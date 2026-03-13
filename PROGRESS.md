@@ -64,7 +64,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T13 — ReplayLogger: JSONL delta-encoded LLM call log | `[ ]` | |
+| T13 — ReplayLogger: JSONL delta-encoded LLM call log | `[x]` | 9 tests |
 | T14 — Context condensation and turn summaries | `[ ]` | |
 | T15 — RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler) | `[ ]` | |
 
@@ -177,3 +177,6 @@
 - T12: stygian-browser 0.1: `BrowserPool::new(config) -> Result<Arc<Self>>`, `pool.acquire() -> Result<BrowserHandle>`, `WaitUntil::NetworkIdle` is a unit variant (no fields).
 - T12: stygian-graph 0.1: `PipelineUnvalidated::new(config).validate()?.execute().complete(results)` typestate pattern. Empty pipeline validation may fail — don't assert Ok.
 - T12: Compiles and passes tests with AND without `stygian` feature. `run_scrape_pipeline` dispatch returns "requires stygian feature" when disabled.
+- T13: FileReplayLogger in adapters/persistence/replay_log.rs implements ReplayLog port. Uses AtomicU32 (seq) + AtomicUsize (prev_len) for thread-safe delta encoding. HeaderParams/CallParams structs avoid clippy too_many_arguments.
+- T13: Delta encoding: seq 0 → full messages_snapshot; seq N → messages_delta (slice from prev_len). File opened in append mode (never truncated). JSONL = one complete JSON object per line.
+- T13: Child loggers via `child(depth, step)` produce hierarchical IDs: `root/d{depth}s{step}`. Grandchild nests: `root/d2s5/d3s1`. All append to same JSONL file.
