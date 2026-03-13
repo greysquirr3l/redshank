@@ -1,10 +1,12 @@
 //! Tool dispatch adapters — `WorkspaceTools` implements `ToolDispatcher`.
 //!
-//! Sub-modules: filesystem, shell, web.
-//! Patching (T11) and stygian (T12) are wired later.
+//! Sub-modules: filesystem, patching, shell, web.
+//! Stygian (T12) is wired later.
 
 #[cfg(feature = "runtime")]
 mod filesystem;
+#[cfg(feature = "runtime")]
+mod patching;
 #[cfg(feature = "runtime")]
 mod shell;
 #[cfg(feature = "runtime")]

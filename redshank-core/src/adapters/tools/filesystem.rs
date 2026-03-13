@@ -846,13 +846,29 @@ fn validate_anchor(
     (lineno, None)
 }
 
-/// Apply a patch (stub — full Codex parser in T11).
-pub async fn apply_patch(_ws: &WorkspaceTools, args: &Value) -> String {
-    let _patch = match args.get("patch").and_then(|v| v.as_str()) {
+/// Apply a Codex-style patch.
+pub async fn apply_patch(ws: &WorkspaceTools, args: &Value) -> String {
+    let patch_text = match args.get("patch").and_then(|v| v.as_str()) {
         Some(p) if !p.trim().is_empty() => p,
         _ => return "apply_patch requires non-empty 'patch' parameter".to_string(),
     };
 
-    // TODO(T11): Codex-style patch format parser
-    "apply_patch: Codex patch format not yet implemented (T11)".to_string()
+    let root = ws.root.clone();
+    let resolve = |raw: &str| -> Result<std::path::PathBuf, String> {
+        ws.resolve_path(raw).map_err(|e| e.to_string())
+    };
+
+    let report = super::patching::apply_patch(patch_text, &resolve);
+
+    // Mark all added/updated files as read so subsequent edits are allowed
+    for p in report.added.iter().chain(report.updated.iter()) {
+        ws.mark_read(p).await;
+    }
+    // Also mark move destinations
+    for (_, to) in &report.moved {
+        ws.mark_read(to).await;
+    }
+
+    let _ = root; // suppress unused if needed
+    report.render()
 }

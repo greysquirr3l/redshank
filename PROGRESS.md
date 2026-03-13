@@ -53,7 +53,7 @@
 | --- | --- | --- |
 | T09 — Tool definitions: JSON schemas and to_provider() converters | `[x]` | 14 tests |
 | T10 — WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/) | `[x]` | 18 tests |
-| T11 — Codex-style patch format parser and applier | `[ ]` | |
+| T11 — Codex-style patch format parser and applier | `[x]` | 18 tests |
 | T12 — stygian-graph + stygian-browser integration for web fetching | `[ ]` | |
 
 ---
@@ -169,3 +169,7 @@
 - T10: crc32fast for hashline hashes (2-char hex, whitespace-invariant). regex for symbol extraction in repo_map. base64 for read_image. All behind `runtime` feature.
 - T10: Parallel write conflict detection via WriteGroup with group_id→(path→owner_id) claims map. scope_group_id/scope_owner_id set per execution context.
 - T10: Edition 2024 let-chains: `if let Some(g) = glob && !fnmatch(...)` collapses nested ifs. Use `&Path` not `&PathBuf` for function params (clippy ptr_arg).
+- T11: Patching module in adapters/tools/patching.rs. Parser splits on `*** Add File:`, `*** Delete File:`, `*** Update File:` lines. Chunks split on `@@` separators.
+- T11: Two-pass hunk matching: exact then whitespace-normalised (collapse runs to single space). Cursor advances after each chunk for ordered multi-hunk application.
+- T11: ApplyReport returned even on partial failure — each operation is independent. resolve closure enforces workspace path safety.
+- T11: apply_patch in filesystem.rs delegates to patching::apply_patch and marks all added/updated/moved files as read for subsequent edits.
