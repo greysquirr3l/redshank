@@ -17,6 +17,7 @@ chrono = { workspace = true }
 
 # I/O dependencies — only used in adapters (behind module boundaries, not domain)
 tokio = { workspace = true, optional = true }
+tokio-util = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 petgraph = { workspace = true, optional = true }
@@ -33,7 +34,7 @@ stygian-graph = { workspace = true, optional = true }
 
 [features]
 default = ["runtime"]
-runtime = ["dep:tokio", "dep:reqwest", "dep:rusqlite", "dep:petgraph", "dep:tracing", "dep:crc32fast", "dep:base64", "dep:regex"]
+runtime = ["dep:tokio", "dep:tokio-util", "dep:reqwest", "dep:rusqlite", "dep:petgraph", "dep:tracing", "dep:crc32fast", "dep:base64", "dep:regex"]
 stygian = ["runtime", "dep:stygian-browser", "dep:stygian-graph"]
 
 [dev-dependencies]

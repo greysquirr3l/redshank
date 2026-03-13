@@ -1,6 +1,6 @@
 //! Orchestration services.
 
 pub mod condensation;
+pub mod engine;
 
-// TODO(T15): engine.rs — RLMEngine
 // TODO(T17): session_runtime.rs — SessionRuntime

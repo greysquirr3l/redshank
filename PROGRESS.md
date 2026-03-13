@@ -66,7 +66,7 @@
 | --- | --- | --- |
 | T13 — ReplayLogger: JSONL delta-encoded LLM call log | `[x]` | 9 tests |
 | T14 — Context condensation and turn summaries | `[x]` | 9 tests |
-| T15 — RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler) | `[ ]` | |
+| T15 — RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler) | `[x]` | 13 tests |
 
 ---
 
@@ -183,3 +183,8 @@
 - T14: ContextTracker in application/services/condensation.rs. should_condense() triggers when used_tokens > 75% of window_size. condense_tool_outputs() replaces old tool-role messages with placeholder, keeping last 4.
 - T14: condense_with_judge() asks judge model for 400-word summary, rebuilds conversation: objective + <condensation> turn + recent messages. Preserves first user message (objective) always.
 - T14: model_context_window() heuristic: claude* = 200k, gpt-4.1/gpt-4o/o4-mini = 128k, cerebras/llama = 128k, default 128k. services.rs converted to module file for services/ directory.
+- T15: RLMEngine<M, D, R> in application/services/engine.rs is generic over ModelProvider, ToolDispatcher, ReplayLog (all RPITIT traits). Uses CancellationToken (tokio-util) behind cfg(feature = "runtime").
+- T15: solve_recursive returns Pin<Box<dyn Future + Send>> for recursive async indirection. handle_subtask recurses via solve_recursive(depth+1). max_depth guards prevent infinite recursion.
+- T15: Runtime policy: shell_command_counts HashMap<(depth, cmd_str), count> blocks identical run_shell after 2 repeats per depth level. Uses Mutex for interior mutability through &self.
+- T15: ExternalContext accumulates cross-turn observations with add() and summary(max_items, max_chars). Passed as &mut through recursive calls.
+- T15: Test infrastructure: ScriptedModel (pre-programmed ModelTurns via AtomicUsize index), ScriptedDispatcher (pre-programmed results), NoopReplayLog. make_engine() helper constructs with default AgentConfig.
