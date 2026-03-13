@@ -46,7 +46,7 @@
 | Task | Status | Notes |
 |---|---|---|
 | T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets | `[x]` | Complete |
-| T07 — OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama | `[ ]` | |
+| T07 — OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama | `[x]` | Complete |
 | T08 — Provider builder and model-name inference | `[ ]` | |
 
 ---
@@ -180,3 +180,5 @@
 - T06: SSE parsing uses byte-level parse_sse_events() → StreamAccumulator pattern. Tool-call JSON fragments accumulate via InProgressToolCall vec, then joined and parsed.
 - T06: Thinking budgets only for models matching `contains("opus-4")` — use let-chain to collapse nested ifs. All Claude models currently share 200k context window.
 - T06: CustomDebug on AnthropicModel excludes api_key field — CredentialGuard alone isn't enough since the struct holds it as a field.
+- T07: Single OpenAICompatibleModel serves OpenAI/OpenRouter/Cerebras/Ollama via for_provider() factory. OpenRouter needs HTTP-Referer + X-Title headers. Ollama gets 120s timeout.
+- T07: OpenAI SSE uses `data: [DONE]` terminator — must filter before JSON parse. Tool call deltas indexed by `index` field, not by content_block events like Anthropic.
