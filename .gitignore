@@ -1,0 +1,57 @@
+# ─── Project-specific ─────────────────────────────────────────────────────────
+.coraline/
+.serena/
+docs/dev/
+reference_projects/
+
+# ─── VS Code ──────────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/orchestrator.prompt.md
+
+# ─── Rust / Cargo ─────────────────────────────────────────────────────────────
+/target/
+**/target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ─── GitHub / Git ─────────────────────────────────────────────────────────────
+*.orig
+*.rej
+*.patch
+
+# ─── Environment & secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# ─── Editor & OS noise ────────────────────────────────────────────────────────
+*~
+*.swp
+*.swo
+.idea/

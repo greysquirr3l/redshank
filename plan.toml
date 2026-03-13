@@ -1,0 +1,1061 @@
+# plan.toml — Redshank: OpenPlanter re-imagined in Rust 1.94
+#
+# Redshank is a full Rust 1.94 (edition 2024) rewrite of OpenPlanter —
+# an autonomous recursive LLM investigation agent for follow-the-money
+# and entity-resolution investigations across heterogeneous public datasets.
+#
+# Key improvements over the Python original:
+#   - Compiled binary: no Python runtime, single deployable executable
+#   - True async concurrency via Tokio (parallel subtask branches w/ structured cancellation)
+#   - stygian-graph for graph-based data-pipeline DAGs replacing hand-rolled fetch scripts
+#   - stygian-browser for anti-detection JS-rendered page scraping
+#   - Type-safe tool dispatch via enum + trait objects (no dynamic string dispatch)
+#   - SQLite session persistence (rusqlite) replacing scattered JSONL/JSON files
+#   - ratatui TUI replacing both Rich and Textual Python UIs
+#   - Coraline MCP integration for code-navigation tooling during self-directed tasks
+#
+# Run:
+#   wiggum validate plan.toml
+#   wiggum generate plan.toml --dry-run
+#   wiggum generate plan.toml
+
+# ─── Project ──────────────────────────────────────────────────────────────────
+
+[project]
+name        = "redshank"
+description = """
+Redshank is an autonomous recursive language-model investigation agent written
+in Rust 1.94 (edition 2024). It ingests heterogeneous public datasets — campaign
+finance, lobbying disclosures, federal contracts, corporate registries,
+sanctions lists (OFAC, UN, EU, World Bank), property records, nonprofit
+filings, corporate registries (GLEIF, OpenCorporates, FinCEN BOI, state SOS
+portals), federal courts (RECAP/CourtListener), individual-person OSINT
+(breach exposure, username enumeration across 300+ platforms, voter rolls,
+github profiles, WHOIS history, patent/trademark inventors), and media
+intelligence (GDELT) — resolves entities across all of them, and surfaces
+non-obvious connections through evidence-backed analysis written into a live
+knowledge-graph wiki.
+
+The agent runs a tool-calling loop that can recursively delegate subtasks to
+child agent invocations, condense context on long runs, apply a cheap judge
+model to evaluate acceptance criteria, and stream its reasoning to an interactive
+ratatui TUI. Web fetches use stygian-graph pipelines (with optional stygian-browser
+anti-detection automation for JS-rendered pages). A compiled binary ships as a
+single executable with no Python or Node.js runtime dependency.
+"""
+language     = "rust"
+path         = "/home/greysquirr3l/redshank"
+architecture = "hexagonal-ddd-cqrs-security-first"
+
+# ─── Preflight ────────────────────────────────────────────────────────────────
+
+[preflight]
+build = "cargo build --workspace"
+test  = "cargo test --workspace"
+lint  = "cargo clippy --workspace -- -D warnings"
+
+# ─── Orchestrator ─────────────────────────────────────────────────────────────
+
+[orchestrator]
+persona = """
+You are a senior Rust engineer specialising in async systems, hexagonal (ports & adapters)
+architecture, DDD-Lite aggregates and domain events, CQRS command/query separation,
+security-first repository design (fail-secure, AuthContext-typed access, idempotency keys),
+LLM tool-calling loops, TUI design with ratatui, and graph-based data pipelines.
+You are rewriting a well-tested Python project (OpenPlanter) in Rust 1.94, preserving
+all existing behaviour and improving on it where Rust idioms allow.
+The internal source layout of every crate mirrors stygian-graph
+(https://github.com/greysquirr3l/stygian/tree/main/crates/stygian-graph/src):
+  domain/ (pure types, zero I/O) → ports/ (trait interfaces) → application/ (CQRS handlers) → adapters/ (I/O implementations)
+with top-level mod files (domain.rs, ports.rs, application.rs, adapters.rs) re-exporting each subtree.
+"""
+strategy = "tdd"
+rules = [
+    "Rust edition 2024, stable toolchain 1.94 only — no nightly features.",
+    "All error types use thiserror; no .unwrap() or .expect() outside of tests and main().",
+    "The domain layer (redshank-core/src/domain/) must have zero I/O dependencies: no tokio, no reqwest, no sqlx. Enforced by the [dependencies] section of redshank-core having no I/O crates as non-optional dependencies.",
+    "Async runtime is tokio with the full feature set.",
+    "Use serde + serde_json for all serialisation; derive Serialize/Deserialize on every domain type.",
+    "Credentials are stored chmod 600; never appear in log output at any level.",
+    "Use coraline MCP tools (coraline_read_file, coraline_search, etc.) when exploring the workspace.",
+    "All public API items must have rustdoc comments.",
+    "Keep stygian-graph and stygian-browser behind feature flags so the binary can be built without a Chrome install.",
+    "Write tests before or alongside implementation (TDD strategy).",
+    "Mirror OpenPlanter's existing test coverage: engine loop, tools, model layer, patching, credentials, session, wiki-graph, TUI events, and all data-fetcher scripts.",
+    "Internal directory structure for every crate mirrors stygian-graph/src/: src/domain/ (zero I/O pure types and aggregates), src/ports/ (trait interfaces — inbound + outbound), src/application/commands/ (CQRS mutating handlers), src/application/queries/ (CQRS read-only handlers), src/application/services/ (orchestration), src/adapters/providers/, src/adapters/tools/, src/adapters/persistence/. Top-level src/{domain,ports,application,adapters}.rs re-export the subtree.",
+    "CQRS: every mutating operation is a Command struct (carries IdempotencyKey: newtype Uuid v4) handled by a CommandHandler in application/commands/. Every read operation is a Query struct handled by a QueryHandler in application/queries/. Commands are idempotent — handlers check an idempotency_keys table before executing and return the cached result on duplicate.",
+    "Security First (fail-secure): every repository/store port method that accesses or mutates keyed data accepts auth: &AuthContext and enforces a SecurityPolicy check before any data access. Security rules live in src/domain/auth.rs as pure functions (no I/O, no async). Default deny — return Err(SecurityError::AccessDenied) unless the policy explicitly grants the required Permission.",
+    "Aggregate repositories: one repository per aggregate root, not one per table. Use the UpdateFn pattern for transactional mutations: async fn update_by_id<F, R>(&self, id, auth: &AuthContext, update_fn: F) -> Result<R>. The closure holds business logic; the repo manages the transaction. Use TransactionProvider only for cross-aggregate consistency.",
+    "Domain events: every significant state transition emits a typed DomainEvent variant (SessionCreated, AgentStarted, ToolCalled, AgentCompleted, WikiEntryWritten). Events are immutable value types. Aggregate methods append them to a pending_events Vec; the session store persists them via append_event.",
+    "Idempotency: all CommandHandlers check and set idempotency_keys via the SessionStore port. Duplicate commands (same IdempotencyKey) return the stored result without re-executing.",
+    "No domain type may reference an adapter or application type. Adapters implement port traits. Port traits reference only domain types.",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 1 — Workspace Scaffold
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Workspace Scaffold"
+order = 1
+
+[[phases.tasks]]
+slug       = "workspace-scaffold"
+title      = "Cargo workspace, CI, and repo hygiene"
+goal       = """
+Bootstrap a compilable Cargo workspace with stub crates, GitHub Actions CI,
+clippy config, deny.toml, and edition 2024 throughout.
+"""
+depends_on = []
+hints = [
+    "Workspace members: redshank-core, redshank-tui, redshank-fetchers, redshank-cli. Four crates replace the original seven — all domain/provider/tool/engine concerns are unified in redshank-core, which follows the stygian-graph src/ layout exactly.",
+    "redshank-core/src/ layout (mirrors https://github.com/greysquirr3l/stygian/tree/main/crates/stygian-graph/src): domain.rs + domain/ (zero I/O), ports.rs + ports/ (trait interfaces), application.rs + application/ (CQRS + services), adapters.rs + adapters/ (LLM providers, tools, persistence), lib.rs.",
+    "redshank-core/src/domain/ files: agent.rs (AgentConfig value object, AgentSession aggregate root), credentials.rs (CredentialBundle, CredentialGuard<T> newtype), events.rs (DomainEvent enum), session.rs (Session, SessionId, TurnSummary, ToolCall, ToolResult, ModelTurn, StopReason), wiki.rs (WikiEntry, WikiCategory), auth.rs (AuthContext, Permission, Role, SecurityPolicy trait, SecurityError), errors.rs (DomainError hierarchy).",
+    "redshank-core/src/ports/ files: model_provider.rs (ModelProvider: async complete + count_tokens), tool_dispatcher.rs (ToolDispatcher: async dispatch takes &AuthContext), session_store.rs (SessionStore — all methods include auth: &AuthContext + idempotency methods), wiki_store.rs (WikiStore), fetcher.rs (DataFetcher), replay_log.rs (ReplayLog). All traits object-safe.",
+    "redshank-core/src/application/ layout: commands/ (run_investigation.rs, configure_credentials.rs, delete_session.rs — each with Command struct + IdempotencyKey + Handler impl), queries/ (get_session.rs, list_sessions.rs, get_wiki_entry.rs — each with Query struct + Handler impl), services/ (engine.rs — RLMEngine, condensation.rs — ContextTracker, session_runtime.rs — SessionRuntime).",
+    "redshank-core/src/adapters/ layout: providers/ (anthropic.rs, openai_compat.rs, builder.rs), tools/ (filesystem.rs, shell.rs, web.rs, patching.rs, stygian.rs — WorkspaceTools implements ToolDispatcher port), persistence/ (sqlite.rs — SqliteSessionStore implements SessionStore, wiki_fs.rs — FsWikiStore implements WikiStore, replay_log.rs — FileReplayLogger implements ReplayLog).",
+    "redshank-tui/src/ layout: domain/ (AppState, AppEvent, UiCommand value types), application/ (event_loop.rs, slash_commands.rs with SlashCommand as CQRS command variants), adapters/ (renderer.rs using ratatui, crossterm_reader.rs), lib.rs.",
+    "redshank-fetchers/src/ layout: domain/ (FetchConfig, FetchOutput), ports/ (HttpClientPort trait), application/ (one FetchQuery handler per data source), adapters/ (http.rs, browser.rs, per-source adapter modules), bin/ (one binary entry point per fetcher).",
+    "redshank-cli/src/main.rs: thin clap derive CLI only — constructs Command/Query structs from args and dispatches to redshank-core handlers. Zero business logic in the CLI layer.",
+    "Each crate gets a stub lib.rs with a single #[test] fn it_compiles() { }.",
+    "GitHub Actions: cargo build + clippy -D warnings + cargo test on ubuntu-latest.",
+    "Add deny.toml (cargo-deny) for supply-chain gate.",
+    "Root Cargo.toml: [workspace] resolver = '2', edition = '2024' in each member.",
+    ".cargo/config.toml: set RUSTFLAGS = '-D warnings' so CI and local are identical.",
+]
+test_hints = [
+    "CI green: cargo build && cargo clippy && cargo test all pass on a clean checkout.",
+    "Test: redshank-core/src/domain/ has no tokio, reqwest, sqlx, or any I/O crate in its transitive dependencies (verify with cargo tree -p redshank-core --edges no-dev).",
+    "Test: each top-level module file (domain.rs, ports.rs, application.rs, adapters.rs) re-exports all public items from its subdirectory.",
+]
+must_haves = [
+    "All four crates compile on stable 1.94",
+    "deny.toml present and cargo-deny check passes",
+    ".github/workflows/ci.yml present",
+    "stygian-graph src/ directory layout reproduced exactly in redshank-core/src/",
+    "Zero I/O crate dependencies in redshank-core/src/domain/ (verified by cargo tree)",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 2 — Domain Model
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Domain Model"
+order = 2
+
+[[phases.tasks]]
+slug       = "domain-types"
+title      = "Domain model: entities, value objects, aggregates, domain events, and CQRS command/query types"
+goal       = """
+Implement the pure domain layer in redshank-core/src/domain/ following DDD-Lite principles:
+aggregate roots (AgentSession), value objects (AgentConfig, CredentialBundle), domain events
+(DomainEvent enum), and the type vocabulary shared by every crate. Also stub the CQRS command
+and query structs in application/commands/ and application/queries/.
+Port trait interfaces (ModelProvider, SessionStore, etc.) live in src/ports/ so the domain
+has zero knowledge of how they are implemented — see the separate hints below.
+"""
+depends_on = ["workspace-scaffold"]
+hints = [
+    # ── domain/agent.rs ──────────────────────────────────────────────────────
+    "AgentConfig (value object): workspace (PathBuf), provider (ProviderKind), model (String), reasoning_effort (ReasoningEffort), max_depth (u8), max_steps (u32), max_observation_chars (usize), command_timeout (Duration), max_file_chars (usize), recursive (bool), acceptance_criteria (bool), demo_mode (bool). ProviderKind: Anthropic, OpenAI, OpenRouter, Cerebras, Ollama. ReasoningEffort: None, Low, Medium, High.",
+    "AgentSession (aggregate root in domain/agent.rs): session_id (SessionId), config (AgentConfig), status (SessionStatus: Idle, Running, Completed, Failed), turns (Vec<TurnSummary>), pending_events (Vec<DomainEvent>). Methods: AgentSession::create(config) emits SessionCreated; start(objective) emits AgentStarted; complete(result) emits AgentCompleted; add_turn(summary, tool_names) emits ToolCalled per tool; drain_events() -> Vec<DomainEvent> (takes and clears pending_events).",
+    "SessionId: newtype around Uuid. IdempotencyKey: newtype around Uuid v4 (used by CQRS commands).",
+    # ── domain/events.rs ─────────────────────────────────────────────────────
+    "DomainEvent enum in domain/events.rs (all variants carry session_id: SessionId and timestamp: DateTime<Utc>): SessionCreated { session_id, config: AgentConfig, timestamp }, AgentStarted { session_id, objective: String, timestamp }, ToolCalled { session_id, tool_name: String, args_summary: String, timestamp }, AgentCompleted { session_id, result_summary: String, timestamp }, WikiEntryWritten { session_id, entry_path: PathBuf, category: WikiCategory, timestamp }. Events are immutable value types — no mutation methods.",
+    # ── domain/session.rs ────────────────────────────────────────────────────
+    "ToolCall { id: String, name: String, arguments: serde_json::Value }. ToolResult { call_id: String, content: String, is_error: bool }. ModelTurn { content: Option<String>, tool_calls: Vec<ToolCall>, stop_reason: StopReason }. StopReason: EndTurn, ToolUse, MaxTokens, StopSequence. TurnSummary { turn: u32, summary: String, tool_names: Vec<String>, timestamp: DateTime<Utc> }.",
+    # ── domain/wiki.rs ───────────────────────────────────────────────────────
+    "WikiEntry { path: PathBuf, title: String, category: WikiCategory, cross_refs: Vec<String> }. WikiCategory: CampaignFinance, Contracts, Corporate, Financial, Infrastructure, International, Lobbying, Nonprofits, People, Other. — People covers individual-person OSINT entries (identity profiles, breach exposure summaries, username maps, voter records).",
+    # ── domain/credentials.rs ────────────────────────────────────────────────
+    "CredentialBundle (value object, all fields Option<CredentialGuard<String>>): openai_api_key, anthropic_api_key, openrouter_api_key, cerebras_api_key, exa_api_key, voyage_api_key, ollama_base_url, hibp_api_key, github_token. CredentialGuard<T>: newtype wrapping T; Debug/Display → '***REDACTED***' (manual impl, NOT derived); Deref<Target=T>; Serialize delegates to T; Deserialize wraps T. Never derives Debug automatically.",
+    # ── domain/auth.rs ───────────────────────────────────────────────────────
+    "AuthContext, Permission, Role, SecurityPolicy, and SecurityError are defined in domain/auth.rs — full specification is in the 'security-model' task in this phase.",
+    # ── src/ports/ ──────────────────────────────────────────────────────────
+    "Port traits live in src/ports/, NOT in src/domain/. ModelProvider (ports/model_provider.rs): async fn complete(messages) -> Result<ModelTurn>; async fn count_tokens(messages) -> Result<u32>. ToolDispatcher (ports/tool_dispatcher.rs): async fn dispatch(call: &ToolCall, auth: &AuthContext) -> ToolResult. SessionStore (ports/session_store.rs): all methods include auth: &AuthContext; includes check_idempotency_key and mark_idempotency_key. WikiStore (ports/wiki_store.rs). DataFetcher (ports/fetcher.rs). ReplayLog (ports/replay_log.rs). All traits object-safe — no generic methods on the trait itself.",
+    # ── application/commands/ + application/queries/ (value types only here) ─
+    "CQRS command value types in src/application/commands/: RunInvestigationCommand { idempotency_key: IdempotencyKey, session_id: SessionId, objective: String, config: AgentConfig, auth: AuthContext }. ConfigureCredentialsCommand { idempotency_key, credentials: CredentialBundle, auth: AuthContext }. DeleteSessionCommand { idempotency_key, session_id, auth: AuthContext }.",
+    "CQRS query value types in src/application/queries/: GetSessionQuery { session_id, auth: AuthContext }. ListSessionsQuery { auth: AuthContext }. GetWikiEntryQuery { path: PathBuf, auth: AuthContext }.",
+]
+test_hints = [
+    "Unit test: AgentConfig::default() has expected field values.",
+    "Unit test: ProviderKind::from_model_name() correctly infers Anthropic for 'claude-*', OpenAI for 'gpt-*', etc.",
+    "Unit test: all domain types round-trip through serde_json without loss.",
+    "Unit test: AgentSession::create() appends SessionCreated to pending_events.",
+    "Unit test: AgentSession::drain_events() clears pending_events after returning them.",
+    "Unit test: DomainEvent variants all carry session_id and timestamp fields.",
+    "Unit test: CredentialGuard Debug output is '***REDACTED***' regardless of inner value.",
+    "Unit test: RunInvestigationCommand round-trips through serde_json.",
+]
+must_haves = [
+    "Zero I/O imports in redshank-core/src/domain/ (no tokio, reqwest, sqlx — verified by cargo tree)",
+    "All domain types derive Serialize, Deserialize, Clone, plus Debug (or a manual masking impl for credential types)",
+    "Port traits live in src/ports/, not in src/domain/",
+    "All port traits are object-safe",
+    "CredentialGuard never leaks inner value through Debug/Display",
+    "DomainEvent enum covers all significant state transitions; no event constructors have side effects",
+]
+
+[[phases.tasks]]
+slug       = "credentials"
+title      = "Credential bundle, storage (chmod 600), and resolution order"
+goal       = """
+Implement the CredentialBundle (7 keys), credential stores (workspace + user-level),
+.env file parser, and multi-source merge — mirroring agent/credentials.py.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "CredentialBundle fields (all Option<CredentialGuard<String>> — see security-model task for CredentialGuard spec): openai_api_key, anthropic_api_key, openrouter_api_key, cerebras_api_key, exa_api_key, voyage_api_key, ollama_base_url, hibp_api_key, github_token.",
+    "Resolution order (highest wins): (1) explicit CLI args, (2) OPENPLANTER_* env vars or bare provider env vars, (3) .env file in workspace, (4) .redshank/credentials.json in workspace, (5) ~/.redshank/credentials.json user-level.",
+    "Write credentials JSON with std::fs::set_permissions (mode 0o600) immediately after writing.",
+    "Interactive configure_keys() function: prompts each key with rpassword, saves to user store.",
+    "has_any() returns true if at least one key is set.",
+    "merge_missing() fills in empty fields from a lower-priority bundle.",
+]
+test_hints = [
+    "Test: .env file parser handles KEY=value, KEY='value', KEY=\"value\", #comments, blank lines.",
+    "Test: resolution order — explicit arg wins over env var wins over file.",
+    "Test: has_any() returns false when all fields are None.",
+    "Test: written credential file has mode 0o600 on Linux.",
+]
+must_haves = [
+    "Credentials never logged (no Debug impl that prints secret values; use a custom Debug that masks them)",
+    "File written with 0o600 permissions",
+    "All five resolution sources tested",
+]
+
+[[phases.tasks]]
+slug       = "settings"
+title      = "Persistent settings (per-provider default model + reasoning effort)"
+goal       = """
+Implement PersistentSettings stored in .redshank/settings.json — per-provider
+default model name and global default reasoning effort.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "PersistentSettings fields: default_model_anthropic, default_model_openai, default_model_openrouter, default_model_cerebras, default_model_ollama (all Option<String>), default_reasoning_effort (Option<ReasoningEffort>).",
+    "SettingsStore: load() (returns default if file absent), save().",
+    "Serialise with serde_json pretty-print.",
+]
+test_hints = [
+    "Test: load() returns PersistentSettings::default() when file does not exist.",
+    "Test: save then load round-trips all fields.",
+    "Test: unknown keys in JSON are ignored (use #[serde(deny_unknown_fields)] = false).",
+]
+must_haves = [
+    "Missing file is not an error — returns defaults silently",
+    "Round-trip fidelity for all fields",
+]
+
+[[phases.tasks]]
+slug       = "security-model"
+title      = "Security domain model: AuthContext, Permission, SecurityPolicy (fail-secure, DDD-Lite)"
+goal       = """
+Implement the security model in redshank-core/src/domain/auth.rs following the
+security-first repository design principle: security rules are pure domain functions
+with zero I/O — it is structurally impossible to call a repository method without
+providing an AuthContext and having the policy evaluated. Default deny everywhere.
+Based on docs/dev/security_first_repository_design.md.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "UserId: newtype around Uuid. Display shows the UUID string. Debug shows UserId(\"...\") for audit log clarity. Does NOT implement Copy — forces intentional passing.",
+    "Role enum: Owner (full access), Operator (run + read + write sessions, wiki, fetch), Reader (read-only sessions + wiki), Service (machine-to-machine for internal ops like wiki seed).",
+    "Permission enum: ReadSession, WriteSession, RunAgent, DeleteSession, ConfigureCredentials, ReadWiki, WriteWiki, FetchData.",
+    "SecurityPolicy trait (object-safe): fn check(&self, ctx: &AuthContext, permission: Permission) -> Result<(), SecurityError>. Default impl StaticPolicy denies ALL permissions — any grant must be explicit.",
+    "StaticPolicy permission map: Owner → all 8 permissions; Operator → RunAgent, ReadSession, WriteSession, ReadWiki, WriteWiki, FetchData; Reader → ReadSession, ReadWiki; Service → ReadSession, WriteSession, ReadWiki, WriteWiki, FetchData.",
+    "SecurityError enum: AccessDenied { user_id: UserId, required_permission: Permission }, InvalidToken, ExpiredToken, InsufficientRole { user_id: UserId, required_role: Role, actual_roles: Vec<Role> }. All variants carry enough context for audit logging without leaking credential data.",
+    "AuthContext { user_id: UserId, roles: Vec<Role>, session_token: CredentialGuard<String> }. Does NOT implement Copy or Clone carelessly — use Arc<AuthContext> at call sites that need to share it. AuthContext::system() -> AuthContext returns Role::Service for internal ops.",
+    "Domain security functions in auth.rs (pure — no I/O, no async, no side effects — takes a &dyn SecurityPolicy so the test can inject a mock): fn can_read_session(ctx, policy) -> Result; fn can_delete_session(ctx, policy) -> Result; fn can_run_agent(ctx, policy) -> Result; fn can_write_wiki(ctx, policy) -> Result; fn can_fetch_data(ctx, policy) -> Result; fn can_configure_credentials(ctx, policy) -> Result.",
+    "Fail-secure invariant: every path through a domain security function either calls policy.check() or explicitly returns Err(SecurityError::AccessDenied). There is no default-allow code path.",
+]
+test_hints = [
+    "Test: StaticPolicy grants Owner all 8 permissions.",
+    "Test: StaticPolicy denies Reader permission DeleteSession.",
+    "Test: StaticPolicy denies Operator permission ConfigureCredentials.",
+    "Test: can_read_session returns Ok with Owner context.",
+    "Test: can_delete_session returns AccessDenied for Reader context.",
+    "Test: AuthContext::system() has Role::Service.",
+    "Test: SecurityError::AccessDenied carries correct user_id and required_permission.",
+    "Test: all SecurityError Display impls contain no credential material.",
+]
+must_haves = [
+    "Default SecurityPolicy (StaticPolicy with empty grant list) denies every permission",
+    "All security rule functions are pure — no I/O, no async, no global state",
+    "AuthContext session_token masked in Debug/Display via CredentialGuard",
+    "SecurityError variants include enough context for audit logging without exposing secrets",
+    "AuthContext does NOT implement Copy",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 3 — LLM Provider Layer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "LLM Provider Layer"
+order = 3
+
+[[phases.tasks]]
+slug       = "provider-anthropic"
+title      = "AnthropicModel: native Messages API with SSE streaming and thinking budgets"
+goal       = """
+Implement the ModelProvider port for Anthropic. Handle Claude models including
+adaptive thinking (Opus 4.6+) and manual thinking budgets. Parse SSE events for
+streaming content and tool-call delta accumulation.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "Use reqwest with the rustls-tls feature; no native-tls anywhere.",
+    "POST to https://api.anthropic.com/v1/messages with anthropic-version: 2023-06-01 header.",
+    "Streaming: parse event: / data: SSE lines; accumulate content_block_delta text and tool-call input JSON fragments.",
+    "Tool serialisation: convert TOOL_DEFINITIONS to Anthropic's {name, description, input_schema} format.",
+    "Reasoning: for claude-opus-4-6 use 'thinking': {'type':'enabled','budget_tokens': N}; for other models inject <thinking> prefix in system prompt when effort != None.",
+    "count_tokens() calls POST /v1/messages/count_tokens (dry-run, no streaming).",
+    "AnthropicModel::new(api_key, model, reasoning_effort, tool_defs).",
+    "Map stop_reason strings: 'end_turn' → StopReason::EndTurn, 'tool_use' → StopReason::ToolUse, 'max_tokens' → StopReason::MaxTokens.",
+]
+test_hints = [
+    "Test: SSE event stream assembled from fixture bytes produces correct ModelTurn.",
+    "Test: tool-call JSON fragment accumulation across multiple deltas.",
+    "Test: thinking budget is absent in payload when reasoning_effort is None.",
+    "Test: API key never appears in error messages or panic output.",
+]
+must_haves = [
+    "TLS via rustls, not native-tls",
+    "API key masked in all Debug/Display impls",
+    "Streaming and non-streaming both exercise the same ModelTurn output type",
+]
+
+[[phases.tasks]]
+slug       = "provider-openai-compat"
+title      = "OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama"
+goal       = """
+Implement the ModelProvider port for all OpenAI-API-shaped providers.
+Handle SSE streaming, tool-call delta accumulation, and per-provider
+auth headers and base URLs.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "Single struct OpenAICompatibleModel { base_url, api_key, model, reasoning_effort, extra_headers, tool_defs }.",
+    "Providers: OpenAI (https://api.openai.com/v1), OpenRouter (https://openrouter.ai/api/v1, adds HTTP-Referer + X-Title headers), Cerebras (https://api.cerebras.ai/v1), Ollama (http://localhost:11434/v1, 120s first-byte timeout).",
+    "OpenAI reasoning: inject 'reasoning_effort': 'high'/'medium'/'low' in request body for o-series models.",
+    "Streaming: accumulate tool-call argument delta strings by index.",
+    "Tool call deserialisation: handle both {type:'function', function:{name,arguments}} shapes.",
+    "factory function: OpenAICompatibleModel::for_provider(kind, credential_bundle, model, effort, tool_defs).",
+]
+test_hints = [
+    "Test: OpenRouter request includes HTTP-Referer and X-Title headers.",
+    "Test: Ollama base URL defaults to localhost:11434.",
+    "Test: reasoning_effort field absent for non-o-series models.",
+    "Test: SSE stream with multiple tool-call chunks assembles correct arguments JSON.",
+]
+must_haves = [
+    "All four provider variants covered by the same struct",
+    "Base URL overridable via config (for proxies / local deployments)",
+    "API keys masked in Debug",
+]
+
+[[phases.tasks]]
+slug       = "provider-builder"
+title      = "Provider builder and model-name inference"
+goal       = """
+Implement build_provider() factory: infers ProviderKind from model name,
+constructs the right ModelProvider impl, and wraps it in Arc<dyn ModelProvider>.
+Also implement list_models() for each provider.
+"""
+depends_on = ["provider-anthropic", "provider-openai-compat"]
+hints = [
+    "infer_provider(model: &str) -> ProviderKind: regex-based: /^claude-/ → Anthropic, /^gpt-|^o[0-9]/ → OpenAI, /^llama|^mistral|^qwen/ → Ollama (or OpenRouter if key set).",
+    "build_provider() accepts AgentConfig + CredentialBundle.",
+    "build_judge_model() builds a cheap model (claude-haiku-4-5 or gpt-4o-mini) for acceptance-criteria evaluation.",
+    "list_models(provider, creds) → Vec<String>: GET /models from each provider API.",
+]
+test_hints = [
+    "Test: infer_provider('claude-opus-4-6') == ProviderKind::Anthropic.",
+    "Test: infer_provider('gpt-5.2') == ProviderKind::OpenAI.",
+    "Test: build_provider() returns Err when required API key is missing.",
+]
+must_haves = [
+    "Returns Arc<dyn ModelProvider + Send + Sync>",
+    "Clear error message when API key is absent",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 4 — Tool Layer
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Tool Layer"
+order = 4
+
+[[phases.tasks]]
+slug       = "tool-defs"
+title      = "Tool definitions: JSON schemas and to_provider() converters"
+goal       = """
+Define TOOL_DEFINITIONS as a static list of ToolDefinition structs covering all
+19 tools. Implement to_anthropic_tools() and to_openai_tools() converters.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "Tools (19 total): list_files, search_files, repo_map, read_file, write_file, edit_file, apply_patch, hashline_edit, read_image, run_shell, run_shell_bg, check_shell_bg, kill_shell_bg, cleanup_bg_jobs, web_search, fetch_url, subtask, execute, begin_parallel_write_group, end_parallel_write_group.",
+    "ToolDefinition { name, description, parameters: serde_json::Value (JSON Schema object) }.",
+    "subtask and execute are only included when AgentConfig.recursive == true.",
+    "to_anthropic_tools() wraps each as {name, description, input_schema: parameters}.",
+    "to_openai_tools() wraps each as {type:'function', function:{name,description,parameters}}.",
+]
+test_hints = [
+    "Test: TOOL_DEFINITIONS contains exactly 20 entries (19 + group tools) when recursive=true.",
+    "Test: to_openai_tools() output has {type: 'function'} wrapper on every entry.",
+    "Test: subtask absent when recursive=false.",
+]
+must_haves = [
+    "All 19 tools present with accurate JSON Schema parameter descriptions",
+    "Both provider shapes tested",
+]
+
+[[phases.tasks]]
+slug       = "workspace-tools"
+title      = "WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/)"
+goal       = """
+Implement all 19 tools split across redshank-core/src/adapters/tools/ modules,
+mirroring agent/tools.py: filesystem.rs (list_files, read_file, write_file, edit_file,
+hashline_edit, read_image), shell.rs (run_shell, run_shell_bg, check/kill/cleanup_bg_jobs),
+web.rs (web_search, fetch_url), patching.rs (apply_patch), stygian.rs (run_scrape_pipeline).
+WorkspaceTools implements the ToolDispatcher port from src/ports/tool_dispatcher.rs.
+All tool dispatch requires &AuthContext — operators and above may dispatch tools;
+readers may not call write or shell tools.
+"""
+depends_on = ["tool-defs", "credentials", "security-model"]
+hints = [
+    "WorkspaceTools (adapters/tools/mod.rs, implements ToolDispatcher port): { workspace: PathBuf, creds: CredentialBundle, bg_jobs: Arc<Mutex<HashMap<String, BgJob>>>, write_group: Arc<Mutex<Option<WriteGroup>>> }. ToolDispatcher::dispatch(call: &ToolCall, auth: &AuthContext) -> ToolResult routes to the correct submodule; checks can_run_agent(auth, policy) — returns ToolResult { is_error: true, content: AccessDenied message } if denied.",
+    "Path-escape guard: canonicalize path and assert it starts with workspace root; return ToolError::PathEscape otherwise.",
+    "Pre-read write guard: write_file() checks a per-path read-set (thread-local or per-session); blocks writes to files not yet read in the current session unless force=true.",
+    "Heredoc blocking: run_shell() scans command string for '<<' or 'EOF' and returns ToolError::Heredoc if found.",
+    "Interactive blocking: block commands containing 'vim', 'nano', 'less', 'more', 'top', 'htop' etc.",
+    "run_shell(): spawn with tokio::process::Command, SIGKILL on timeout (command_timeout_sec from config), capture stdout+stderr, prepend hashline prefix to output.",
+    "run_shell_bg(): spawn detached, register in bg_jobs map with UUID key, return job ID.",
+    "web_search(): POST to Exa API (https://api.exa.ai/search) with exa_api_key from CredentialBundle.",
+    "fetch_url(): reqwest GET, follow redirects, return body text truncated to max_observation_chars.",
+    "hashline_edit(): parse the hashline-prefixed read output to locate target lines; apply edit.",
+    "read_image(): read file bytes, base64-encode, return as ImageData { mime_type, data }.",
+    "begin/end_parallel_write_group(): track ownership of file paths per parallel branch; block cross-branch writes.",
+]
+test_hints = [
+    "Test: write_file to a path outside workspace returns PathEscape error.",
+    "Test: write_file to an unread path returns PreReadGuard error.",
+    "Test: run_shell with heredoc syntax returns Heredoc error.",
+    "Test: run_shell timeout kills the process within 200ms of deadline.",
+    "Test: run_shell_bg registers job; check_shell_bg returns running status; kill_shell_bg terminates it.",
+    "Test: web_search constructs correct JSON body and parses mock response.",
+    "Test: parallel write group blocks write from a non-owning branch.",
+]
+must_haves = [
+    "All security policies enforced (path escape, pre-read guard, heredoc, interactive block)",
+    "Background jobs cleaned up on WorkspaceTools drop",
+    "Exa API key never logged",
+]
+
+[[phases.tasks]]
+slug       = "patching"
+title      = "Codex-style patch format parser and applier"
+goal       = """
+Port agent/patching.py to Rust: parse *** Begin Patch / *** End Patch blocks
+with Add File, Delete File, and Update File hunks. Two-pass matching: exact
+then whitespace-normalised. Return ApplyReport.
+"""
+depends_on = ["workspace-tools"]
+hints = [
+    "Patch format: *** Begin Patch\\n[operations]\\n*** End Patch",
+    "Operations: '*** Add File: <path>\\n<content>', '*** Delete File: <path>', '*** Update File: <path>\\n[hunks]'.",
+    "Hunk lines: ' ' (context), '-' (remove), '+' (add).",
+    "Two-pass hunk matching: first try byte-exact; if no match, try after stripping leading/trailing whitespace from each line.",
+    "ApplyReport { added: Vec<PathBuf>, deleted: Vec<PathBuf>, updated: Vec<PathBuf>, errors: Vec<PatchError> }.",
+    "apply_patch() in WorkspaceTools takes the raw patch string and calls the parser + applier, respecting workspace path safety.",
+]
+test_hints = [
+    "Test: Add File creates the file with correct content.",
+    "Test: Delete File removes the file.",
+    "Test: Update File with a single hunk replaces the matching lines.",
+    "Test: Update File whitespace-normalised match succeeds when exact fails.",
+    "Test: multi-hunk patch applies all hunks in order.",
+    "Test: patch referencing a path outside workspace is rejected.",
+]
+must_haves = [
+    "Both exact and whitespace-normalised match paths tested",
+    "ApplyReport returned even on partial failure",
+    "Workspace path safety enforced for all patch operations",
+]
+
+[[phases.tasks]]
+slug       = "stygian-integration"
+title      = "stygian-graph + stygian-browser integration for web fetching"
+goal       = """
+Behind the 'stygian' feature flag, integrate stygian-graph pipelines as an
+enhanced fetch_url implementation, and stygian-browser for JS-rendered pages.
+"""
+depends_on = ["workspace-tools"]
+hints = [
+    "Add feature flags: default = [], stygian = ['dep:stygian-graph', 'dep:stygian-browser'].",
+    "When stygian feature is enabled, fetch_url() checks if the URL is likely JS-rendered (heuristic: known SPAs, configurable domain list) and routes through stygian-browser BrowserPool.",
+    "For bulk data-pipeline fetching (used by the fetcher scripts in phase 8), expose a run_scrape_pipeline(pipeline_json: &str) tool that executes a stygian-graph Node/Edge DAG.",
+    "BrowserPool initialised lazily (once, shared across all fetch_url calls via Arc<OnceCell<BrowserPool>>).",
+    "Stealth level: Advanced by default; configurable via AgentConfig.",
+    "Non-stygian fallback: plain reqwest GET (always available without the feature flag).",
+    "Anti-scraping note: use stygian only for public data — never to bypass paywalls or authenticated systems.",
+]
+test_hints = [
+    "Test (stygian feature): run_scrape_pipeline with a minimal Node config returns Ok.",
+    "Test: when stygian feature is absent, fetch_url compiles and works with reqwest fallback.",
+    "Test: BrowserPool not instantiated when stygian feature is disabled.",
+]
+must_haves = [
+    "Binary compiles and all tests pass with AND without the stygian feature flag",
+    "stygian-browser only used on public data sources",
+    "BrowserPool is Drop-safe (browsers shut down cleanly)",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 5 — Engine (Agent Loop)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Agent Engine"
+order = 5
+
+[[phases.tasks]]
+slug       = "replay-logger"
+title      = "ReplayLogger: JSONL delta-encoded LLM call log"
+goal       = """
+Port agent/replay_log.py to Rust: append JSONL records for every LLM call
+using delta encoding (seq 0 = full snapshot; seq N = delta since seq N-1).
+Child loggers for subtasks use hierarchical IDs (root/d2s5).
+"""
+depends_on = ["domain-types"]
+hints = [
+    "ReplayLogger { path: PathBuf, seq: AtomicU32, parent_id: Option<String> }.",
+    "log_call(session_id, messages_snapshot, response) appends a JSON line with { session_id, seq, timestamp, delta_messages, response }.",
+    "Delta: seq 0 stores full messages Vec; seq N stores only the suffix appended since seq N-1 (tracked as prev_len).",
+    "child(subtask_label) -> ReplayLogger: appends to same file, ID = parent_id + '/' + subtask_label.",
+    "File opened in append mode (OpenOptions::new().append(true).create(true)).",
+]
+test_hints = [
+    "Test: seq 0 log line contains full messages snapshot.",
+    "Test: seq 1 line contains only the two new messages appended.",
+    "Test: child logger ID is 'root/d2s5' when parent is 'root' and label is 'd2s5'.",
+    "Test: JSONL file is valid (each line parses independently).",
+]
+must_haves = [
+    "Delta encoding reduces log size on long conversations",
+    "File opened in append mode (never truncated)",
+    "JSONL integrity: each line is a complete valid JSON object",
+]
+
+[[phases.tasks]]
+slug       = "context-condensation"
+title      = "Context condensation and turn summaries"
+goal       = """
+Implement context-window tracking and turn-summary injection:
+when token usage exceeds 75% of the model's context window, inject
+a condensation turn that summarises past reasoning.
+"""
+depends_on = ["provider-builder", "domain-types"]
+hints = [
+    "ContextTracker { window_size: u32, used_tokens: u32 }.",
+    "should_condense() → bool when used_tokens / window_size > 0.75.",
+    "condense(conversation, judge_model) → Conversation: calls the judge model with 'Summarise the investigation so far in 400 words.' and replaces old turns with a single <condensation> system turn.",
+    "TurnSummary items persisted to session state after each step.",
+    "Model context window sizes: Claude models 200k, GPT-4.1 128k, o4-mini 128k, Cerebras models 128k, Ollama 8k default (overridable).",
+]
+test_hints = [
+    "Test: should_condense() false at 74% usage, true at 76%.",
+    "Test: condense() call produces a Conversation with fewer turns than the original.",
+    "Test: TurnSummary appended to session state after each completed step.",
+]
+must_haves = [
+    "Condensation does not drop the original user objective turn",
+    "Token counts are estimates — over-count is safe; under-count is not",
+]
+
+[[phases.tasks]]
+slug       = "agent-engine"
+title      = "RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler)"
+goal       = """
+Implement the core agent loop in redshank-core/src/application/services/engine.rs,
+mirroring agent/engine.py. The CQRS entry point is RunInvestigationHandler in
+application/commands/run_investigation.rs: it validates the command, checks idempotency
+(mark as in-flight, return cached result on duplicate), enforces AuthContext via
+can_run_agent(), then delegates to RLMEngine. Features: step budget, depth control,
+subtask recursion (child RunInvestigationCommands), runtime policy enforcement,
+acceptance-criteria judge, cancel() via CancellationToken.
+"""
+depends_on = ["workspace-tools", "provider-builder", "replay-logger", "context-condensation", "patching", "security-model"]
+hints = [
+    "RunInvestigationHandler (application/commands/run_investigation.rs): (1) check_idempotency_key → return cached if hit; (2) can_run_agent(auth, policy) → return Err if denied; (3) mark key in-flight; (4) build RLMEngine; (5) call solve(); (6) store AgentCompleted event via session_store.append_event(); (7) mark_idempotency_key(key, result). Returns Err(DomainError) on auth failure or engine error.",
+    "RLMEngine (application/services/engine.rs): { config: AgentConfig, model: Arc<dyn ModelProvider>, tools: Arc<dyn ToolDispatcher>, judge: Arc<dyn ModelProvider>, replay_log: Arc<dyn ReplayLog>, auth: AuthContext, policy: Arc<dyn SecurityPolicy> }.",
+    "solve(objective, conversation_seed) → Result<String>: calls _solve_recursive(depth=0).",
+    "_solve_recursive(depth, objective, conversation) → Result<String>: loop up to config.max_steps per call.",
+    "Each iteration: model.complete(conversation) → ModelTurn; log call; dispatch each ToolCall; append ToolResults; check StopReason::EndTurn.",
+    "Subtask: when tool name == 'subtask', create child RLMEngine with depth+1; call _solve_recursive; feed result back as ToolResult.",
+    "Depth guard: if depth >= config.max_depth, return an error ToolResult instead of recursing.",
+    "Runtime policy: block identical run_shell command strings seen >2× at the same depth; block write_file to an unread path (enforced again here as double-check).",
+    "Acceptance judge: after subtask returns, call judge.complete(acceptance_prompt(subtask_goal, acceptance_criteria, result)) → pass/fail; retry once on fail.",
+    "Context condensation: call ContextTracker after each model.complete(); condense if needed.",
+    "CancellationToken (tokio_util::sync::CancellationToken): check at start of each loop iteration; return CancelledError if cancelled.",
+    "Parallel subtasks: when multiple subtask ToolCalls appear in the same ModelTurn, spawn them as tokio::task::spawn() and join_all(); respect parallel write groups.",
+    "ExternalContext { observations: Vec<String> }: accumulate cross-turn notes; prepend to system prompt on subsequent turns.",
+]
+test_hints = [
+    "Test (scripted model): write_file then read_file then end_turn produces expected final text.",
+    "Test: subtask recursion to depth 2 produces nested JSONL log entries.",
+    "Test: depth limit returns error ToolResult at max_depth.",
+    "Test: step budget exhaustion returns BudgetExhausted error.",
+    "Test: identical run_shell blocked after second repetition.",
+    "Test: cancel() during model.complete() returns CancelledError within 500ms.",
+    "Test: parallel subtasks run concurrently (mock model sleeps 100ms; two subtasks complete in <200ms total).",
+    "Test: acceptance judge retry on first fail passes on second attempt.",
+]
+must_haves = [
+    "All policy enforcements have dedicated tests",
+    "CancellationToken respected in the loop",
+    "Parallel subtask execution tested for actual concurrency",
+    "Scripted model fixture (no live API) used for all engine tests",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 6 — Wiki Graph
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Wiki Graph"
+order = 6
+
+[[phases.tasks]]
+slug       = "wiki-graph"
+title      = "WikiGraphModel: index parsing, cross-ref extraction, petgraph DAG"
+goal       = """
+Port agent/wiki_graph.py to Rust using petgraph. Parse wiki/index.md,
+read individual entry files to extract bold cross-references, fuzzy-match
+entity names across the registry, and build a petgraph::DiGraph.
+"""
+depends_on = ["domain-types"]
+hints = [
+    "WikiGraphModel { graph: DiGraph<WikiNode, WikiEdge>, name_registry: HashMap<String, NodeIndex> }.",
+    "parse_index(index_path) → Vec<(WikiCategory, String, PathBuf)>: parse '## Category' sections, then '- [title](path)' entries.",
+    "For each entry file, extract bold text in '## Cross-Reference Potential' section: **Entity Name** patterns.",
+    "Name registry keys: full name, parentheticals (content inside parens), slash-split parts, acronyms (first letters of each word), slug (lowercase-hyphenated).",
+    "fuzzy_match(name, registry) → Option<NodeIndex>: try exact key lookup; if miss, use strsim::jaro_winkler with threshold 0.88.",
+    "WikiWatcher: use notify crate to watch the wiki dir; on Change event, call rebuild().",
+    "WikiCategory colours (for TUI rendering): CampaignFinance=Cyan, Contracts=Yellow, Corporate=Green, Financial=Red, International=Magenta, Lobbying=Blue, Nonprofits=White, Other=Gray.",
+]
+test_hints = [
+    "Test: parse_index with a 3-category fixture produces correct (category, title, path) triples.",
+    "Test: bold cross-ref extraction finds '**Acme Corp**' in a fixture entry file.",
+    "Test: fuzzy match finds 'Acme Corporation' node when query is 'Acme Corp' (jaro_winkler > 0.88).",
+    "Test: acronym key 'AC' resolves to 'Acme Corp' node.",
+    "Test: rebuild() after a file write updates the graph node count.",
+]
+must_haves = [
+    "petgraph DiGraph used (not a hand-rolled adjacency list)",
+    "WikiWatcher is Send + Sync and does not block the async runtime",
+    "fuzzy matching tested for both positive and negative cases",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 7 — Session Persistence
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Session Persistence"
+order = 7
+
+[[phases.tasks]]
+slug       = "session-store"
+title      = "SQLite-backed session store (rusqlite)"
+goal       = """
+Implement the SessionStore port using rusqlite. Replace OpenPlanter's scattered
+JSONL + JSON files with a single .redshank/sessions.db SQLite database.
+Schema: sessions, turns, events, artifacts, observations.
+"""
+depends_on = ["domain-types", "wiki-graph"]
+hints = [
+    "SqliteSessionStore lives in src/adapters/persistence/sqlite.rs and implements the SessionStore port from src/ports/session_store.rs. SessionRuntime lives in src/application/services/session_runtime.rs.",
+    "Tables: sessions (id TEXT PK, created_at, owner_user_id TEXT NOT NULL, metadata JSON), turns (id, session_id FK, turn_index, summary JSON), events (id, session_id FK, seq INTEGER, event_type TEXT, payload JSON, ts), artifacts (id, session_id FK, name TEXT, path TEXT), observations (id, session_id FK, content TEXT, ts), idempotency_keys (key TEXT PK, session_id TEXT, result JSON, created_at INTEGER). Run CREATE TABLE IF NOT EXISTS at open time — no migration runner.",
+    "Use rusqlite in WAL mode (PRAGMA journal_mode = WAL) for concurrent readers.",
+    "Security-first port: every method accepts auth: &AuthContext. create_session checks can_run_agent; load_session checks can_read_session and verifies auth.user_id == session.owner_user_id unless Role::Owner/Service; list_sessions returns only sessions owned by the requesting user (or all if Owner/Service); delete_session checks can_delete_session. No bypasses.",
+    "UpdateFn pattern for transactional mutations (from docs/dev/database_transactions_summary.md): async fn update_session<F, R>(&self, id: &SessionId, auth: &AuthContext, update_fn: F) -> Result<R> where F: FnOnce(&mut AgentSession) -> Result<(bool, R), DomainError> + Send, R: Send. Closure returns (should_save, return_value); repo manages the SQLite transaction.",
+    "Idempotency: check_idempotency_key(key: &IdempotencyKey) -> Option<serde_json::Value> — SELECT from idempotency_keys WHERE key=? AND created_at > now()-86400. mark_idempotency_key(key, result) — INSERT OR REPLACE.",
+    "Domain event persistence: append_event(auth, session_id, event: &DomainEvent) serialises to JSON and INSERTs into events with auto-incrementing seq. list_events(auth, session_id) returns events ORDER BY seq ASC.",
+    "WikiSeed: on session creation, copy wiki/ baseline into .redshank/wiki/ (never overwrite agent-modified files — track via seed_applied flag in sessions table).",
+    "SessionRuntime (application/services/session_runtime.rs): wraps RunInvestigationHandler + WikiSeed; on each step appends DomainEvents from AgentSession::drain_events() via append_event, persists TurnSummary via save_turn.",
+    "Aggregate repository: SessionStore is the single repository for the AgentSession aggregate root — all related data (turns, events, artifacts, observations) flows through this one port.",
+]
+test_hints = [
+    "Test: create_session with AuthContext::system() round-trips metadata through load_session.",
+    "Test: load_session with mismatched user_id returns DomainError::Security(AccessDenied).",
+    "Test: list_sessions returns only sessions owned by the requesting user_id.",
+    "Test: list_sessions with Owner role returns all sessions.",
+    "Test: update_session closure returning (true, value) persists the mutation; (false, value) rolls back.",
+    "Test: append_event seq numbers increment across calls; list_events returns them in order.",
+    "Test: check_idempotency_key returns None on first call, cached result on second call.",
+    "Test: idempotency keys older than 24 hours return None.",
+    "Test: wiki seed copies files; second session creation does not overwrite agent-modified file.",
+    "Test: WAL mode confirmed (PRAGMA journal_mode = WAL returns 'wal').",
+    "Test: delete_session removes all related rows (CASCADE) and requires can_delete_session permission.",
+]
+must_haves = [
+    "In-memory SQLite (':memory:') used in all tests (no filesystem side-effects)",
+    "All SessionStore port methods enforce AuthContext checks — no method accessible without auth",
+    "UpdateFn pattern used for all transactional mutations",
+    "Idempotency table present and used by all command handlers",
+    "WikiSeed idempotent across multiple session creations",
+    "Aggregate repository pattern: SessionStore is the only repository for AgentSession",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 8 — Data Fetchers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Data Fetchers"
+order = 8
+
+[[phases.tasks]]
+slug       = "fetcher-framework"
+title      = "Fetcher trait, CLI entry points, and output conventions"
+goal       = """
+Define the DataFetcher trait and shared output conventions used by all 12
+public-data fetcher scripts. Implement the shared HTTP client and rate-limit
+helper.
+"""
+depends_on = ["workspace-scaffold", "credentials"]
+hints = [
+    "DataFetcher trait: async fn fetch(config: FetchConfig) -> Result<FetchOutput>.",
+    "FetchConfig: base_url, query_params, headers, rate_limit_ms (delay between paged requests), max_pages, output_path.",
+    "FetchOutput: records_written (usize), output_path (PathBuf), source_name (String).",
+    "Shared HTTP client: reqwest Client with User-Agent 'redshank/0.1.0 (research tool; contact in AGENTS.md)', 30s timeout, rustls-tls.",
+    "Rate-limit helper: tokio::time::sleep(Duration::from_millis(rate_limit_ms)) between pages.",
+    "Each fetcher is a binary in src/bin/ of redshank-fetchers crate, accepting --output <dir> and --query <string> CLI args.",
+]
+test_hints = [
+    "Test: rate_limit helper sleeps at least rate_limit_ms between calls (mock time).",
+    "Test: FetchConfig validates that output_path parent exists.",
+]
+must_haves = [
+    "User-Agent header set on all outbound requests",
+    "Rate limiting applied between paginated requests",
+    "Output written as JSON (newline-delimited) for agent consumption",
+]
+
+[[phases.tasks]]
+slug       = "fetchers-core"
+title      = "12 ported fetcher binaries (FEC, SEC, USASpending, lobbying, OFAC, ICIJ, 990, Census, EPA, FDIC, OSHA, SAM)"
+goal       = """
+Port all 12 fetch_*.py scripts from OpenPlanter to Rust fetcher binaries.
+Each fetches a specific public data source, respects rate limits, and writes
+NDJSON output. Use stygian-graph pipelines where multi-step or JS-rendered
+extraction is needed.
+"""
+depends_on = ["fetcher-framework", "stygian-integration"]
+hints = [
+    "fetch-fec: GET https://api.open.fec.gov/v1/candidates, /committees, /schedules/schedule_a, /totals. API key passed as api_key param.",
+    "fetch-sec-edgar: GET https://data.sec.gov/submissions/{CIK}.json. Accepts --ticker or --cik; resolve ticker→CIK via https://www.sec.gov/files/company_tickers.json.",
+    "fetch-usaspending: POST https://api.usaspending.gov/api/v2/search/spending_by_award (paginated via page param).",
+    "fetch-senate-lobbying: GET https://soprweb.senate.gov/index.aspx?event=processSearchCriteria (XML ZIP downloads; parse LD-1/LD-2/LD-203 XML).",
+    "fetch-ofac-sdn: GET https://www.treasury.gov/ofac/downloads/sdn.xml; parse XML to NDJSON.",
+    "fetch-icij-leaks: GET https://offshoreleaks.icij.org/api/... ; parse entity/officer/address nodes.",
+    "fetch-propublica-990: GET https://projects.propublica.org/nonprofits/api/v2/search.json.",
+    "fetch-census-acs: GET https://api.census.gov/data/{year}/acs/acs5 with variable list.",
+    "fetch-epa-echo: GET https://echo.epa.gov/rest/services/... facility enforcement records.",
+    "fetch-fdic: GET https://banks.data.fdic.gov/api/... financial institution data.",
+    "fetch-osha: GET https://enforcedata.dol.gov/views/data_summary.php inspection records.",
+    "fetch-sam-gov: GET https://api.sam.gov/entity-information/v3/entities with API key.",
+    "Where applicable, route through stygian-graph pipelines (stygian feature): ICIJ uses browser for JS rendering; SAM.gov benefits from AI extraction node for unstructured fields.",
+]
+test_hints = [
+    "Each fetcher has a unit test that mocks the HTTP response and asserts correct NDJSON output format.",
+    "Test: FEC fetcher constructs correct query params for candidate search.",
+    "Test: SEC EDGAR ticker→CIK resolution parses company_tickers.json fixture.",
+    "Test: Senate lobbying XML parser extracts registrant and client names from LD-2 fixture.",
+    "Test: OFAC SDN XML parser extracts entity name and program from fixture.",
+]
+must_haves = [
+    "All 12 fetchers present as separate binary targets",
+    "Each fetcher tested with a mocked HTTP response",
+    "Rate limiting between paginated requests for every fetcher",
+    "All fetchers exit 0 on success, non-zero with a clear message on error",
+]
+
+[[phases.tasks]]
+slug       = "fetchers-extended"
+title      = "14 new fetcher binaries expanding corporate, sanctions, courts, and property intelligence"
+goal       = """
+Add 14 new data-fetcher binaries that significantly expand Redshank's
+investigative reach: beneficial ownership (FinCEN BOI, OpenCorporates, GLEIF),
+additional sanctions layers (UN, EU, World Bank), courts (CourtListener/RECAP),
+House lobbying, federal audits (FAC), granular contracts (FPDS-NG),
+entity disambiguation (Wikidata SPARQL), media intelligence (GDELT),
+state corporate registries and county property records (both via stygian-graph
+browser + AI extraction pipelines).
+"""
+depends_on = ["fetchers-core"]
+hints = [
+    # ── Beneficial Ownership / Corporate Identity ──────────────────────────
+    "fetch-fincen-boi: POST https://boiefiling.fincen.gov/api/v1/... to search the FinCEN Beneficial Ownership database (post-CTA 2024 filings). API key required. Output: entity name, jurisdiction, beneficial owners (name, DOB hash, address). Critical for piercing shell company layers.",
+    "fetch-gleif: GET https://api.gleif.org/api/v1/lei-records?filter[entity.legalName]={name} — GLEIF LEI Registry. Returns Legal Entity Identifier, jurisdiction, registration authority, parent LEI (ownership chain). No auth required. Use as the canonical cross-linking ID for any entity appearing in SEC/SAM/USASpending.",
+    "fetch-opencorporates: GET https://api.opencorporates.com/v0.4/companies/search?q={name}&jurisdiction_code={code} — 200+ jurisdiction aggregator. API key for high-volume. Vital for DE/WY/NV shell companies and foreign subsidiaries the EDGAR graph misses.",
+    # ── Lobbying (completing the picture) ─────────────────────────────────
+    "fetch-house-lobbying: GET https://clerkapi.house.gov/Lobbying/... LD-1/LD-2 XML downloads from House Clerk (separate system from Senate SOPR). Parse registrant, client, issue codes, and covered officials. Combine output with senate-lobbying for full federal lobbying picture.",
+    # ── Courts & Legal ────────────────────────────────────────────────────
+    "fetch-recap-courtlistener: GET https://www.courtlistener.com/api/rest/v4/dockets/?q={query} — CourtListener / RECAP free federal court archive. Returns case name, court, docket entries, parties, attorneys. No auth for basic use; API key for bulk. Use stygian-graph http→ai_extract pipeline to pull case summaries from docket PDFs via vision API.",
+    # ── International / Multilateral Sanctions ────────────────────────────
+    "fetch-un-sanctions: GET https://scsanctions.un.org/resources/xml/en/consolidated.xml — UN Security Council Consolidated Sanctions List XML. Parse individual/entity records: aliases, addresses, identifiers (passport, national ID), listing reason. Complements OFAC for entities sanctioned by multilateral bodies but not the US.",
+    "fetch-eu-sanctions: GET https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content — EU CFSP/RELEX consolidated financial sanctions XML. Covers entities sanctioned under EU law that may not overlap with OFAC or UN lists. Parse subject, nameAlias, identificationDetail.",
+    "fetch-world-bank-debarred: GET https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_ACROBAT/FIRM/debarredFirms — World Bank debarred and cross-debarred firms JSON. Covers multilateral development bank sanctions. Cross-debarment flag indicates entity banned across MDB signatories.",
+    # ── Federal Grants & Procurement (deeper layer) ───────────────────────
+    "fetch-federal-audit: GET https://facdissem.census.gov/api/v1.0/submissions?... — Federal Audit Clearinghouse (FAC) single-audit database. Covers any organisation that spent $750k+ in federal grants. Returns findings, questioned costs, material weaknesses. JSON API no auth.",
+    "fetch-fpds: POST https://api.sam.gov/prod/opportunities/v2/search — FPDS-NG contract awards at a more granular level than USASpending: individual line items, modification history, award type codes, NAICS. Use this in parallel with USASpending to cross-validate and surface discrepancies.",
+    # ── Entity Disambiguation ─────────────────────────────────────────────
+    "fetch-wikidata: POST https://query.wikidata.org/sparql with SPARQL queries. Wikidata is the backbone for entity disambiguation: links Q-IDs across corporate registries, government roles, sanctions lists, and news mentions. Key queries: politician→company board memberships, officer→organisation affiliations, company→subsidiary tree. Use the sparql crate or raw reqwest POST with Accept: application/sparql-results+json.",
+    # ── State Corporate Registries (shell company hotspots) ───────────────
+    "fetch-state-sos: stygian-graph pipeline with browser + AI extraction nodes. Target DE (https://icis.corp.delaware.gov), WY (https://wyobiz.wyo.gov), NV (https://esos.nv.gov), FL (https://search.sunbiz.org). These are JS-heavy portals with no public API; stygian-browser Advanced stealth + claude ai_extract node parses the entity detail page. Output: registered agent, officers, formation date, status. Pipeline config stored as TOML in src/pipelines/state_sos/.",
+    # ── Property & Real Estate ────────────────────────────────────────────
+    "fetch-county-property: stygian-graph pipeline. Target county assessor portals for high-interest jurisdictions (NYC ACRIS https://a836-acris.nyc.gov, Miami-Dade, LA, Cook County). ACRIS has a JSON API (https://data.cityofnewyork.us/resource/636b-3b5g.json); others require browser + AI extraction. Output: owner name, LLC/trust chain, assessed value, deed history. Property→beneficial-owner chains are a key money-laundering vector.",
+    # ── Media Intelligence ────────────────────────────────────────────────
+    "fetch-gdelt: GET https://api.gdeltproject.org/api/v2/doc/doc?query={entity}&mode=artlist&format=json — GDELT Global Event/Media database. Returns news article metadata (URL, theme codes, image, tone score) mentioning the queried entity. Use to surface when an entity under investigation appears in news coverage and what context (conflict, corruption, legal). Combine with fetch-recap results to correlate legal filings with media coverage timeline.",
+]
+test_hints = [
+    "Each of the 14 new fetchers has a unit test mocking the HTTP/SPARQL response.",
+    "Test: GLEIF fetcher extracts LEI, legal name, and parent LEI from fixture JSON.",
+    "Test: OpenCorporates fetcher returns company number and registered address for a DE fixture.",
+    "Test: UN sanctions XML parser extracts aliases and passport identifiers from fixture.",
+    "Test: EU sanctions XML parser handles both individual and entity subject types.",
+    "Test: CourtListener fetcher constructs correct query string and parses docket fixture.",
+    "Test: Wikidata SPARQL fetcher serialises query, POSTs with correct Content-Type, parses bindings.",
+    "Test: GDELT fetcher URL-encodes entity name and parses artlist JSON fixture.",
+    "Test (stygian feature): state-sos pipeline config loads and validates without launching a browser.",
+    "Test (stygian feature): county-property ACRIS endpoint returns owner name from mock JSON response.",
+]
+must_haves = [
+    "All 14 fetchers (or pipeline configs) present as binary targets or embedded TOML pipeline definitions",
+    "stygian-graph pipeline configs for state-sos and county-property stored in src/pipelines/",
+    "Each fetcher exits 0 on success, non-zero with structured error on failure",
+    "Wikidata SPARQL queries documented inline as named constants",
+    "Rate limits respected: GLEIF 60 req/min, OpenCorporates 500/day (free tier), CourtListener 5000/day",
+]
+
+[[phases.tasks]]
+slug       = "fetchers-osint"
+title      = "8 individual-person OSINT fetchers (HIBP, GitHub, Wayback, WHOIS/RDAP, voter rolls, USPTO, username enum, social profiles)"
+goal       = """
+Add 8 individual-person OSINT fetchers that fill a gap entirely absent from
+OpenPlanter. These cover breach-exposure checking, public username/identity
+correlation, historical web presence, domain registration history, voter
+registration records, patent/trademark inventor data, and JS-rendered social
+profile scraping. All sources are fully public or breach-notification services
+that return only exposure metadata — never raw credential material.
+"""
+depends_on = ["fetchers-extended", "stygian-integration"]
+hints = [
+    # ── Breach Exposure ────────────────────────────────────────────────────
+    "fetch-hibp: Have I Been Pwned API v3. GET https://haveibeenpwned.com/api/v3/breachedaccount/{email}?truncateResponse=false with hibp-api-key header. Returns list of breach names, domains, dates, and data classes exposed (email, password-hash, phone, etc.). IMPORTANT: this API returns only breach METADATA — it never returns actual passwords or raw breach data. Use to answer 'was an email address found in a known breach?' during an investigation. Free for individual lookups at 1.5 req/sec. Add hibp_api_key to CredentialBundle.",
+    # ── GitHub Public Profile ──────────────────────────────────────────────
+    "fetch-github-profile: GitHub REST API. GET https://api.github.com/users/{username} and /users/{username}/orgs and /repos. No auth for public data (60 req/hr); add github_token to CredentialBundle for 5000 req/hr. Output: name, bio, company, location, email (if public), org memberships, public repo list. Surfaces tech workers, security researchers, and developers who use their real names in commits. Also: GET https://api.github.com/search/users?q={email}+in:email for email→username reverse lookup.",
+    # ── Historical Web Presence ────────────────────────────────────────────
+    "fetch-wayback: Wayback Machine CDX Server API. GET https://web.archive.org/cdx/search/cdx?url={domain_or_url}&output=json&limit=500. Returns (urlkey, timestamp, original, mimetype, statuscode, digest, length) for each archived snapshot. Use to reconstruct a domain's historical content and detect when it changed ownership. No auth, no rate limit stated — be polite (500ms between requests).",
+    # ── Domain / IP Registration ───────────────────────────────────────────
+    "fetch-whois-rdap: RDAP (Registration Data Access Protocol) — the WHOIS successor. GET https://rdap.org/domain/{domain} or https://rdap.verisign.com/com/v1/domain/{domain}. Returns registrant org (often privacy-masked), creation/expiry dates, nameservers, registrar. For IP blocks: GET https://rdap.arin.net/registry/ip/{ip}. No auth. Pair with Wayback results to build a domain provenance timeline.",
+    # ── Voter Registration ─────────────────────────────────────────────────
+    "fetch-voter-reg: State voter registration bulk files. Free/cheap states: FL (https://dos.fl.gov/elections/data-statistics/voter-registration-statistics/voter-extract-disk-request/), NC (https://www.ncsbe.gov/results-data/voter-registration-data), OH (https://www.ohiosos.gov/elections/voters/find-my-voter-registration/). Each provides a tab-delimited or CSV file (zip download). Fields include: full name, address, party, registration date, voting history. Use stygian-browser for portal navigation where direct download URL is not static. Name + address from voter rolls is a powerful cross-link to property records and campaign donations.",
+    # ── Patents & Trademarks ───────────────────────────────────────────────
+    "fetch-uspto: USPTO PatentsView API and TMAPI. GET https://search.patentsview.org/api/v1/inventor/?q={\"inventor_last_name\":\"Smith\"}  and https://developer.uspto.gov/api-catalog/trademark-search. Patent inventors and trademark applicants/assignees are filed under real individual names and addresses — surfaces undisclosed company interests and technical expertise of persons under investigation. No auth for PatentsView (1000 req/day free); TMAPI uses api.gov key.",
+    # ── Username Enumeration ───────────────────────────────────────────────
+    "fetch-username-enum: stygian-graph pipeline. Given a username, construct profile URLs across 300+ platforms (GitHub, Reddit, HackerNews, Twitter/X, Mastodon, Instagram, TikTok, YouTube, GitLab, npm, PyPI, Docker Hub, Steam, Keybase, Medium, Substack, etc.) and HEAD-request each to detect 200 vs 404. Compile presence map. Store platform URL templates as TOML in src/pipelines/username_enum/platforms.toml — one entry per platform with url_template, success_codes, and false_positive_patterns. Use stygian-graph http nodes with parallel wave execution for throughput. Output NDJSON: {username, platform, url, found: bool}. NO password/credential extraction of any kind.",
+    # ── Social Profile Scraping ────────────────────────────────────────────
+    "fetch-social-profiles: stygian-graph pipeline with stygian-browser Advanced stealth + ai_extract node. Target platforms: LinkedIn public profiles (https://www.linkedin.com/in/{slug}), Twitter/X (https://x.com/{username}), Mastodon (ActivityPub public JSON: https://{instance}/@{username}/outbox). Pipeline: browser navigate → wait for network idle → ai_extract node (Claude) extracts: display name, headline/bio, employer, location, follower count, recent post summary, linked URLs. Output NDJSON. LinkedIn ToS note: only access public profiles that are indexable by search engines (robots.txt allows). Pipeline config in src/pipelines/social_profiles/. Rate: one profile per 5 seconds minimum.",
+]
+test_hints = [
+    "Test: HIBP fetcher constructs correct URL, sets hibp-api-key header, parses breach list fixture JSON, and NEVER logs the API key.",
+    "Test: HIBP fetcher returns empty list (not an error) when API returns 404 (clean email).",
+    "Test: GitHub profile fetcher parses user fixture and returns org membership list.",
+    "Test: GitHub email-reverse-lookup constructs correct search query URL.",
+    "Test: Wayback CDX fetcher parses array-of-arrays JSON response into typed snapshot records.",
+    "Test: RDAP fetcher parses domain fixture JSON and extracts registrar + creation date.",
+    "Test: USPTO PatentsView fetcher constructs inventor name query and parses patent list fixture.",
+    "Test: username-enum pipeline config loads platforms.toml and constructs correct URL for GitHub template.",
+    "Test: username-enum marks platform as found=true on 200, found=false on 404.",
+    "Test (stygian feature): social-profiles pipeline config validates without launching a browser.",
+    "Test: voter-reg fetcher parses NC tab-delimited fixture row into structured output.",
+]
+must_haves = [
+    "HIBP API key masked in Debug/Display and never logged",
+    "HIBP fetcher returns breach METADATA only — no raw password/credential data is fetched, stored, or handled",
+    "Username enumeration: NO credential extraction, NO authentication attempts of any kind",
+    "Social profile scraping: only public, search-engine-indexable pages",
+    "All 8 fetchers/pipeline configs present as binary targets or embedded TOML pipeline definitions",
+    "platforms.toml for username-enum stored in src/pipelines/username_enum/ and included in binary via include_str!()",
+    "Rate limits documented and enforced for every source",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 9 — TUI
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "TUI"
+order = 9
+
+[[phases.tasks]]
+slug       = "tui-ratatui"
+title      = "ratatui TUI: chat pane, wiki-graph canvas, activity indicator, REPL"
+goal       = """
+Implement the interactive TUI in redshank-tui using ratatui + crossterm.
+Three-pane layout: sidebar (sessions + model), chat log, wiki-graph canvas.
+Activity indicator, slash-command REPL, streaming content rendering.
+"""
+depends_on = ["agent-engine", "wiki-graph", "session-store"]
+hints = [
+    "Layout: Vertical [ Header | Horizontal [ Sidebar(20%) | Chat(55%) | Graph(25%) ] | Footer ].",
+    "Sidebar: scrollable session list, current provider + model display, reasoning effort badge.",
+    "Chat pane: scrolling RichLog of agent turns; user input rendered in a styled InputBox at bottom; markdown-ish rendering (bold, code blocks, bullet lists) via ratatui Paragraph.",
+    "WikiGraphCanvas: character-cell petgraph force-layout rendering; nodes as coloured 3-char boxes; edges as ASCII lines; category colours as in wiki-graph phase.",
+    "ActivityIndicator: 8fps tick; states: Thinking(elapsed), Running(tool_name, elapsed), Streaming(elapsed, partial_text_preview).",
+    "Agent runs in a background tokio task; events sent to TUI via mpsc::channel with AppEvent enum: ContentDelta(String), ToolStart(String), ToolEnd(String, String), AgentComplete(String), WikiChanged.",
+    "Slash commands: /model [name] [--save], /model list, /reasoning [low|medium|high|off], /status, /clear, /quit, /help.",
+    "Non-TUI fallback: --no-tui flag renders plain streaming output to stdout (for scripting / CI).",
+    "Banner on startup: figlet-style 'redshank' in a ratatui Paragraph using block-character art.",
+]
+test_hints = [
+    "Test: ActivityIndicator transitions Idle→Thinking→Running→Streaming→Idle on correct events.",
+    "Test: slash command parser extracts '/model claude-opus-4-6 --save' correctly.",
+    "Test: WikiGraphCanvas re-renders after WikiChanged event (node count increases).",
+    "Test: AppEvent channel delivers ContentDelta events in order.",
+]
+must_haves = [
+    "All three panes render without panic on a 80×24 terminal",
+    "TUI exits cleanly on /quit (terminal state restored)",
+    "Activity indicator tested for all state transitions",
+    "Non-TUI --no-tui mode functional for headless use",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 10 — CLI Entry Point
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "CLI Entry Point"
+order = 10
+
+[[phases.tasks]]
+slug       = "cli-entrypoint"
+title      = "clap CLI: run, tui, fetch, session, configure, version"
+goal       = """
+Wire the binary entry point using clap derive. Subcommands: run (headless),
+tui (interactive TUI), fetch <source>, session list/delete/resume, configure
+(interactive credential setup), version.
+"""
+depends_on = ["tui-ratatui", "session-store", "fetchers-extended", "credentials", "settings"]
+gate = "Run `cargo test --workspace` locally and confirm all phase 1–9 tests pass before starting."
+hints = [
+    "run <objective>: load config+creds, build session, call SessionRuntime.solve(), print result to stdout.",
+    "tui: launch ratatui TUI, load last session or create new.",
+    "fetch <source> [--output <dir>] [--query <str>]: dispatch to the named fetcher binary.",
+    "session list: print table of sessions (ID, created, last objective).",
+    "session delete <id>: delete session from DB.",
+    "session resume <id>: resume an existing session in TUI or headless mode.",
+    "configure: interactive credential setup (rpassword prompts), saves to ~/.redshank/credentials.json.",
+    "version: print semver + git SHA (embed with env!(CARGO_PKG_VERSION) and a build.rs git SHA).",
+    "Global flags: --workspace <path>, --model <name>, --reasoning <effort>, --no-tui, --max-depth <n>, --demo.",
+    "Structured JSON logging via tracing + tracing-subscriber; default INFO, RUST_LOG override.",
+    "Startup log line: 'redshank v{VERSION} ({GIT_SHA}) — model: {model} — workspace: {path}'.",
+]
+test_hints = [
+    "CLI integration test: redshank version prints semver.",
+    "CLI integration test: redshank configure with mocked stdin saves credentials JSON.",
+    "CLI integration test: redshank session list with empty DB prints empty table (not an error).",
+]
+must_haves = [
+    "All subcommands present and functional",
+    "RUST_LOG respected",
+    "Startup log line present",
+    "Single statically-linked binary on Linux (RUSTFLAGS='-C target-feature=+crt-static' optional target)",
+]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 11 — Integration, Polish, and Docs
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[[phases]]
+name  = "Integration and Polish"
+order = 11
+
+[[phases.tasks]]
+slug       = "integration-tests"
+title      = "Full-stack integration tests with scripted model"
+goal       = """
+Write end-to-end integration tests that exercise the full stack
+(CLI → SessionRuntime → RLMEngine → WorkspaceTools) using a ScriptedModel
+fixture — no live API calls.
+"""
+depends_on = ["cli-entrypoint"]
+hints = [
+    "ScriptedModel: implements ModelProvider; replays a pre-defined sequence of ModelTurn responses when complete() is called.",
+    "Test: multi-turn session that writes a file, reads it back, runs a shell command, and returns a final answer — assert final text and file contents.",
+    "Test: subtask delegation creates child session entry in DB.",
+    "Test: context condensation triggers at 76% token usage in a scripted long conversation.",
+    "Test: demo mode (--demo) censors entity names in output.",
+    "Test: wiki seed creates .redshank/wiki/ on first session; second session leaves agent-modified file untouched.",
+    "Test user stories (mirrors test_user_stories.py): follow-the-money scripted scenario writes expected wiki entries.",
+]
+test_hints = [
+    "All integration tests use in-memory SQLite and a temp workspace dir.",
+    "No live API or network calls in any integration test — use mock HTTP server (wiremock) for fetcher tests.",
+]
+must_haves = [
+    "Zero live API calls in the test suite (all mocked)",
+    "Full-stack path exercised without real network",
+    "User-story scenarios from the Python test suite ported",
+]
+
+[[phases.tasks]]
+slug       = "coraline-mcp-tools"
+title      = "Coraline MCP tool bindings for self-directed code navigation"
+goal       = """
+When the agent is directed at the redshank workspace itself, it should be able
+to use Coraline MCP tools (coraline_read_file, coraline_search, coraline_repo_map,
+coraline_edit_file) via the tool layer. Wire these as additional ToolDefinitions
+behind a 'coraline' feature flag.
+"""
+depends_on = ["tool-defs", "workspace-tools"]
+hints = [
+    "coraline feature: if 'coraline' feature is enabled, add four extra ToolDefinitions: coraline_read_file, coraline_search, coraline_repo_map, coraline_edit_file.",
+    "These tools proxy to the Coraline MCP server over stdio (use the coraline crate's MCP client).",
+    "WorkspaceTools::dispatch() routes coraline_* calls to the MCP proxy.",
+    "The orchestrator rules already state to use Coraline for code navigation — these tools make that concrete.",
+]
+test_hints = [
+    "Test: coraline_* tools absent when feature is disabled.",
+    "Test: coraline_* tools present in TOOL_DEFINITIONS when feature is enabled.",
+]
+must_haves = [
+    "Coraline tools compile-conditional on the feature flag",
+    "MCP proxy does not break non-coraline builds",
+]
+
+[[phases.tasks]]
+slug       = "readme-and-agents-md"
+title      = "README.md and AGENTS.md"
+goal       = """
+Write README.md (project description, quickstart, feature list, fetcher list,
+stygian integration notes, comparison with OpenPlanter) and AGENTS.md
+(subagent instructions that mirror the orchestrator rules in plan.toml).
+"""
+depends_on = ["cli-entrypoint"]
+hints = [
+    "README sections: Overview, Installation (cargo install redshank), Quickstart (3 commands), Features, Data Sources, Configuration, TUI guide, Development.",
+    "AGENTS.md: mirrors the orchestrator.rules list; adds coraline tool usage instructions; specifies test-first workflow.",
+    "Include a comparison table: OpenPlanter (Python, Textual TUI, NetworkX, urllib) vs Redshank (Rust, ratatui, petgraph, reqwest + stygian).",
+]
+must_haves = [
+    "README has a working quickstart that a new user can follow",
+    "AGENTS.md is valid wiggum AGENTS.md format (used by wiggum generate)",
+]
