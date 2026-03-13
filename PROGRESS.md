@@ -15,7 +15,7 @@
 ## Phase 1 — Workspace Scaffold
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T01 — Cargo workspace, CI, and repo hygiene | `[x]` | Complete |
 
 ---
@@ -25,7 +25,7 @@
 > Depends on: Phase 1 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T02 — Domain model: entities, value objects, aggregates, domain events, and CQRS command/query types | `[x]` | Complete |
 | T03 — Credential bundle, storage (chmod 600), and resolution order | `[x]` | Complete |
 | T04 — Persistent settings (per-provider default model + reasoning effort) | `[x]` | Complete |
@@ -38,7 +38,7 @@
 > Depends on: Phase 2 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets | `[x]` | Complete |
 | T07 — OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama | `[x]` | Complete |
 | T08 — Provider builder and model-name inference | `[x]` | Complete |
@@ -50,9 +50,9 @@
 > Depends on: Phase 3 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T09 — Tool definitions: JSON schemas and to_provider() converters | `[x]` | 14 tests |
-| T10 — WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/) | `[ ]` | |
+| T10 — WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/) | `[x]` | 18 tests |
 | T11 — Codex-style patch format parser and applier | `[ ]` | |
 | T12 — stygian-graph + stygian-browser integration for web fetching | `[ ]` | |
 
@@ -63,7 +63,7 @@
 > Depends on: Phase 4 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T13 — ReplayLogger: JSONL delta-encoded LLM call log | `[ ]` | |
 | T14 — Context condensation and turn summaries | `[ ]` | |
 | T15 — RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler) | `[ ]` | |
@@ -75,7 +75,7 @@
 > Depends on: Phase 5 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T16 — WikiGraphModel: index parsing, cross-ref extraction, petgraph DAG | `[ ]` | |
 
 ---
@@ -85,7 +85,7 @@
 > Depends on: Phase 6 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T17 — SQLite-backed session store (rusqlite) | `[ ]` | |
 
 ---
@@ -95,7 +95,7 @@
 > Depends on: Phase 7 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T18 — Fetcher trait, CLI entry points, and output conventions | `[ ]` | |
 | T19 — 12 ported fetcher binaries (FEC, SEC, USASpending, lobbying, OFAC, ICIJ, 990, Census, EPA, FDIC, OSHA, SAM) | `[ ]` | |
 | T20 — 14 new fetcher binaries expanding corporate, sanctions, courts, and property intelligence | `[ ]` | |
@@ -108,7 +108,7 @@
 > Depends on: Phase 8 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T22 — ratatui TUI: chat pane, wiki-graph canvas, activity indicator, REPL | `[ ]` | |
 
 ---
@@ -118,7 +118,7 @@
 > Depends on: Phase 9 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T23 — clap CLI: run, tui, fetch, session, configure, version | `[ ]` | |
 
 ---
@@ -128,7 +128,7 @@
 > Depends on: Phase 10 all complete
 
 | Task | Status | Notes |
-|---|---|---|
+| --- | --- | --- |
 | T24 — Full-stack integration tests with scripted model | `[ ]` | |
 | T25 — Coraline MCP tool bindings for self-directed code navigation | `[ ]` | |
 | T26 — README.md and AGENTS.md | `[ ]` | |
@@ -146,21 +146,26 @@
 - T01: edition 2024 compiles fine on stable 1.94. RPITIT works natively (no async-trait crate needed).
 - T02: AgentSession is the aggregate root — SessionStore port should reference AgentSession, not a flat Session struct.
 - T02: ProviderKind::from_model_name must check specific prefixes (ollama/, cerebras/) before the generic contains('/') fallback for OpenRouter.
-- T02: Use `#[default]` derive attribute on enum variants instead of manual Default impls — clippy enforces `derivable_impls`.
-- T02: CredentialGuard<T> with Deref + "***REDACTED***" Debug/Display is the zero-cost secret masking pattern. serde(transparent) keeps JSON clean.
+- T02: Use `#[default]` derive attribute on enum variants instead of manual Default impls — clippy enforces `derivable_impls`.  
+- T02: `CredentialGuard<T>` with Deref + "***REDACTED***" Debug/Display is the zero-cost secret masking pattern. serde(transparent) keeps JSON clean.
 - T03: Credential adapter uses only std I/O (no tokio/reqwest needed). set_owner_only_perms uses cfg(unix) platform gate.
 - T03: Resolution order: explicit > env vars > .env file > workspace store > user store. merge_missing() fills only None fields.
 - T04: PersistentSettings uses skip_serializing_if = "Option::is_none" for clean JSON. Unknown keys silently ignored (serde default).
 - T05: SecurityPolicy trait is object-safe (`&dyn SecurityPolicy`). StaticPolicy uses explicit match arms per role — no role ordering/comparison.
 - T05: UserId newtype wraps Uuid, no Copy — forces intentional passing. UserId::system() returns nil UUID.
-- T05: AuthContext carries CredentialGuard<String> for session_token — redacted in Debug output. All downstream CQRS types needed zero changes (AuthContext used opaquely).
+- T05: AuthContext carries `CredentialGuard<String>` for session_token — redacted in Debug output. All downstream CQRS types needed zero changes (AuthContext used opaquely).
 - T06: SSE parsing uses byte-level parse_sse_events() → StreamAccumulator pattern. Tool-call JSON fragments accumulate via InProgressToolCall vec, then joined and parsed.
 - T06: Thinking budgets only for models matching `contains("opus-4")` — use let-chain to collapse nested ifs. All Claude models currently share 200k context window.
 - T06: CustomDebug on AnthropicModel excludes api_key field — CredentialGuard alone isn't enough since the struct holds it as a field.
 - T07: Single OpenAICompatibleModel serves OpenAI/OpenRouter/Cerebras/Ollama via for_provider() factory. OpenRouter needs HTTP-Referer + X-Title headers. Ollama gets 120s timeout.
 - T07: OpenAI SSE uses `data: [DONE]` terminator — must filter before JSON parse. Tool call deltas indexed by `index` field, not by content_block events like Anthropic.
-- T08: ModelProvider uses RPITIT so it's NOT dyn-compatible. Use ProviderBox enum-dispatch instead of Arc<dyn ModelProvider>. Clippy enforces async fn over impl Future for simple delegation (manual_async_fn lint).
+- T08: ModelProvider uses RPITIT so it's NOT dyn-compatible. Use ProviderBox enum-dispatch instead of `Arc<dyn ModelProvider>`. Clippy enforces async fn over impl Future for simple delegation (manual_async_fn lint).
 - T08: Ollama doesn't require an API key — use empty CredentialGuard placeholder. Judge model prefers claude-haiku-4-5, falls back to gpt-4o-mini.
 - T08: list_models endpoint format differs: Ollama uses `{"models": [...]}` with `name` field; OpenAI/Anthropic use `{"data": [...]}` with `id` field. Anthropic needs `anthropic-version` header.
 - T09: Tool definitions live in adapters/tool_defs.rs (provider-specific converters). 18 base tools + 2 delegation tools (subtask/execute) gated on recursive flag.
 - T09: to_anthropic_tools() uses `input_schema` key; to_openai_tools() wraps in `{type: "function", function: {name, description, parameters}}`. All parameters have type=object + additionalProperties=false.
+- T10: WorkspaceTools in adapters/tools/ (mod+filesystem+shell+web) implements ToolDispatcher. resolve_path() canonicalizes and checks workspace containment. Pre-read write guard via files_read HashSet.
+- T10: Shell policy: HEREDOC_RE and INTERACTIVE_RE block dangerous/interactive commands. tokio::time::timeout + wait_with_output for clean timeout handling (wait_with_output takes ownership; restructure code so timeout drops the future which drops child).
+- T10: crc32fast for hashline hashes (2-char hex, whitespace-invariant). regex for symbol extraction in repo_map. base64 for read_image. All behind `runtime` feature.
+- T10: Parallel write conflict detection via WriteGroup with group_id→(path→owner_id) claims map. scope_group_id/scope_owner_id set per execution context.
+- T10: Edition 2024 let-chains: `if let Some(g) = glob && !fnmatch(...)` collapses nested ifs. Use `&Path` not `&PathBuf` for function params (clippy ptr_arg).

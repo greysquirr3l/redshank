@@ -56,6 +56,11 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
+# Hashing / encoding / regex (tool layer)
+crc32fast = "1"
+base64 = "0.22"
+regex = "1"
+
 # Workspace crates
 redshank-core = { path = "redshank-core" }
 redshank-tui = { path = "redshank-tui" }
