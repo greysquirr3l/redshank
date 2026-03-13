@@ -76,7 +76,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T16 — WikiGraphModel: index parsing, cross-ref extraction, petgraph DAG | `[ ]` | |
+| T16 — WikiGraphModel: index parsing, cross-ref extraction, petgraph DAG | `[x]` | 13 tests |
 
 ---
 
@@ -188,3 +188,6 @@
 - T15: Runtime policy: shell_command_counts HashMap<(depth, cmd_str), count> blocks identical run_shell after 2 repeats per depth level. Uses Mutex for interior mutability through &self.
 - T15: ExternalContext accumulates cross-turn observations with add() and summary(max_items, max_chars). Passed as &mut through recursive calls.
 - T15: Test infrastructure: ScriptedModel (pre-programmed ModelTurns via AtomicUsize index), ScriptedDispatcher (pre-programmed results), NoopReplayLog. make_engine() helper constructs with default AgentConfig.
+- T16: WikiGraphModel in adapters/wiki_graph.rs with petgraph DiGraph<WikiNode, WikiEdge>. parse_index reads `### Category` headers and `| Name | Jurisdiction | [link](path) |` rows. extract_cross_refs finds bold `**text**` in `## Cross-Reference Potential` sections.
+- T16: Name registry maps lowered variants → NodeIndex: full name, title, parenthetical contents, slash-split parts, file slug. match_reference uses 5-stage lookup: exact → parenthetical → substring → token overlap (≥2) → jaro_winkler (≥0.88).
+- T16: Hand-rolled jaro/jaro_winkler to avoid strsim dep. WikiWatcher uses tokio interval poll loop (Send+Sync, non-blocking) with CancellationToken instead of notify crate.

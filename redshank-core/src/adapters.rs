@@ -6,3 +6,4 @@ pub mod persistence;
 pub mod providers;
 pub mod tool_defs;
 pub mod tools;
+pub mod wiki_graph;
