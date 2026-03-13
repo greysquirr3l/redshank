@@ -1,0 +1,19 @@
+[package]
+name = "redshank-tui"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Ratatui-based TUI for the Redshank investigation agent"
+
+[dependencies]
+redshank-core = { workspace = true, features = ["runtime"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+tracing = { workspace = true }

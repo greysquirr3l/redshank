@@ -1,0 +1,19 @@
+[package]
+name = "redshank-fetchers"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Public data fetcher binaries for the Redshank investigation agent"
+
+[dependencies]
+redshank-core = { workspace = true, features = ["runtime"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+clap = { workspace = true }

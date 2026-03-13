@@ -1,0 +1,32 @@
+[package]
+name = "redshank-core"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Core domain, ports, application, and adapters for the Redshank investigation agent"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# I/O dependencies — only used in adapters (behind module boundaries, not domain)
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
+petgraph = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[features]
+default = ["runtime"]
+runtime = ["dep:tokio", "dep:reqwest", "dep:rusqlite", "dep:petgraph", "dep:tracing"]
+stygian = ["runtime"]
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }

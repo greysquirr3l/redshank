@@ -18,7 +18,7 @@
 
 | Task | Status | Notes |
 |---|---|---|
-| T01 — Cargo workspace, CI, and repo hygiene | `[ ]` | |
+| T01 — Cargo workspace, CI, and repo hygiene | `[x]` | Complete |
 
 ---
 
@@ -164,4 +164,6 @@
 > The orchestrator reads this section at the start of every iteration
 > to avoid repeating past mistakes.
 
-_No learnings yet._
+- T01: ReplayLog trait uses RPITIT (`impl Future`) which is not dyn-compatible. Use generics (`T: ReplayLog`) not `dyn ReplayLog`. Changed `child()` to `child_path()` returning a String.
+- T01: redshank-core with `--no-default-features` has zero I/O deps — domain purity verified via `cargo tree`.
+- T01: edition 2024 compiles fine on stable 1.94. RPITIT works natively (no async-trait crate needed).
