@@ -33,7 +33,7 @@
 | T02 — Domain model: entities, value objects, aggregates, domain events, and CQRS command/query types | `[x]` | Complete |
 | T03 — Credential bundle, storage (chmod 600), and resolution order | `[x]` | Complete |
 | T04 — Persistent settings (per-provider default model + reasoning effort) | `[x]` | Complete |
-| T05 — Security domain model: AuthContext, Permission, SecurityPolicy (fail-secure, DDD-Lite) | `[ ]` | |
+| T05 — Security domain model: AuthContext, Permission, SecurityPolicy (fail-secure, DDD-Lite) | `[x]` | Complete |
 
 ---
 
@@ -174,3 +174,6 @@
 - T03: Credential adapter uses only std I/O (no tokio/reqwest needed). set_owner_only_perms uses cfg(unix) platform gate.
 - T03: Resolution order: explicit > env vars > .env file > workspace store > user store. merge_missing() fills only None fields.
 - T04: PersistentSettings uses skip_serializing_if = "Option::is_none" for clean JSON. Unknown keys silently ignored (serde default).
+- T05: SecurityPolicy trait is object-safe (`&dyn SecurityPolicy`). StaticPolicy uses explicit match arms per role — no role ordering/comparison.
+- T05: UserId newtype wraps Uuid, no Copy — forces intentional passing. UserId::system() returns nil UUID.
+- T05: AuthContext carries CredentialGuard<String> for session_token — redacted in Debug output. All downstream CQRS types needed zero changes (AuthContext used opaquely).
