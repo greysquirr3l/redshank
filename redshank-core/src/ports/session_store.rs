@@ -1,18 +1,21 @@
 //! `SessionStore` port — session persistence.
 
+use crate::domain::agent::AgentSession;
 use crate::domain::auth::AuthContext;
 use crate::domain::errors::DomainError;
 use crate::domain::events::DomainEvent;
-use crate::domain::session::{Session, SessionId};
+use crate::domain::session::SessionId;
 use uuid::Uuid;
 
 /// Port trait for session persistence. All methods require `AuthContext`.
+///
+/// Uses RPITIT — not dyn-compatible. Use generics (`T: SessionStore`).
 pub trait SessionStore: Send + Sync {
-    /// Save a new session.
+    /// Save or update an agent session.
     fn save(
         &self,
         auth: &AuthContext,
-        session: &Session,
+        session: &AgentSession,
     ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send;
 
     /// Load a session by ID.
@@ -20,13 +23,13 @@ pub trait SessionStore: Send + Sync {
         &self,
         auth: &AuthContext,
         id: SessionId,
-    ) -> impl std::future::Future<Output = Result<Option<Session>, DomainError>> + Send;
+    ) -> impl std::future::Future<Output = Result<Option<AgentSession>, DomainError>> + Send;
 
     /// List all sessions visible to the caller.
     fn list(
         &self,
         auth: &AuthContext,
-    ) -> impl std::future::Future<Output = Result<Vec<Session>, DomainError>> + Send;
+    ) -> impl std::future::Future<Output = Result<Vec<AgentSession>, DomainError>> + Send;
 
     /// Delete a session by ID.
     fn delete(

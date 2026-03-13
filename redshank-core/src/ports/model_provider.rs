@@ -1,5 +1,6 @@
 //! `ModelProvider` port — LLM completion and token counting.
 
+use crate::domain::errors::DomainError;
 use crate::domain::session::{ModelTurn, ToolCall};
 use serde::{Deserialize, Serialize};
 
@@ -27,33 +28,22 @@ pub struct ToolDefinition {
     pub parameters: serde_json::Value,
 }
 
-/// Response from a model completion call.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompletionResponse {
-    /// The model turn generated.
-    pub turn: ModelTurn,
-    /// Total tokens used (prompt + completion).
-    pub total_tokens: u64,
-    /// Prompt tokens used.
-    pub prompt_tokens: u64,
-    /// Completion tokens used.
-    pub completion_tokens: u64,
-}
-
 /// Port trait for LLM model providers.
+///
+/// Uses RPITIT — not dyn-compatible. Use generics (`T: ModelProvider`).
 pub trait ModelProvider: Send + Sync {
-    /// Send a completion request and return the model's response.
+    /// Send a completion request and return the model's response turn.
     fn complete(
         &self,
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
-    ) -> impl std::future::Future<Output = Result<CompletionResponse, crate::domain::errors::DomainError>> + Send;
+    ) -> impl std::future::Future<Output = Result<ModelTurn, DomainError>> + Send;
 
     /// Count tokens in the given messages without making an API call.
     fn count_tokens(
         &self,
         messages: &[ChatMessage],
-    ) -> Result<u64, crate::domain::errors::DomainError>;
+    ) -> Result<u32, DomainError>;
 
     /// The model's context window size in tokens.
     fn context_window(&self) -> u64;

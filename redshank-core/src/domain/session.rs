@@ -21,17 +21,23 @@ impl Default for SessionId {
     }
 }
 
-/// Reason the agent stopped.
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Reason the model stopped generating.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StopReason {
-    /// Normal completion — acceptance criteria met.
-    Completed,
-    /// Step budget exhausted.
-    BudgetExhausted,
-    /// User or system cancellation.
-    Cancelled,
-    /// Unrecoverable error.
-    Error(String),
+    /// Normal end of turn.
+    EndTurn,
+    /// Model wants to use a tool.
+    ToolUse,
+    /// Hit token limit.
+    MaxTokens,
+    /// Hit a stop sequence.
+    StopSequence,
 }
 
 /// A single tool call made by the model.
@@ -50,55 +56,78 @@ pub struct ToolCall {
 pub struct ToolResult {
     /// Corresponding tool call ID.
     pub call_id: String,
-    /// Whether the tool succeeded.
-    pub success: bool,
-    /// Output text.
-    pub output: String,
+    /// Output content.
+    pub content: String,
+    /// Whether the tool execution errored.
+    pub is_error: bool,
 }
 
-/// A single model turn (request + response).
+/// A single model turn (response from the model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelTurn {
-    /// Turn number (0-indexed).
-    pub turn: u32,
-    /// Model's text response.
-    pub response_text: Option<String>,
+    /// Text content from the model (if any).
+    pub content: Option<String>,
     /// Tool calls requested by the model.
     pub tool_calls: Vec<ToolCall>,
-    /// Results of tool execution.
-    pub tool_results: Vec<ToolResult>,
+    /// Why the model stopped.
+    pub stop_reason: StopReason,
+}
+
+/// Summary of a turn, used for context condensation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnSummary {
+    /// Turn number (0-indexed).
+    pub turn: u32,
+    /// Summary text.
+    pub summary: String,
+    /// Names of tools used in this turn.
+    pub tool_names: Vec<String>,
     /// Timestamp.
     pub timestamp: DateTime<Utc>,
 }
 
-/// Summary of a condensed portion of conversation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TurnSummary {
-    /// Range of turns summarised.
-    pub turn_range: (u32, u32),
-    /// The summary text.
-    pub summary: String,
-    /// Timestamp of summarisation.
-    pub timestamp: DateTime<Utc>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// A complete session record.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    /// Session identifier.
-    pub id: SessionId,
-    /// Investigation goal / prompt.
-    pub goal: String,
-    /// Model turns.
-    pub turns: Vec<ModelTurn>,
-    /// Turn summaries from context condensation.
-    pub summaries: Vec<TurnSummary>,
-    /// How the session ended.
-    pub stop_reason: Option<StopReason>,
-    /// Owner user ID for access control.
-    pub owner_user_id: String,
-    /// Session creation time.
-    pub created_at: DateTime<Utc>,
-    /// Last updated time.
-    pub updated_at: DateTime<Utc>,
+    #[test]
+    fn session_id_display() {
+        let sid = SessionId::new();
+        let display = format!("{sid}");
+        assert!(!display.is_empty());
+        assert_eq!(display, sid.0.to_string());
+    }
+
+    #[test]
+    fn tool_call_roundtrip_serde() {
+        let tc = ToolCall {
+            id: "call_123".to_string(),
+            name: "web_search".to_string(),
+            arguments: serde_json::json!({"query": "test"}),
+        };
+        let json = serde_json::to_string(&tc).unwrap();
+        let restored: ToolCall = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.name, "web_search");
+    }
+
+    #[test]
+    fn model_turn_roundtrip_serde() {
+        let turn = ModelTurn {
+            content: Some("I found something".to_string()),
+            tool_calls: vec![],
+            stop_reason: StopReason::EndTurn,
+        };
+        let json = serde_json::to_string(&turn).unwrap();
+        let restored: ModelTurn = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.stop_reason, StopReason::EndTurn);
+    }
+
+    #[test]
+    fn stop_reason_variants_roundtrip() {
+        for reason in [StopReason::EndTurn, StopReason::ToolUse, StopReason::MaxTokens, StopReason::StopSequence] {
+            let json = serde_json::to_string(&reason).unwrap();
+            let restored: StopReason = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored, reason);
+        }
+    }
 }

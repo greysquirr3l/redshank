@@ -1,12 +1,17 @@
 //! `GetWikiEntry` query.
 
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
-/// Query to retrieve a wiki entry by title.
+use crate::domain::auth::AuthContext;
+
+/// Query to retrieve a wiki entry by path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetWikiEntryQuery {
-    /// Entry title to look up.
-    pub title: String,
+    /// Path to the wiki entry.
+    pub path: PathBuf,
+    /// Caller's auth context.
+    pub auth: AuthContext,
 }
 
 // TODO(T16): Implement GetWikiEntryHandler

@@ -30,7 +30,7 @@
 
 | Task | Status | Notes |
 |---|---|---|
-| T02 — Domain model: entities, value objects, aggregates, domain events, and CQRS command/query types | `[ ]` | |
+| T02 — Domain model: entities, value objects, aggregates, domain events, and CQRS command/query types | `[x]` | Complete |
 | T03 — Credential bundle, storage (chmod 600), and resolution order | `[ ]` | |
 | T04 — Persistent settings (per-provider default model + reasoning effort) | `[ ]` | |
 | T05 — Security domain model: AuthContext, Permission, SecurityPolicy (fail-secure, DDD-Lite) | `[ ]` | |
@@ -167,3 +167,7 @@
 - T01: ReplayLog trait uses RPITIT (`impl Future`) which is not dyn-compatible. Use generics (`T: ReplayLog`) not `dyn ReplayLog`. Changed `child()` to `child_path()` returning a String.
 - T01: redshank-core with `--no-default-features` has zero I/O deps — domain purity verified via `cargo tree`.
 - T01: edition 2024 compiles fine on stable 1.94. RPITIT works natively (no async-trait crate needed).
+- T02: AgentSession is the aggregate root — SessionStore port should reference AgentSession, not a flat Session struct.
+- T02: ProviderKind::from_model_name must check specific prefixes (ollama/, cerebras/) before the generic contains('/') fallback for OpenRouter.
+- T02: Use `#[default]` derive attribute on enum variants instead of manual Default impls — clippy enforces `derivable_impls`.
+- T02: CredentialGuard<T> with Deref + "***REDACTED***" Debug/Display is the zero-cost secret masking pattern. serde(transparent) keeps JSON clean.
