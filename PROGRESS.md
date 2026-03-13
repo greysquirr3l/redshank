@@ -45,7 +45,7 @@
 
 | Task | Status | Notes |
 |---|---|---|
-| T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets | `[ ]` | |
+| T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets | `[x]` | Complete |
 | T07 — OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama | `[ ]` | |
 | T08 — Provider builder and model-name inference | `[ ]` | |
 
@@ -177,3 +177,6 @@
 - T05: SecurityPolicy trait is object-safe (`&dyn SecurityPolicy`). StaticPolicy uses explicit match arms per role — no role ordering/comparison.
 - T05: UserId newtype wraps Uuid, no Copy — forces intentional passing. UserId::system() returns nil UUID.
 - T05: AuthContext carries CredentialGuard<String> for session_token — redacted in Debug output. All downstream CQRS types needed zero changes (AuthContext used opaquely).
+- T06: SSE parsing uses byte-level parse_sse_events() → StreamAccumulator pattern. Tool-call JSON fragments accumulate via InProgressToolCall vec, then joined and parsed.
+- T06: Thinking budgets only for models matching `contains("opus-4")` — use let-chain to collapse nested ifs. All Claude models currently share 200k context window.
+- T06: CustomDebug on AnthropicModel excludes api_key field — CredentialGuard alone isn't enough since the struct holds it as a field.
