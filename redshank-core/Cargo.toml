@@ -27,10 +27,14 @@ crc32fast = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 
+# Stygian (behind stygian feature)
+stygian-browser = { workspace = true, optional = true }
+stygian-graph = { workspace = true, optional = true }
+
 [features]
 default = ["runtime"]
 runtime = ["dep:tokio", "dep:reqwest", "dep:rusqlite", "dep:petgraph", "dep:tracing", "dep:crc32fast", "dep:base64", "dep:regex"]
-stygian = ["runtime"]
+stygian = ["runtime", "dep:stygian-browser", "dep:stygian-graph"]
 
 [dev-dependencies]
 tokio = { workspace = true }

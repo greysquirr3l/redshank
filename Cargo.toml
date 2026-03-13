@@ -65,3 +65,7 @@ regex = "1"
 redshank-core = { path = "redshank-core" }
 redshank-tui = { path = "redshank-tui" }
 redshank-fetchers = { path = "redshank-fetchers" }
+
+# Stygian (browser automation + graph scraping)
+stygian-browser = "0.1"
+stygian-graph = { version = "0.1", default-features = false }

@@ -1,7 +1,7 @@
 //! Tool dispatch adapters — `WorkspaceTools` implements `ToolDispatcher`.
 //!
-//! Sub-modules: filesystem, patching, shell, web.
-//! Stygian (T12) is wired later.
+//! Sub-modules: filesystem, patching, shell, stygian, web.
+//! Stygian module requires the `stygian` feature flag.
 
 #[cfg(feature = "runtime")]
 mod filesystem;
@@ -9,6 +9,8 @@ mod filesystem;
 mod patching;
 #[cfg(feature = "runtime")]
 mod shell;
+#[cfg(feature = "stygian")]
+mod stygian;
 #[cfg(feature = "runtime")]
 mod web;
 
@@ -284,7 +286,7 @@ mod workspace_tools {
                 "run_shell" | "run_shell_bg" | "check_shell_bg" | "kill_shell_bg"
                 | "cleanup_bg_jobs" => Permission::RunAgent,
                 // Web tools
-                "web_search" | "fetch_url" => Permission::FetchData,
+                "web_search" | "fetch_url" | "run_scrape_pipeline" => Permission::FetchData,
                 // Read tools
                 _ => Permission::ReadSession,
             }
@@ -351,6 +353,16 @@ mod workspace_tools {
                 // Web
                 "web_search" => web::web_search(self, &arguments).await,
                 "fetch_url" => web::fetch_url(self, &arguments).await,
+                // Stygian pipeline (only available with stygian feature)
+                #[cfg(feature = "stygian")]
+                "run_scrape_pipeline" => {
+                    super::stygian::run_scrape_pipeline(self, &arguments).await
+                }
+                #[cfg(not(feature = "stygian"))]
+                "run_scrape_pipeline" => {
+                    "run_scrape_pipeline requires the 'stygian' feature flag"
+                        .to_string()
+                }
                 // Parallel write groups
                 "begin_parallel_write_group" => {
                     self.begin_parallel_write_group(&arguments).await
@@ -358,8 +370,7 @@ mod workspace_tools {
                 "end_parallel_write_group" => {
                     self.end_parallel_write_group(&arguments).await
                 }
-                // Patching — delegates to apply_patch in filesystem for now
-                // TODO(T11): Codex-style patch format parser
+                // Patching
                 "apply_patch" => filesystem::apply_patch(self, &arguments).await,
                 _ => format!("Unknown tool: {tool_name}"),
             };

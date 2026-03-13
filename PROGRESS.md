@@ -54,7 +54,7 @@
 | T09 — Tool definitions: JSON schemas and to_provider() converters | `[x]` | 14 tests |
 | T10 — WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/) | `[x]` | 18 tests |
 | T11 — Codex-style patch format parser and applier | `[x]` | 18 tests |
-| T12 — stygian-graph + stygian-browser integration for web fetching | `[ ]` | |
+| T12 — stygian-graph + stygian-browser integration for web fetching | `[x]` | 4 tests (stygian feature) |
 
 ---
 
@@ -173,3 +173,7 @@
 - T11: Two-pass hunk matching: exact then whitespace-normalised (collapse runs to single space). Cursor advances after each chunk for ordered multi-hunk application.
 - T11: ApplyReport returned even on partial failure — each operation is independent. resolve closure enforces workspace path safety.
 - T11: apply_patch in filesystem.rs delegates to patching::apply_patch and marks all added/updated/moved files as read for subsequent edits.
+- T12: Stygian integration behind `stygian` feature flag. BrowserPool lazy via `Arc<OnceCell<Arc<BrowserPool>>>`. StygianIntegration, fetch_url_smart, is_likely_spa, run_scrape_pipeline.
+- T12: stygian-browser 0.1: `BrowserPool::new(config) -> Result<Arc<Self>>`, `pool.acquire() -> Result<BrowserHandle>`, `WaitUntil::NetworkIdle` is a unit variant (no fields).
+- T12: stygian-graph 0.1: `PipelineUnvalidated::new(config).validate()?.execute().complete(results)` typestate pattern. Empty pipeline validation may fail — don't assert Ok.
+- T12: Compiles and passes tests with AND without `stygian` feature. `run_scrape_pipeline` dispatch returns "requires stygian feature" when disabled.
