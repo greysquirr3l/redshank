@@ -65,7 +65,7 @@
 | Task | Status | Notes |
 | --- | --- | --- |
 | T13 — ReplayLogger: JSONL delta-encoded LLM call log | `[x]` | 9 tests |
-| T14 — Context condensation and turn summaries | `[ ]` | |
+| T14 — Context condensation and turn summaries | `[x]` | 9 tests |
 | T15 — RLMEngine: recursive tool-calling agent loop (application/services/ + CQRS command handler) | `[ ]` | |
 
 ---
@@ -180,3 +180,6 @@
 - T13: FileReplayLogger in adapters/persistence/replay_log.rs implements ReplayLog port. Uses AtomicU32 (seq) + AtomicUsize (prev_len) for thread-safe delta encoding. HeaderParams/CallParams structs avoid clippy too_many_arguments.
 - T13: Delta encoding: seq 0 → full messages_snapshot; seq N → messages_delta (slice from prev_len). File opened in append mode (never truncated). JSONL = one complete JSON object per line.
 - T13: Child loggers via `child(depth, step)` produce hierarchical IDs: `root/d{depth}s{step}`. Grandchild nests: `root/d2s5/d3s1`. All append to same JSONL file.
+- T14: ContextTracker in application/services/condensation.rs. should_condense() triggers when used_tokens > 75% of window_size. condense_tool_outputs() replaces old tool-role messages with placeholder, keeping last 4.
+- T14: condense_with_judge() asks judge model for 400-word summary, rebuilds conversation: objective + <condensation> turn + recent messages. Preserves first user message (objective) always.
+- T14: model_context_window() heuristic: claude* = 200k, gpt-4.1/gpt-4o/o4-mini = 128k, cerebras/llama = 128k, default 128k. services.rs converted to module file for services/ directory.
