@@ -47,7 +47,7 @@
 |---|---|---|
 | T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets | `[x]` | Complete |
 | T07 — OpenAICompatibleModel: OpenAI, OpenRouter, Cerebras, Ollama | `[x]` | Complete |
-| T08 — Provider builder and model-name inference | `[ ]` | |
+| T08 — Provider builder and model-name inference | `[x]` | Complete |
 
 ---
 
@@ -182,3 +182,6 @@
 - T06: CustomDebug on AnthropicModel excludes api_key field — CredentialGuard alone isn't enough since the struct holds it as a field.
 - T07: Single OpenAICompatibleModel serves OpenAI/OpenRouter/Cerebras/Ollama via for_provider() factory. OpenRouter needs HTTP-Referer + X-Title headers. Ollama gets 120s timeout.
 - T07: OpenAI SSE uses `data: [DONE]` terminator — must filter before JSON parse. Tool call deltas indexed by `index` field, not by content_block events like Anthropic.
+- T08: ModelProvider uses RPITIT so it's NOT dyn-compatible. Use ProviderBox enum-dispatch instead of Arc<dyn ModelProvider>. Clippy enforces async fn over impl Future for simple delegation (manual_async_fn lint).
+- T08: Ollama doesn't require an API key — use empty CredentialGuard placeholder. Judge model prefers claude-haiku-4-5, falls back to gpt-4o-mini.
+- T08: list_models endpoint format differs: Ollama uses `{"models": [...]}` with `name` field; OpenAI/Anthropic use `{"data": [...]}` with `id` field. Anthropic needs `anthropic-version` header.
