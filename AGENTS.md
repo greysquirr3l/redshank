@@ -21,7 +21,6 @@ ratatui TUI. Web fetches use stygian-graph pipelines (with optional stygian-brow
 anti-detection automation for JS-rendered pages). A compiled binary ships as a
 single executable with no Python or Node.js runtime dependency.
 
-
 ## Setup commands
 
 - Build: `cargo build --workspace`
@@ -32,7 +31,6 @@ single executable with no Python or Node.js runtime dependency.
 
 - Language: rust
 - Strategy: TDD — write a failing test before any implementation code
-
 
 ## Rules
 

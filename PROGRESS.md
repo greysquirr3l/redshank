@@ -12,9 +12,7 @@
 
 ---
 
-
 ## Phase 1 — Workspace Scaffold
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -22,11 +20,9 @@
 
 ---
 
-
 ## Phase 2 — Domain Model
 
 > Depends on: Phase 1 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -37,11 +33,9 @@
 
 ---
 
-
 ## Phase 3 — LLM Provider Layer
 
 > Depends on: Phase 2 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -51,26 +45,22 @@
 
 ---
 
-
 ## Phase 4 — Tool Layer
 
 > Depends on: Phase 3 all complete
 
-
 | Task | Status | Notes |
 |---|---|---|
-| T09 — Tool definitions: JSON schemas and to_provider() converters | `[ ]` | |
+| T09 — Tool definitions: JSON schemas and to_provider() converters | `[x]` | 14 tests |
 | T10 — WorkspaceTools: filesystem, shell, web, and parallel-write safety (adapters/tools/) | `[ ]` | |
 | T11 — Codex-style patch format parser and applier | `[ ]` | |
 | T12 — stygian-graph + stygian-browser integration for web fetching | `[ ]` | |
 
 ---
 
-
 ## Phase 5 — Agent Engine
 
 > Depends on: Phase 4 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -80,11 +70,9 @@
 
 ---
 
-
 ## Phase 6 — Wiki Graph
 
 > Depends on: Phase 5 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -92,11 +80,9 @@
 
 ---
 
-
 ## Phase 7 — Session Persistence
 
 > Depends on: Phase 6 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -104,11 +90,9 @@
 
 ---
 
-
 ## Phase 8 — Data Fetchers
 
 > Depends on: Phase 7 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -119,11 +103,9 @@
 
 ---
 
-
 ## Phase 9 — TUI
 
 > Depends on: Phase 8 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -131,11 +113,9 @@
 
 ---
 
-
 ## Phase 10 — CLI Entry Point
 
 > Depends on: Phase 9 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -143,11 +123,9 @@
 
 ---
 
-
 ## Phase 11 — Integration and Polish
 
 > Depends on: Phase 10 all complete
-
 
 | Task | Status | Notes |
 |---|---|---|
@@ -156,7 +134,6 @@
 | T26 — README.md and AGENTS.md | `[ ]` | |
 
 ---
-
 
 ## Accumulated Learnings
 
@@ -185,3 +162,5 @@
 - T08: ModelProvider uses RPITIT so it's NOT dyn-compatible. Use ProviderBox enum-dispatch instead of Arc<dyn ModelProvider>. Clippy enforces async fn over impl Future for simple delegation (manual_async_fn lint).
 - T08: Ollama doesn't require an API key — use empty CredentialGuard placeholder. Judge model prefers claude-haiku-4-5, falls back to gpt-4o-mini.
 - T08: list_models endpoint format differs: Ollama uses `{"models": [...]}` with `name` field; OpenAI/Anthropic use `{"data": [...]}` with `id` field. Anthropic needs `anthropic-version` header.
+- T09: Tool definitions live in adapters/tool_defs.rs (provider-specific converters). 18 base tools + 2 delegation tools (subtask/execute) gated on recursive flag.
+- T09: to_anthropic_tools() uses `input_schema` key; to_openai_tools() wraps in `{type: "function", function: {name, description, parameters}}`. All parameters have type=object + additionalProperties=false.

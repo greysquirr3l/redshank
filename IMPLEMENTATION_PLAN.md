@@ -21,7 +21,6 @@ ratatui TUI. Web fetches use stygian-graph pipelines (with optional stygian-brow
 anti-detection automation for JS-rendered pages). A compiled binary ships as a
 single executable with no Python or Node.js runtime dependency.
 
-
 **Architecture**: hexagonal-ddd-cqrs-security-first
 **Language**: rust
 
@@ -29,14 +28,11 @@ single executable with no Python or Node.js runtime dependency.
 
 ## Phases
 
-
 ### Phase 1 — Workspace Scaffold
 
 1. **T01 — Cargo workspace, CI, and repo hygiene**
    Bootstrap a compilable Cargo workspace with stub crates, GitHub Actions CI,
 clippy config, deny.toml, and edition 2024 throughout.
-
-
 
 ### Phase 2 — Domain Model
 
@@ -68,7 +64,6 @@ Based on docs/dev/security_first_repository_design.md.
 
    _Depends on: domain-types_
 
-
 ### Phase 3 — LLM Provider Layer
 
 1. **T06 — AnthropicModel: native Messages API with SSE streaming and thinking budgets**
@@ -90,7 +85,6 @@ Also implement list_models() for each provider.
 
    _Depends on: provider-anthropic, provider-openai-compat_
 
-
 ### Phase 4 — Tool Layer
 
 1. **T09 — Tool definitions: JSON schemas and to_provider() converters**
@@ -109,7 +103,7 @@ readers may not call write or shell tools.
 
    _Depends on: tool-defs, credentials, security-model_
 3. **T11 — Codex-style patch format parser and applier**
-   Port agent/patching.py to Rust: parse *** Begin Patch / *** End Patch blocks
+   Port agent/patching.py to Rust: parse _**Begin Patch /**_ End Patch blocks
 with Add File, Delete File, and Update File hunks. Two-pass matching: exact
 then whitespace-normalised. Return ApplyReport.
 
@@ -119,7 +113,6 @@ then whitespace-normalised. Return ApplyReport.
 enhanced fetch_url implementation, and stygian-browser for JS-rendered pages.
 
    _Depends on: workspace-tools_
-
 
 ### Phase 5 — Agent Engine
 
@@ -146,7 +139,6 @@ acceptance-criteria judge, cancel() via CancellationToken.
 
    _Depends on: workspace-tools, provider-builder, replay-logger, context-condensation, patching, security-model_
 
-
 ### Phase 6 — Wiki Graph
 
 1. **T16 — WikiGraphModel: index parsing, cross-ref extraction, petgraph DAG**
@@ -156,7 +148,6 @@ entity names across the registry, and build a petgraph::DiGraph.
 
    _Depends on: domain-types_
 
-
 ### Phase 7 — Session Persistence
 
 1. **T17 — SQLite-backed session store (rusqlite)**
@@ -165,7 +156,6 @@ JSONL + JSON files with a single .redshank/sessions.db SQLite database.
 Schema: sessions, turns, events, artifacts, observations.
 
    _Depends on: domain-types, wiki-graph_
-
 
 ### Phase 8 — Data Fetchers
 
@@ -202,7 +192,6 @@ that return only exposure metadata — never raw credential material.
 
    _Depends on: fetchers-extended, stygian-integration_
 
-
 ### Phase 9 — TUI
 
 1. **T22 — ratatui TUI: chat pane, wiki-graph canvas, activity indicator, REPL**
@@ -212,7 +201,6 @@ Activity indicator, slash-command REPL, streaming content rendering.
 
    _Depends on: agent-engine, wiki-graph, session-store_
 
-
 ### Phase 10 — CLI Entry Point
 
 1. **T23 — clap CLI: run, tui, fetch, session, configure, version**
@@ -221,7 +209,6 @@ tui (interactive TUI), fetch <source>, session list/delete/resume, configure
 (interactive credential setup), version.
 
    _Depends on: tui-ratatui, session-store, fetchers-extended, credentials, settings_
-
 
 ### Phase 11 — Integration and Polish
 
@@ -244,7 +231,6 @@ stygian integration notes, comparison with OpenPlanter) and AGENTS.md
 (subagent instructions that mirror the orchestrator rules in plan.toml).
 
    _Depends on: cli-entrypoint_
-
 
 ---
 
