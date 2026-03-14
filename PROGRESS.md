@@ -119,7 +119,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T23 — clap CLI: run, tui, fetch, session, configure, version | `[ ]` | |
+| T23 — clap CLI: run, tui, fetch, session, configure, version | `[x]` | 6 subcommands, global flags (workspace/model/reasoning/no-tui/max-depth/demo), build.rs git SHA, tracing+env-filter, headless --no-tui mode; 12 tests |
 
 ---
 
