@@ -97,7 +97,7 @@
 | Task | Status | Notes |
 | --- | --- | --- |
 | T18 — Fetcher trait, CLI entry points, and output conventions | `[x]` | 10 tests — FetchConfig+FetchOutput+FetchError, shared client w/ User-Agent, rate_limit_delay, NDJSON writer, FetcherArgs CLI |
-| T19 — 12 ported fetcher binaries (FEC, SEC, USASpending, lobbying, OFAC, ICIJ, 990, Census, EPA, FDIC, OSHA, SAM) | `[ ]` | |
+| T19 — 12 ported fetcher binaries (FEC, SEC, USASpending, lobbying, OFAC, ICIJ, 990, Census, EPA, FDIC, OSHA, SAM) | `[x]` | 12 library modules in `fetchers/`, 12 unit tests (237 total) |
 | T20 — 14 new fetcher binaries expanding corporate, sanctions, courts, and property intelligence | `[ ]` | |
 | T21 — 8 individual-person OSINT fetchers (HIBP, GitHub, Wayback, WHOIS/RDAP, voter rolls, USPTO, username enum, social profiles) | `[ ]` | |
 

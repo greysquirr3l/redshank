@@ -9,6 +9,7 @@
 
 pub mod client;
 pub mod domain;
+pub mod fetchers;
 
 // Re-export commonly used types.
 pub use client::{build_client, build_client_from_config, rate_limit_delay, write_ndjson};
