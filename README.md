@@ -147,7 +147,7 @@ redshank run --no-tui "Investigate ..."
 
 ## CLI Reference
 
-```
+```bash
 redshank [OPTIONS] <COMMAND>
 
 Commands:
@@ -194,7 +194,7 @@ cargo build -p redshank-core --features coraline
 
 ### Workspace Layout
 
-```
+```text
 redshank/
 ├── redshank-core/       Core library: domain model, ports, engine, tools, persistence
 │   └── src/

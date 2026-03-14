@@ -2,6 +2,10 @@
 .coraline/
 .serena/
 docs/dev/
+docs/PROGRESS.md
+docs/IMPLEMENTATION_PLAN.md
+docs/plan.toml
+tasks/
 reference_projects/
 
 # ─── VS Code ──────────────────────────────────────────────────────────────────
