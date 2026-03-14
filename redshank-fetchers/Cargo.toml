@@ -16,4 +16,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["env"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
