@@ -1,0 +1,222 @@
+# Username enumeration platform templates.
+# Each entry defines a platform with a URL template, expected success codes,
+# and false positive patterns to filter out soft-404 pages.
+#
+# NO credential extraction or authentication attempts of any kind.
+# Only HEAD/GET requests to check if a public profile page exists.
+
+[[platform]]
+name = "GitHub"
+url_template = "https://github.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "GitLab"
+url_template = "https://gitlab.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Reddit"
+url_template = "https://www.reddit.com/user/{username}"
+success_codes = [200]
+false_positive_patterns = ["page not found"]
+
+[[platform]]
+name = "HackerNews"
+url_template = "https://news.ycombinator.com/user?id={username}"
+success_codes = [200]
+false_positive_patterns = ["No such user"]
+
+[[platform]]
+name = "Twitter"
+url_template = "https://x.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Mastodon_social"
+url_template = "https://mastodon.social/@{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Instagram"
+url_template = "https://www.instagram.com/{username}/"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "TikTok"
+url_template = "https://www.tiktok.com/@{username}"
+success_codes = [200]
+false_positive_patterns = ["Couldn't find this account"]
+
+[[platform]]
+name = "YouTube"
+url_template = "https://www.youtube.com/@{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "npm"
+url_template = "https://www.npmjs.com/~{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "PyPI"
+url_template = "https://pypi.org/user/{username}/"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "DockerHub"
+url_template = "https://hub.docker.com/u/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Steam"
+url_template = "https://steamcommunity.com/id/{username}"
+success_codes = [200]
+false_positive_patterns = ["The specified profile could not be found"]
+
+[[platform]]
+name = "Keybase"
+url_template = "https://keybase.io/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Medium"
+url_template = "https://medium.com/@{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Substack"
+url_template = "https://{username}.substack.com"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "LinkedIn"
+url_template = "https://www.linkedin.com/in/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Pinterest"
+url_template = "https://www.pinterest.com/{username}/"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Twitch"
+url_template = "https://www.twitch.tv/{username}"
+success_codes = [200]
+false_positive_patterns = ["Sorry. Unless you've got a time machine"]
+
+[[platform]]
+name = "Patreon"
+url_template = "https://www.patreon.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Behance"
+url_template = "https://www.behance.net/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "DeviantArt"
+url_template = "https://www.deviantart.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Dribbble"
+url_template = "https://dribbble.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Flickr"
+url_template = "https://www.flickr.com/people/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Vimeo"
+url_template = "https://vimeo.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "SoundCloud"
+url_template = "https://soundcloud.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Spotify"
+url_template = "https://open.spotify.com/user/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "CratesIO"
+url_template = "https://crates.io/users/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "RubyGems"
+url_template = "https://rubygems.org/profiles/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "StackOverflow"
+url_template = "https://stackoverflow.com/users/{username}"
+success_codes = [200]
+false_positive_patterns = ["Page Not Found"]
+
+[[platform]]
+name = "BitBucket"
+url_template = "https://bitbucket.org/{username}/"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "AngelList"
+url_template = "https://angel.co/u/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Gravatar"
+url_template = "https://gravatar.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "ProductHunt"
+url_template = "https://www.producthunt.com/@{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "Kaggle"
+url_template = "https://www.kaggle.com/{username}"
+success_codes = [200]
+false_positive_patterns = []
+
+[[platform]]
+name = "HuggingFace"
+url_template = "https://huggingface.co/{username}"
+success_codes = [200]
+false_positive_patterns = []

@@ -32,3 +32,13 @@ pub mod wikidata;
 pub mod gdelt;
 pub mod state_sos;
 pub mod county_property;
+
+// ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
+pub mod hibp;
+pub mod github_profile;
+pub mod wayback;
+pub mod whois_rdap;
+pub mod voter_reg;
+pub mod uspto;
+pub mod username_enum;
+pub mod social_profiles;

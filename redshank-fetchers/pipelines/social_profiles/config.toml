@@ -1,0 +1,28 @@
+# Social profile scraping pipeline configuration.
+# Uses stygian-browser Advanced stealth + ai_extract node.
+# Only public, search-engine-indexable pages are accessed.
+# Rate: one profile per 5 seconds minimum.
+
+[pipeline]
+name = "social_profiles"
+rate_limit_seconds = 5
+
+[[target]]
+platform = "LinkedIn"
+url_template = "https://www.linkedin.com/in/{slug}"
+requires_browser = true
+extract_fields = ["display_name", "headline", "employer", "location", "follower_count", "recent_post_summary", "linked_urls"]
+# Only access public profiles indexable by search engines (robots.txt allows)
+
+[[target]]
+platform = "Twitter"
+url_template = "https://x.com/{username}"
+requires_browser = true
+extract_fields = ["display_name", "bio", "location", "follower_count", "following_count", "recent_post_summary", "linked_urls"]
+
+[[target]]
+platform = "Mastodon"
+url_template = "https://{instance}/@{username}/outbox"
+requires_browser = false
+# ActivityPub public JSON endpoint — no browser needed
+extract_fields = ["display_name", "summary", "follower_count", "outbox_items"]
