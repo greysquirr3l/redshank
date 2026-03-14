@@ -1,0 +1,229 @@
+# Redshank
+
+An autonomous recursive language-model investigation agent written in Rust.
+Redshank ingests heterogeneous public datasets — campaign finance, lobbying
+disclosures, federal contracts, corporate registries, sanctions lists, court
+records, individual-person OSINT, and media intelligence — resolves entities
+across all of them, and surfaces non-obvious connections through evidence-backed
+analysis written into a live knowledge-graph wiki.
+
+Redshank is a from-scratch Rust rewrite of
+[OpenPlanter](https://github.com/ShinMegamiBoson/OpenPlanter), replacing the
+Python runtime with a compiled binary that has zero Python or Node.js dependency.
+
+## Installation
+
+```bash
+cargo install redshank --locked
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/greysquirr3l/redshank.git
+cd redshank
+cargo build --release
+```
+
+The binary lands at `target/release/redshank`.
+
+## Quickstart
+
+```bash
+# 1. Set your API key
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# 2. Launch the TUI
+redshank tui
+
+# 3. Or run a one-shot investigation from the command line
+redshank run "Who are the top donors to PACs linked to defense contractors with active SAM.gov registrations?"
+```
+
+## Features
+
+- **Recursive tool-calling engine** — The agent loop calls tools, reads results,
+  and can delegate subtasks to child agent invocations with independent context
+  windows. Context condensation keeps long investigations under the token limit.
+- **34 data fetchers** — Pull records from government databases, corporate
+  registries, sanctions lists, court systems, and OSINT sources (see
+  [Data Sources](#data-sources) below).
+- **Knowledge-graph wiki** — Findings are written to interconnected Markdown
+  documents with cross-references. A petgraph DAG tracks entities and
+  relationships with fuzzy name matching.
+- **Interactive TUI** — Three-pane ratatui interface: session sidebar, scrolling
+  chat log, and a character-cell wiki-graph canvas. Slash commands for model
+  switching, reasoning effort, and session management.
+- **Multi-provider LLM support** — Anthropic (native Messages API with thinking
+  budgets), OpenAI, OpenRouter, Cerebras, and Ollama (local).
+- **Security-first architecture** — Fail-secure design with typed `AuthContext`,
+  role-based `SecurityPolicy`, and `chmod 600` credential storage. Every data
+  access path checks permissions before touching storage.
+- **Stygian integration** — Optional `stygian` feature flag enables
+  stygian-graph pipelines and stygian-browser anti-detection automation for
+  JS-rendered pages.
+- **Coraline MCP tools** — Optional `coraline` feature flag adds code-aware
+  file reading, semantic search, repo mapping, and file editing via the
+  Coraline MCP server.
+- **CQRS + domain events** — Every mutating operation flows through idempotent
+  Command handlers; every read through Query handlers. State transitions emit
+  typed domain events persisted to SQLite.
+
+## Data Sources
+
+| Category | Fetchers |
+| --- | --- |
+| **Campaign Finance** | FEC filings, Senate lobbying disclosures, House lobbying disclosures |
+| **Government Contracts** | USASpending, SAM.gov registrations, FPDS contract awards, federal audit clearinghouse |
+| **Corporate Registries** | GLEIF (LEI lookups), OpenCorporates, FinCEN BOI, state Secretary of State portals, SEC EDGAR |
+| **Financial** | FDIC institution search, PropPublica nonprofit 990 filings |
+| **Sanctions** | OFAC SDN, UN consolidated sanctions, EU sanctions, World Bank debarred firms |
+| **Environmental & Safety** | EPA ECHO compliance, OSHA inspection data |
+| **Courts** | CourtListener (RECAP archive) |
+| **Leaks & Offshore** | ICIJ offshore leaks database |
+| **Individual OSINT** | HIBP breach exposure, GitHub profiles, Wayback Machine snapshots, WHOIS/RDAP history, voter registration, USPTO patent/trademark inventors, username enumeration (37 platforms), social media profiles |
+| **Reference & Media** | Wikidata entity lookups, GDELT media monitoring, Census ACS demographics |
+| **Property** | County property/assessor records |
+
+## Configuration
+
+Redshank reads API keys from environment variables or a credentials file at
+`~/.config/redshank/credentials.toml` (created with `chmod 600`):
+
+```toml
+[anthropic]
+api_key = "sk-ant-..."
+
+[openai]
+api_key = "sk-..."
+
+[openrouter]
+api_key = "sk-or-..."
+```
+
+Provider and model defaults are stored in `~/.config/redshank/settings.toml`:
+
+```toml
+default_provider = "anthropic"
+default_model = "claude-sonnet-4-20250514"
+reasoning_effort = "medium"
+```
+
+Override at runtime with CLI flags:
+
+```bash
+redshank run --model gpt-4o --reasoning high "Investigate ..."
+```
+
+## TUI Guide
+
+Launch with `redshank tui` (or `redshank tui --session <id>` to resume).
+
+| Area | Description |
+| --- | --- |
+| **Sidebar** (left 20%) | Session list. Select with arrow keys. |
+| **Chat pane** (center 55%) | Scrolling conversation log. Type objectives at the bottom input line. |
+| **Graph pane** (right 25%) | Character-cell wiki-graph canvas. Nodes are color-coded by category. |
+
+### Slash Commands
+
+| Command | Effect |
+| --- | --- |
+| `/model <name>` | Switch model (add `--save` to persist) |
+| `/model` | List available models |
+| `/reasoning <off\|low\|medium\|high>` | Set reasoning effort |
+| `/status` | Show current model, effort, and session info |
+| `/clear` | Clear the chat log |
+| `/help` | Show available commands |
+| `/quit` or `Ctrl+C` | Exit |
+
+### Headless Mode
+
+Run without the TUI for scripting or CI:
+
+```bash
+redshank run --no-tui "Investigate ..."
+```
+
+## CLI Reference
+
+```
+redshank [OPTIONS] <COMMAND>
+
+Commands:
+  run        Run an investigation with a given objective
+  tui        Launch the interactive TUI
+  fetch      Run a data fetcher directly
+  session    List, resume, or delete sessions
+  configure  Interactive credential and settings setup
+  version    Print version and build info
+
+Global Options:
+  -w, --workspace <PATH>    Workspace directory [default: .]
+  -m, --model <MODEL>       Override the default model
+  -r, --reasoning <LEVEL>   Reasoning effort (off|low|medium|high)
+      --no-tui              Run headless (no interactive UI)
+      --max-depth <N>       Maximum recursion depth for subtasks
+      --demo                Demo mode (use mock model)
+```
+
+## Development
+
+### Prerequisites
+
+- Rust 1.94+ (stable)
+- SQLite (bundled via rusqlite)
+
+### Build & Test
+
+```bash
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+```
+
+### Optional Features
+
+```bash
+# Build with stygian web automation
+cargo build -p redshank-core --features stygian
+
+# Build with Coraline MCP code navigation tools
+cargo build -p redshank-core --features coraline
+```
+
+### Workspace Layout
+
+```
+redshank/
+├── redshank-core/       Core library: domain model, ports, engine, tools, persistence
+│   └── src/
+│       ├── domain/      Pure types, zero I/O deps
+│       ├── ports/       Trait interfaces (inbound + outbound)
+│       ├── application/ CQRS command/query handlers, engine service
+│       └── adapters/    LLM providers, tools, SQLite, wiki filesystem
+├── redshank-tui/        ratatui terminal interface
+├── redshank-fetchers/   34 data-source fetcher libraries
+├── redshank-cli/        clap CLI entry point
+└── plan.toml            Build plan (26 tasks)
+```
+
+## Comparison with OpenPlanter
+
+| | OpenPlanter | Redshank |
+| --- | --- | --- |
+| **Language** | Python 3.12 | Rust 1.94 (edition 2024) |
+| **TUI framework** | Textual | ratatui + crossterm |
+| **Graph library** | NetworkX | petgraph |
+| **HTTP client** | urllib / httpx | reqwest + stygian-browser |
+| **LLM providers** | Anthropic, OpenAI, OpenRouter, Cerebras, Ollama | Same set, native Rust clients |
+| **Data fetchers** | 12 Python scripts | 34 library modules |
+| **Architecture** | Flat modules | Hexagonal DDD + CQRS |
+| **Security model** | File permissions | Typed AuthContext + SecurityPolicy + fail-secure |
+| **Session storage** | JSON files | SQLite with domain events |
+| **Distribution** | pip install + Python runtime | Single compiled binary |
+| **Desktop app** | Tauri 2 + Svelte | — (TUI only, desktop planned) |
+
+## License
+
+See [LICENSE](LICENSE) for details.

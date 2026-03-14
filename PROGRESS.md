@@ -131,7 +131,7 @@
 | --- | --- | --- |
 | T24 — Full-stack integration tests with scripted model | `[x]` | ScriptedModel+RecordingDispatcher fixtures; 14 tests: multi-turn, subtask delegation, context condensation, cancellation, runtime policy, error surfacing, wiki dirs; also fixed all pre-existing clippy warnings workspace-wide |
 | T25 — Coraline MCP tool bindings for self-directed code navigation | `[x]` | 4 MCP stdio proxy tools (read_file, search, repo_map, edit_file) behind `coraline` feature flag; JSON-RPC request/response parsing; 7 tests (5 unit + 2 conditional); 322 tests total (234 with coraline) |
-| T26 — README.md and AGENTS.md | `[ ]` | |
+| T26 — README.md and AGENTS.md | `[x]` | README with quickstart, 34-fetcher table, TUI guide, CLI reference, OpenPlanter comparison; AGENTS.md enhanced with Coraline tool usage, workspace layout, testing instructions |
 
 ---
 

@@ -73,8 +73,41 @@ single executable with no Python or Node.js runtime dependency.
 ## Testing instructions
 
 - Run `cargo test --workspace` before committing
+- Run `cargo clippy --workspace --tests -- -D warnings` — zero warnings policy
 - Every new public function needs at least one test
 - Fix all test failures before marking a task complete
+- To test with optional features: `cargo test -p redshank-core --features coraline`
+
+## Coraline MCP tool usage
+
+When exploring or modifying the redshank workspace, prefer Coraline MCP tools
+over raw filesystem access:
+
+| Tool | Purpose | Example |
+| --- | --- | --- |
+| `coraline_read_file` | Code-aware file reading | `{"path": "redshank-core/src/domain.rs"}` |
+| `coraline_search` | Semantic code search | `{"query": "SecurityPolicy", "max_results": 10}` |
+| `coraline_repo_map` | Repository file tree with symbols | `{"max_depth": 3}` |
+| `coraline_edit_file` | Code-aware file editing | `{"path": "src/lib.rs", "old_str": "...", "new_str": "..."}` |
+
+These tools require the `coraline` feature flag and a Coraline binary on `$PATH`.
+Without the feature, the dispatch returns a helpful error message instead of failing.
+
+## Workspace layout
+
+```
+redshank/
+├── redshank-core/       Core library (domain, ports, application, adapters)
+│   └── src/
+│       ├── domain/      Pure types, zero I/O deps (agent, auth, credentials, events, session, wiki, errors)
+│       ├── ports/       Trait interfaces (ModelProvider, ToolDispatcher, SessionStore, WikiStore, ReplayLog)
+│       ├── application/ CQRS handlers + RLMEngine service + context condensation
+│       └── adapters/    Anthropic/OpenAI providers, WorkspaceTools, SQLite, Coraline MCP, stygian
+├── redshank-tui/        ratatui TUI (domain, renderer, event_loop, crossterm_reader)
+├── redshank-fetchers/   34 data-source fetcher libraries + pipeline configs
+├── redshank-cli/        clap CLI (run, tui, fetch, session, configure, version)
+└── plan.toml            Build plan — 26 tasks across 11 phases
+```
 
 ## Commit conventions
 
