@@ -12,11 +12,14 @@ use serde_json::json;
 ///
 /// 20 entries when `recursive=true` (includes `subtask` and `execute`).
 /// 18 entries when `recursive=false` (excludes them).
+/// +4 when the `coraline` feature is enabled.
 pub fn tool_definitions(recursive: bool) -> Vec<ToolDefinition> {
     let mut defs = base_tools();
     if recursive {
         defs.extend(delegation_tools());
     }
+    #[cfg(feature = "coraline")]
+    defs.extend(coraline_tools());
     defs
 }
 
@@ -404,6 +407,87 @@ fn delegation_tools() -> Vec<ToolDefinition> {
     ]
 }
 
+// ── Coraline MCP tools (behind feature flag) ────────────────
+
+/// Four Coraline MCP tools for self-directed code navigation.
+#[cfg(feature = "coraline")]
+fn coraline_tools() -> Vec<ToolDefinition> {
+    vec![
+        ToolDefinition {
+            name: "coraline_read_file".into(),
+            description: "Read a file through Coraline's code-aware reader, which provides AST context and symbol information.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative path to the file to read."
+                    }
+                },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
+            name: "coraline_search".into(),
+            description: "Search the codebase using Coraline's semantic code search. Returns relevant code snippets with file paths and line numbers.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language or code query to search for."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 10)."
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
+            name: "coraline_repo_map".into(),
+            description: "Get a repository map showing the file tree with symbols (functions, classes, types) extracted by Coraline.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum directory depth to traverse (default: 3)."
+                    }
+                },
+                "required": [],
+                "additionalProperties": false
+            }),
+        },
+        ToolDefinition {
+            name: "coraline_edit_file".into(),
+            description: "Edit a file through Coraline's code-aware editor, which validates edits against the AST.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative path to the file to edit."
+                    },
+                    "old_str": {
+                        "type": "string",
+                        "description": "Exact string to find and replace."
+                    },
+                    "new_str": {
+                        "type": "string",
+                        "description": "Replacement string."
+                    }
+                },
+                "required": ["path", "old_str", "new_str"],
+                "additionalProperties": false
+            }),
+        },
+    ]
+}
+
 // ── Provider-specific converters ────────────────────────────
 
 /// Convert tool definitions to Anthropic's `tools` array format.
@@ -446,15 +530,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recursive_true_has_20_tools() {
+    fn recursive_true_has_expected_tool_count() {
         let defs = tool_definitions(true);
-        assert_eq!(defs.len(), 20);
+        let expected = if cfg!(feature = "coraline") { 24 } else { 20 };
+        assert_eq!(defs.len(), expected);
     }
 
     #[test]
-    fn recursive_false_has_18_tools() {
+    fn recursive_false_has_expected_tool_count() {
         let defs = tool_definitions(false);
-        assert_eq!(defs.len(), 18);
+        let expected = if cfg!(feature = "coraline") { 22 } else { 18 };
+        assert_eq!(defs.len(), expected);
     }
 
     #[test]
@@ -474,10 +560,11 @@ mod tests {
     #[test]
     fn all_tool_names_unique() {
         let defs = tool_definitions(true);
+        let count = defs.len();
         let mut names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
         names.sort_unstable();
         names.dedup();
-        assert_eq!(names.len(), 20);
+        assert_eq!(names.len(), count);
     }
 
     #[test]
@@ -567,5 +654,22 @@ mod tests {
         let defs = tool_definitions(true);
         let anthropic = to_anthropic_tools(&defs);
         assert_eq!(anthropic.len(), defs.len());
+    }
+
+    #[test]
+    #[cfg(not(feature = "coraline"))]
+    fn coraline_tools_absent_without_feature() {
+        let defs = tool_definitions(true);
+        assert!(!defs.iter().any(|d| d.name.starts_with("coraline_")));
+    }
+
+    #[test]
+    #[cfg(feature = "coraline")]
+    fn coraline_tools_present_with_feature() {
+        let defs = tool_definitions(true);
+        assert!(defs.iter().any(|d| d.name == "coraline_read_file"));
+        assert!(defs.iter().any(|d| d.name == "coraline_search"));
+        assert!(defs.iter().any(|d| d.name == "coraline_repo_map"));
+        assert!(defs.iter().any(|d| d.name == "coraline_edit_file"));
     }
 }

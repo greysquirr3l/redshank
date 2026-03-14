@@ -11,6 +11,8 @@ mod patching;
 mod shell;
 #[cfg(feature = "stygian")]
 mod stygian;
+#[cfg(feature = "coraline")]
+mod coraline;
 #[cfg(feature = "runtime")]
 mod web;
 
@@ -372,6 +374,28 @@ mod workspace_tools {
                 }
                 // Patching
                 "apply_patch" => filesystem::apply_patch(self, &arguments).await,
+                // Coraline MCP (only available with coraline feature)
+                #[cfg(feature = "coraline")]
+                "coraline_read_file" => {
+                    super::coraline::coraline_read_file(self, &arguments).await
+                }
+                #[cfg(feature = "coraline")]
+                "coraline_search" => {
+                    super::coraline::coraline_search(self, &arguments).await
+                }
+                #[cfg(feature = "coraline")]
+                "coraline_repo_map" => {
+                    super::coraline::coraline_repo_map(self, &arguments).await
+                }
+                #[cfg(feature = "coraline")]
+                "coraline_edit_file" => {
+                    super::coraline::coraline_edit_file(self, &arguments).await
+                }
+                #[cfg(not(feature = "coraline"))]
+                "coraline_read_file" | "coraline_search" | "coraline_repo_map"
+                | "coraline_edit_file" => {
+                    "coraline tools require the 'coraline' feature flag".to_string()
+                }
                 _ => format!("Unknown tool: {tool_name}"),
             };
 
