@@ -1,15 +1,10 @@
 # Redshank
 
-An autonomous recursive language-model investigation agent written in Rust.
-Redshank ingests heterogeneous public datasets — campaign finance, lobbying
-disclosures, federal contracts, corporate registries, sanctions lists, court
-records, individual-person OSINT, and media intelligence — resolves entities
-across all of them, and surfaces non-obvious connections through evidence-backed
-analysis written into a live knowledge-graph wiki.
+![RedShank Logo](./docs/assets/img/redshank-logo.png)
 
-Redshank is a from-scratch Rust rewrite of
-[OpenPlanter](https://github.com/ShinMegamiBoson/OpenPlanter), replacing the
-Python runtime with a compiled binary that has zero Python or Node.js dependency.
+An autonomous recursive language-model investigation agent written in Rust.  Redshank ingests heterogeneous public datasets — campaign finance, lobbying disclosures, federal contracts, corporate registries, sanctions lists, court records, individual-person OSINT,and media intelligence — resolves entities across all of them, and surfaces non-obvious connections through evidence-backed analysis written into a live knowledge-graph wiki.
+
+Redshank is a from-scratch Rust rewrite of [OpenPlanter](https://github.com/ShinMegamiBoson/OpenPlanter), replacing the Python runtime with a compiled binary that has zero Python or Node.js dependency.
 
 ## Installation
 

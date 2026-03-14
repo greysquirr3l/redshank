@@ -62,7 +62,7 @@ single executable with no Python or Node.js runtime dependency.
 
 - Security First (fail-secure): every repository/store port method that accesses or mutates keyed data accepts auth: &AuthContext and enforces a SecurityPolicy check before any data access. Security rules live in src/domain/auth.rs as pure functions (no I/O, no async). Default deny — return Err(SecurityError::AccessDenied) unless the policy explicitly grants the required Permission.
 
-- Aggregate repositories: one repository per aggregate root, not one per table. Use the UpdateFn pattern for transactional mutations: async fn update_by_id<F, R>(&self, id, auth: &AuthContext, update_fn: F) -> Result<R>. The closure holds business logic; the repo manages the transaction. Use TransactionProvider only for cross-aggregate consistency.
+- Aggregate repositories: one repository per aggregate root, not one per table. Use the UpdateFn pattern for transactional mutations: `async fn update_by_id<F, R>(&self, id, auth: &AuthContext, update_fn: F) -> Result<R>`. The closure holds business logic; the repo manages the transaction. Use TransactionProvider only for cross-aggregate consistency.
 
 - Domain events: every significant state transition emits a typed DomainEvent variant (SessionCreated, AgentStarted, ToolCalled, AgentCompleted, WikiEntryWritten). Events are immutable value types. Aggregate methods append them to a pending_events Vec; the session store persists them via append_event.
 
@@ -95,7 +95,7 @@ Without the feature, the dispatch returns a helpful error message instead of fai
 
 ## Workspace layout
 
-```
+```text
 redshank/
 ├── redshank-core/       Core library (domain, ports, application, adapters)
 │   └── src/
