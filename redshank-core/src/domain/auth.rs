@@ -300,6 +300,14 @@ pub fn can_delete_session(
     policy.check(ctx, Permission::DeleteSession)
 }
 
+/// Check permission to write (create/update) session data.
+pub fn can_write_session(
+    ctx: &AuthContext,
+    policy: &dyn SecurityPolicy,
+) -> Result<(), SecurityError> {
+    policy.check(ctx, Permission::WriteSession)
+}
+
 /// Check permission to run an agent investigation.
 pub fn can_run_agent(
     ctx: &AuthContext,

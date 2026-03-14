@@ -86,7 +86,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T17 — SQLite-backed session store (rusqlite) | `[ ]` | |
+| T17 — SQLite-backed session store (rusqlite) | `[x]` | 10 tests — can_write_session perm, Operator role for ownership-scoped tests |
 
 ---
 
