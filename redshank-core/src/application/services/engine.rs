@@ -540,8 +540,10 @@ mod tests {
                 stop_reason: StopReason::EndTurn,
             },
         ]);
-        let mut config = AgentConfig::default();
-        config.max_depth = 0; // No recursion allowed.
+        let config = AgentConfig {
+            max_depth: 0, // No recursion allowed.
+            ..Default::default()
+        };
         let engine = RLMEngine::new(
             config,
             model,
@@ -575,8 +577,10 @@ mod tests {
             })
             .collect();
 
-        let mut config = AgentConfig::default();
-        config.max_steps = 3;
+        let config = AgentConfig {
+            max_steps: 3,
+            ..Default::default()
+        };
         let engine = RLMEngine::new(
             config,
             ScriptedModel::new(turns),

@@ -24,6 +24,6 @@ pub mod adapters;
 mod tests {
     #[test]
     fn it_compiles() {
-        assert!(true);
+        // Smoke test: this crate compiles successfully.
     }
 }

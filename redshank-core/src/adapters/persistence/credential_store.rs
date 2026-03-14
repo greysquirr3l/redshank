@@ -327,8 +327,10 @@ mod tests {
         std::fs::write(&env_path, "ANTHROPIC_API_KEY=from-env-file\n").unwrap();
 
         // Explicit arg should win
-        let mut explicit = CredentialBundle::default();
-        explicit.anthropic_api_key = Some(CredentialGuard::new("from-explicit".to_string()));
+        let explicit = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("from-explicit".to_string())),
+            ..Default::default()
+        };
 
         let resolved = resolve_credentials(workspace, Some(&explicit));
         assert_eq!(resolved.anthropic_api_key.as_ref().unwrap().expose(), "from-explicit");
@@ -339,9 +341,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = FileCredentialStore::workspace(dir.path());
 
-        let mut bundle = CredentialBundle::default();
-        bundle.anthropic_api_key = Some(CredentialGuard::new("sk-ant-persist".to_string()));
-        bundle.ollama_base_url = Some("http://localhost:11434".to_string());
+        let bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-ant-persist".to_string())),
+            ollama_base_url: Some("http://localhost:11434".to_string()),
+            ..Default::default()
+        };
 
         store.save(&bundle).unwrap();
 
@@ -385,8 +389,10 @@ mod tests {
 
         // workspace store has anthropic key
         let ws_store = FileCredentialStore::workspace(workspace);
-        let mut ws_bundle = CredentialBundle::default();
-        ws_bundle.anthropic_api_key = Some(CredentialGuard::new("from-ws-store".to_string()));
+        let ws_bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("from-ws-store".to_string())),
+            ..Default::default()
+        };
         ws_store.save(&ws_bundle).unwrap();
 
         let resolved = resolve_credentials(workspace, None);

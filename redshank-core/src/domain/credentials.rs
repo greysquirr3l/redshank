@@ -149,8 +149,10 @@ mod tests {
 
     #[test]
     fn credential_bundle_debug_hides_secrets() {
-        let mut bundle = CredentialBundle::default();
-        bundle.anthropic_api_key = Some(CredentialGuard::new("sk-ant-12345".to_string()));
+        let bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-ant-12345".to_string())),
+            ..Default::default()
+        };
         let debug = format!("{bundle:?}");
         assert!(!debug.contains("sk-ant-12345"));
         assert!(debug.contains("***REDACTED***"));
@@ -158,9 +160,11 @@ mod tests {
 
     #[test]
     fn credential_bundle_roundtrip_serde() {
-        let mut bundle = CredentialBundle::default();
-        bundle.anthropic_api_key = Some(CredentialGuard::new("sk-ant-test".to_string()));
-        bundle.ollama_base_url = Some("http://localhost:11434".to_string());
+        let bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-ant-test".to_string())),
+            ollama_base_url: Some("http://localhost:11434".to_string()),
+            ..Default::default()
+        };
 
         let json = serde_json::to_string(&bundle).unwrap();
         // The serialized form should contain the actual key (for storage)
@@ -179,27 +183,35 @@ mod tests {
 
     #[test]
     fn has_any_returns_false_when_all_empty_strings() {
-        let mut bundle = CredentialBundle::default();
-        bundle.openai_api_key = Some(CredentialGuard::new("  ".to_string()));
+        let bundle = CredentialBundle {
+            openai_api_key: Some(CredentialGuard::new("  ".to_string())),
+            ..Default::default()
+        };
         assert!(!bundle.has_any());
     }
 
     #[test]
     fn has_any_returns_true_when_one_set() {
-        let mut bundle = CredentialBundle::default();
-        bundle.anthropic_api_key = Some(CredentialGuard::new("sk-test".to_string()));
+        let bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-test".to_string())),
+            ..Default::default()
+        };
         assert!(bundle.has_any());
     }
 
     #[test]
     fn merge_missing_fills_empty_fields() {
-        let mut high = CredentialBundle::default();
-        high.anthropic_api_key = Some(CredentialGuard::new("high-key".to_string()));
+        let mut high = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("high-key".to_string())),
+            ..Default::default()
+        };
 
-        let mut low = CredentialBundle::default();
-        low.anthropic_api_key = Some(CredentialGuard::new("low-key".to_string()));
-        low.openai_api_key = Some(CredentialGuard::new("low-openai".to_string()));
-        low.ollama_base_url = Some("http://localhost:11434".to_string());
+        let low = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("low-key".to_string())),
+            openai_api_key: Some(CredentialGuard::new("low-openai".to_string())),
+            ollama_base_url: Some("http://localhost:11434".to_string()),
+            ..Default::default()
+        };
 
         high.merge_missing(&low);
 

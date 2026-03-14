@@ -493,11 +493,10 @@ mod tests {
 
     #[test]
     fn judge_prefers_anthropic_haiku() {
-        let creds = {
-            let mut c = CredentialBundle::default();
-            c.anthropic_api_key = Some(CredentialGuard::new("sk-ant-test".to_string()));
-            c.openai_api_key = Some(CredentialGuard::new("sk-openai-test".to_string()));
-            c
+        let creds = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-ant-test".to_string())),
+            openai_api_key: Some(CredentialGuard::new("sk-openai-test".to_string())),
+            ..Default::default()
         };
         let p = build_judge_model(&creds).unwrap();
         assert!(matches!(p, ProviderBox::Anthropic(_)));
@@ -506,10 +505,9 @@ mod tests {
 
     #[test]
     fn judge_falls_back_to_openai() {
-        let creds = {
-            let mut c = CredentialBundle::default();
-            c.openai_api_key = Some(CredentialGuard::new("sk-openai-test".to_string()));
-            c
+        let creds = CredentialBundle {
+            openai_api_key: Some(CredentialGuard::new("sk-openai-test".to_string())),
+            ..Default::default()
         };
         let p = build_judge_model(&creds).unwrap();
         assert!(matches!(p, ProviderBox::OpenAICompat(_)));

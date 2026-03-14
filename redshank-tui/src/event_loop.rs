@@ -320,8 +320,10 @@ mod tests {
 
     #[test]
     fn handle_agent_complete() {
-        let mut state = AppState::default();
-        state.agent_running = true;
+        let mut state = AppState {
+            agent_running: true,
+            ..Default::default()
+        };
         handle_app_event(
             &mut state,
             AppEvent::AgentComplete("Done investigating.".into()),

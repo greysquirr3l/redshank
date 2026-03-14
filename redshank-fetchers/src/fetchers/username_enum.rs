@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn username_enum_marks_found_on_200_not_found_on_404() {
         // Simulate result mapping
-        let success_codes = vec![200_u16];
+        let success_codes: &[u16] = &[200_u16];
         assert!(success_codes.contains(&200));
         assert!(!success_codes.contains(&404));
     }

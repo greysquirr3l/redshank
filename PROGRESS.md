@@ -129,7 +129,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T24 — Full-stack integration tests with scripted model | `[ ]` | |
+| T24 — Full-stack integration tests with scripted model | `[x]` | ScriptedModel+RecordingDispatcher fixtures; 14 tests: multi-turn, subtask delegation, context condensation, cancellation, runtime policy, error surfacing, wiki dirs; also fixed all pre-existing clippy warnings workspace-wide |
 | T25 — Coraline MCP tool bindings for self-directed code navigation | `[ ]` | |
 | T26 — README.md and AGENTS.md | `[ ]` | |
 

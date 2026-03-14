@@ -44,7 +44,5 @@ pub struct FetcherArgs {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_compiles() {
-        assert!(true);
-    }
+    fn it_compiles() {}
 }
