@@ -1,0 +1,9 @@
+# Delaware ICIS corporate registry pipeline
+# Portal: https://icis.corp.delaware.gov
+# JS-heavy: requires stygian-browser for navigation
+
+state_code = "DE"
+portal_url = "https://icis.corp.delaware.gov/ecorp/entitysearch/namesearch.aspx"
+search_selector = "#txtEntityName"
+result_selector = "table.rgMasterTable tr"
+detail_fields = ["registered_agent", "officers", "formation_date", "status", "entity_type", "file_number"]

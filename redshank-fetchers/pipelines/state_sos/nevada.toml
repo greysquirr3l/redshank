@@ -1,0 +1,9 @@
+# Nevada Secretary of State corporate registry pipeline
+# Portal: https://esos.nv.gov
+# JS-heavy: requires stygian-browser for navigation
+
+state_code = "NV"
+portal_url = "https://esos.nv.gov/EntitySearch/OnlineEntitySearch"
+search_selector = "#SearchCriteria"
+result_selector = "#ResultList tr"
+detail_fields = ["registered_agent", "officers", "formation_date", "status", "entity_type", "file_number"]

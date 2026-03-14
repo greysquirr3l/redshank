@@ -1,0 +1,10 @@
+# Miami-Dade County Property Appraiser
+# Portal: https://www.miamidade.gov/pa/
+# JS-heavy: requires stygian-browser for navigation
+
+county = "Miami-Dade"
+portal_url = "https://www.miamidade.gov/pa/PropertySearch.asp"
+has_json_api = false
+api_url = ""
+search_selector = "#txtSearch"
+detail_fields = ["owner_name", "property_address", "folio_number", "assessed_value", "deed_date", "sale_price", "land_use"]

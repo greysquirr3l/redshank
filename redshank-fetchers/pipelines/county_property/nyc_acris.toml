@@ -1,0 +1,10 @@
+# NYC ACRIS (Automated City Register Information System)
+# Portal: https://a836-acris.nyc.gov
+# Has JSON API: https://data.cityofnewyork.us/resource/636b-3b5g.json
+
+county = "NYC"
+portal_url = "https://a836-acris.nyc.gov"
+has_json_api = true
+api_url = "https://data.cityofnewyork.us/resource/636b-3b5g.json"
+search_selector = ""
+detail_fields = ["name", "document_id", "doc_type", "recorded_filed", "borough", "block", "lot", "assessed_value"]

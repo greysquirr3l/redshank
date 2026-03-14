@@ -3,6 +3,7 @@
 //! Each submodule implements a public data source fetcher as a library,
 //! with a corresponding binary in `src/bin/` for CLI invocation.
 
+// ── T19: 12 ported fetchers ──────────────────────────────────────────────────
 pub mod fec;
 pub mod sec_edgar;
 pub mod usaspending;
@@ -15,3 +16,19 @@ pub mod epa_echo;
 pub mod fdic;
 pub mod osha;
 pub mod sam_gov;
+
+// ── T20: 14 extended fetchers ────────────────────────────────────────────────
+pub mod fincen_boi;
+pub mod gleif;
+pub mod opencorporates;
+pub mod house_lobbying;
+pub mod courtlistener;
+pub mod un_sanctions;
+pub mod eu_sanctions;
+pub mod world_bank_debarred;
+pub mod federal_audit;
+pub mod fpds;
+pub mod wikidata;
+pub mod gdelt;
+pub mod state_sos;
+pub mod county_property;

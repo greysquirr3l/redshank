@@ -1,0 +1,9 @@
+# Wyoming Secretary of State corporate registry pipeline
+# Portal: https://wyobiz.wyo.gov
+# JS-heavy: requires stygian-browser for navigation
+
+state_code = "WY"
+portal_url = "https://wyobiz.wyo.gov/Business/FilingSearch.aspx"
+search_selector = "#MainContent_txtFilingName"
+result_selector = "#MainContent_gvResults tr"
+detail_fields = ["registered_agent", "officers", "formation_date", "status", "entity_type", "file_number"]

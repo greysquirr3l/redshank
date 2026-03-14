@@ -1,0 +1,9 @@
+# Florida Sunbiz corporate registry pipeline
+# Portal: https://search.sunbiz.org
+# JS-heavy: requires stygian-browser for navigation
+
+state_code = "FL"
+portal_url = "https://search.sunbiz.org/Inquiry/CorporationSearch/ByName"
+search_selector = "#SearchTerm"
+result_selector = "table.searchResultTable tr"
+detail_fields = ["registered_agent", "officers", "formation_date", "status", "entity_type", "file_number"]
