@@ -109,7 +109,7 @@
 
 | Task | Status | Notes |
 | --- | --- | --- |
-| T22 — ratatui TUI: chat pane, wiki-graph canvas, activity indicator, REPL | `[ ]` | |
+| T22 — ratatui TUI: chat pane, wiki-graph canvas, activity indicator, REPL | `[x]` | domain.rs (AppState, events, slash commands), renderer.rs (3-pane layout, chat, wiki graph, 80×24 safe), event_loop.rs (mpsc channel, 8fps tick, headless mode), crossterm_reader.rs; 25 tests |
 
 ---
 
