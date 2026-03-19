@@ -82,26 +82,37 @@ redshank run "Who are the top donors to PACs linked to defense contractors with 
 
 ## Configuration
 
-Redshank reads API keys from environment variables or a credentials file at
-`~/.config/redshank/credentials.toml` (created with `chmod 600`):
+Credentials are resolved in this priority order (first match wins):
 
-```toml
-[anthropic]
-api_key = "sk-ant-..."
+1. `REDSHANK_<KEY>` — app-namespaced, useful when running multiple agents on one host
+2. `OPENPLANTER_<KEY>` — legacy backward compatibility
+3. `<KEY>` — bare env var (sufficient for most users)
 
-[openai]
-api_key = "sk-..."
+Set keys as environment variables or in a `.env` file:
 
-[openrouter]
-api_key = "sk-or-..."
+```bash
+cp .env.example .env
+# edit .env with your keys
+chmod 600 .env
 ```
 
-Provider and model defaults are stored in `~/.config/redshank/settings.toml`:
+For persistent storage, copy the example credentials file:
 
-```toml
-default_provider = "anthropic"
-default_model = "claude-sonnet-4-20250514"
-reasoning_effort = "medium"
+```bash
+mkdir -p .redshank
+cp credentials.example.json .redshank/credentials.json
+chmod 600 .redshank/credentials.json
+```
+
+Redshank merges from all sources in order: env vars → `.env` → `<workspace>/.redshank/credentials.json` → `~/.redshank/credentials.json`.
+
+Model defaults live in `<workspace>/.redshank/settings.json`:
+
+```json
+{
+  "default_model": "claude-sonnet-4-20250514",
+  "default_reasoning_effort": "medium"
+}
 ```
 
 Override at runtime with CLI flags:

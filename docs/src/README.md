@@ -1,6 +1,6 @@
 # Redshank
 
-![Redshank Logo](../assets/img/redshank-logo.png)
+![Redshank Logo](assets/img/redshank-logo.png)
 
 Redshank is an autonomous recursive language-model investigation agent written in Rust. It ingests heterogeneous public datasets — campaign finance, lobbying disclosures, federal contracts, corporate registries, sanctions lists, court records, individual-person OSINT, and media intelligence — resolves entities across all of them, and surfaces non-obvious connections through evidence-backed analysis written into a live knowledge-graph wiki.
 

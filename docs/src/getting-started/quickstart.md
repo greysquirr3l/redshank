@@ -2,7 +2,9 @@
 
 ## 1. Set credentials
 
-At minimum, set one LLM provider key. Redshank resolves credentials from environment variables, a `.env` file in the working directory, or `~/.redshank/credentials`.
+At minimum, set one LLM provider key. Redshank resolves credentials from environment variables, a `.env` file in the working directory, or `~/.redshank/credentials.json`.
+
+See [Configuration](./configuration.md) for the full resolution order and available keys.
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."

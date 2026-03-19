@@ -13,7 +13,11 @@ Credential files are written `chmod 600`. Keys never appear in log output at any
 
 ## Environment variables
 
-Both bare keys and the legacy `OPENPLANTER_` prefix are accepted.
+Each credential is resolved with the following priority (first match wins):
+
+1. `REDSHANK_<KEY>` — app-namespaced; use when running multiple different agents side-by-side
+2. `OPENPLANTER_<KEY>` — legacy backward compatibility with the OpenPlanter predecessor
+3. `<KEY>` — bare/global env var; sufficient for most users
 
 | Variable | Purpose |
 |----------|---------|

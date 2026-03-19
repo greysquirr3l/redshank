@@ -25,7 +25,7 @@ pub struct AuthContext {
 
 ## Credential security
 
-- Credentials are stored in `~/.redshank/credentials` with `chmod 600`.
+- Credentials are stored in `~/.redshank/credentials.json` (user level) or `<workspace>/.redshank/credentials.json` (workspace level), both written `chmod 600`.
 - Keys never appear in log output at any level (enforced by `Debug` impls that redact sensitive fields).
 - No credential is ever written to disk with broader permissions than `0o600`.
 
