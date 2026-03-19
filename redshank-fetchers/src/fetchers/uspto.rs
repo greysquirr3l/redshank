@@ -91,6 +91,7 @@ pub async fn fetch_patent_inventors(
         records_written: count,
         output_path,
         source_name: "uspto".into(),
+        attribution: None,
     })
 }
 

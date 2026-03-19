@@ -56,6 +56,7 @@ pub async fn fetch_github_profile(
         records_written: count,
         output_path,
         source_name: "github".into(),
+        attribution: None,
     })
 }
 

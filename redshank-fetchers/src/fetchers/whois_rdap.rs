@@ -45,6 +45,7 @@ pub async fn fetch_domain_rdap(domain: &str, output_dir: &Path) -> Result<FetchO
         records_written: count,
         output_path,
         source_name: "rdap".into(),
+        attribution: None,
     })
 }
 
@@ -82,6 +83,7 @@ pub async fn fetch_ip_rdap(ip: &str, output_dir: &Path) -> Result<FetchOutput, F
         records_written: count,
         output_path,
         source_name: "rdap".into(),
+        attribution: None,
     })
 }
 

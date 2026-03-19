@@ -84,6 +84,7 @@ pub async fn fetch_quarter(
         records_written: count,
         output_path,
         source_name: "senate-lobbying".into(),
+        attribution: None,
     })
 }
 

@@ -84,6 +84,7 @@ pub async fn fetch_acris_records(
         records_written: count,
         output_path,
         source_name: "acris".into(),
+        attribution: None,
     })
 }
 

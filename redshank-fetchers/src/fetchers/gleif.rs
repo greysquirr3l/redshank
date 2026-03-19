@@ -83,6 +83,7 @@ pub async fn fetch_lei_records(
         records_written: count,
         output_path,
         source_name: "gleif".into(),
+        attribution: None,
     })
 }
 

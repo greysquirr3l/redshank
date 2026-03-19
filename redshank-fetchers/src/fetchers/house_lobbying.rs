@@ -62,6 +62,7 @@ pub async fn fetch_house_lobbying(
         records_written: count,
         output_path,
         source_name: "house_lobbying".into(),
+        attribution: None,
     })
 }
 

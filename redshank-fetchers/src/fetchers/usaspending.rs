@@ -84,6 +84,7 @@ pub async fn fetch_awards(
         records_written: count,
         output_path,
         source_name: "usaspending".into(),
+        attribution: None,
     })
 }
 

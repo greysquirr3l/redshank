@@ -39,6 +39,7 @@ pub async fn fetch_eu_sanctions(output_dir: &Path) -> Result<FetchOutput, FetchE
         records_written: count,
         output_path,
         source_name: "eu_sanctions".into(),
+        attribution: None,
     })
 }
 

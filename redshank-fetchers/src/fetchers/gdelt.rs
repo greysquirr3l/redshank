@@ -58,6 +58,7 @@ pub async fn fetch_gdelt_articles(
         records_written: count,
         output_path,
         source_name: "gdelt".into(),
+        attribution: None,
     })
 }
 

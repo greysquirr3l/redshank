@@ -38,6 +38,7 @@ pub async fn fetch_un_sanctions(output_dir: &Path) -> Result<FetchOutput, FetchE
         records_written: count,
         output_path,
         source_name: "un_sanctions".into(),
+        attribution: None,
     })
 }
 

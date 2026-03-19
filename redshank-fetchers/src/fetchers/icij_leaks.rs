@@ -58,6 +58,7 @@ pub async fn fetch_entities(query: &str, output_dir: &Path) -> Result<FetchOutpu
         records_written: count,
         output_path,
         source_name: "icij-leaks".into(),
+        attribution: None,
     })
 }
 

@@ -55,6 +55,33 @@ impl FetchConfig {
     }
 }
 
+// ── Attribution ─────────────────────────────────────────────
+
+/// ODbL / licence attribution that **must** appear in any report or
+/// user-facing output that surfaces data from the originating source.
+///
+/// The `text` field is the human-readable attribution line.
+/// The `url` field is the hyperlink target that `text` must link to.
+/// The `min_font_size_px` constraint is derived from the ODbL:
+/// attribution must be ≥ 70 % of the largest related font, and never
+/// smaller than 7 px — encode whichever is larger here.
+///
+/// All fields are required; omitting any means the licence is not
+/// correctly satisfied.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attribution {
+    /// Short label identifying the source (e.g. `"OpenCorporates"`).
+    pub source: String,
+    /// Human-readable attribution text that must be displayed.
+    pub text: String,
+    /// URL the `text` must hyperlink to (homepage or canonical entity page).
+    pub url: String,
+    /// Minimum display size in pixels required by the originating licence.
+    pub min_font_size_px: u8,
+    /// SPDX licence identifier (e.g. `"ODbL-1.0"`).
+    pub licence: String,
+}
+
 // ── FetchOutput ─────────────────────────────────────────────
 
 /// Result of a completed fetch operation.
@@ -66,6 +93,11 @@ pub struct FetchOutput {
     pub output_path: PathBuf,
     /// Human-readable source name.
     pub source_name: String,
+    /// Licence attribution that **must** be included in any report or
+    /// user-facing output derived from this data. `None` for sources
+    /// that carry no specific attribution requirement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution: Option<Attribution>,
 }
 
 // ── FetchError ──────────────────────────────────────────────
@@ -137,9 +169,27 @@ mod tests {
             records_written: 42,
             output_path: PathBuf::from("/data/output.ndjson"),
             source_name: "fec".into(),
+            attribution: None,
         };
         let json = serde_json::to_string(&output).unwrap();
         assert!(json.contains("\"records_written\":42"));
         assert!(json.contains("\"source_name\":\"fec\""));
+        // attribution: None is skip_serializing, so it must be absent
+        assert!(!json.contains("attribution"));
+    }
+
+    #[test]
+    fn attribution_roundtrips_serde() {
+        let attr = Attribution {
+            source: "OpenCorporates".into(),
+            text: "from OpenCorporates".into(),
+            url: "https://opencorporates.com".into(),
+            min_font_size_px: 7,
+            licence: "ODbL-1.0".into(),
+        };
+        let json = serde_json::to_string(&attr).unwrap();
+        let restored: Attribution = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, attr);
+        assert!(json.contains("ODbL-1.0"));
     }
 }

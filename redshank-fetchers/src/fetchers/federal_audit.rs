@@ -69,6 +69,7 @@ pub async fn fetch_audits(
         records_written: count,
         output_path,
         source_name: "federal_audit".into(),
+        attribution: None,
     })
 }
 

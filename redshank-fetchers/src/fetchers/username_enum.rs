@@ -141,6 +141,7 @@ pub async fn enumerate_username(
         records_written: count,
         output_path,
         source_name: "username_enum".into(),
+        attribution: None,
     })
 }
 

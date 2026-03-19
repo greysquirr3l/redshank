@@ -80,6 +80,7 @@ pub async fn fetch_entities(
         records_written: count,
         output_path,
         source_name: "sam-gov".into(),
+        attribution: None,
     })
 }
 

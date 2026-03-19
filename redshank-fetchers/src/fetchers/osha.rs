@@ -67,6 +67,7 @@ pub async fn fetch_inspections(
         records_written: count,
         output_path,
         source_name: "osha".into(),
+        attribution: None,
     })
 }
 

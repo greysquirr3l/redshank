@@ -74,6 +74,7 @@ pub async fn fetch_nonprofits(
         records_written: count,
         output_path,
         source_name: "propublica-990".into(),
+        attribution: None,
     })
 }
 

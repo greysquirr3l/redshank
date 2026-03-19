@@ -123,6 +123,7 @@ pub async fn fetch_mastodon_profile(
         records_written: count,
         output_path,
         source_name: "social_profiles".into(),
+        attribution: None,
     })
 }
 

@@ -81,6 +81,7 @@ pub async fn fetch_boi_entities(
         records_written: count,
         output_path,
         source_name: "fincen_boi".into(),
+        attribution: None,
     })
 }
 

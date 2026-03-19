@@ -56,6 +56,7 @@ pub async fn fetch_submissions(cik: &str, output_dir: &Path) -> Result<FetchOutp
         records_written: count,
         output_path,
         source_name: "sec-edgar".into(),
+        attribution: None,
     })
 }
 

@@ -58,6 +58,7 @@ pub async fn fetch_wayback_snapshots(
         records_written: count,
         output_path,
         source_name: "wayback".into(),
+        attribution: None,
     })
 }
 

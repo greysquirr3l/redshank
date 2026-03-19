@@ -84,6 +84,7 @@ pub async fn fetch_sdn(output_dir: &Path) -> Result<FetchOutput, FetchError> {
         records_written: count,
         output_path,
         source_name: "ofac-sdn".into(),
+        attribution: None,
     })
 }
 

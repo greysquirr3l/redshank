@@ -87,6 +87,7 @@ pub async fn fetch_wikidata_sparql(
         records_written: count,
         output_path,
         source_name: "wikidata".into(),
+        attribution: None,
     })
 }
 

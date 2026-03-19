@@ -94,6 +94,7 @@ pub async fn fetch_facilities(
         records_written: count,
         output_path,
         source_name: "epa-echo".into(),
+        attribution: None,
     })
 }
 

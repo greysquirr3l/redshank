@@ -39,6 +39,7 @@ pub async fn fetch_debarred_firms(output_dir: &Path) -> Result<FetchOutput, Fetc
         records_written: count,
         output_path,
         source_name: "world_bank_debarred".into(),
+        attribution: None,
     })
 }
 

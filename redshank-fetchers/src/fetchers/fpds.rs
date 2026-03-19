@@ -80,6 +80,7 @@ pub async fn fetch_fpds_awards(
         records_written: count,
         output_path,
         source_name: "fpds".into(),
+        attribution: None,
     })
 }
 

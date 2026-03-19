@@ -2,12 +2,35 @@
 //!
 //! API: `https://api.opencorporates.com/v0.4/companies/search`
 //! Free tier: 500 requests/day. API key for higher volume.
+//!
+//! **Licence**: Data is published under the Open Database Licence (ODbL 1.0).
+//! Any report or user-facing output that surfaces data from this source **must**
+//! include a hyperlink reading "from OpenCorporates" linking to
+//! `https://opencorporates.com` (or the canonical entity URL returned in the API
+//! response). The attribution must be at least 70 % of the largest related font
+//! and never smaller than 7 px. See <https://opencorporates.com/terms-of-use-2/>.
 
-use crate::domain::{FetchError, FetchOutput};
+use crate::domain::{Attribution, FetchError, FetchOutput};
 use crate::{build_client, rate_limit_delay, write_ndjson};
 use std::path::Path;
 
 const API_BASE: &str = "https://api.opencorporates.com/v0.4";
+
+/// Returns the ODbL attribution that **must** accompany any output derived from
+/// OpenCorporates data.
+///
+/// Attach the result to every [`FetchOutput`] and render it in all reports / UI.
+/// The attribution text must hyperlink to `url`, be at least `min_font_size_px` pixels,
+/// and never be smaller than 70 % of the largest related font on the page.
+pub fn attribution() -> Attribution {
+    Attribution {
+        source: "OpenCorporates".into(),
+        text: "from OpenCorporates".into(),
+        url: "https://opencorporates.com".into(),
+        min_font_size_px: 7,
+        licence: "ODbL-1.0".into(),
+    }
+}
 
 /// Search `OpenCorporates` for companies matching `name`, optionally filtered by
 /// `jurisdiction_code` (e.g. `us_de` for Delaware, `gb` for UK).
@@ -87,6 +110,9 @@ pub async fn fetch_companies(
         records_written: count,
         output_path,
         source_name: "opencorporates".into(),
+        // ODbL-1.0 requires attribution in every report / user-facing output.
+        // See: https://opencorporates.com/terms-of-use-2/
+        attribution: Some(attribution()),
     })
 }
 

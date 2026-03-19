@@ -82,6 +82,7 @@ pub async fn fetch_candidates(
         records_written: count,
         output_path,
         source_name: "fec".into(),
+        attribution: None,
     })
 }
 

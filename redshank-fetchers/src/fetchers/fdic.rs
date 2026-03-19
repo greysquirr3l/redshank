@@ -84,6 +84,7 @@ pub async fn fetch_institutions(
         records_written: count,
         output_path,
         source_name: "fdic".into(),
+        attribution: None,
     })
 }
 

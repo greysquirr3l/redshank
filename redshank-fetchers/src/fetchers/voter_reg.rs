@@ -68,6 +68,7 @@ pub fn parse_voter_file(content: &str, output_dir: &Path) -> Result<FetchOutput,
         records_written: count,
         output_path,
         source_name: "voter_reg".into(),
+        attribution: None,
     })
 }
 
