@@ -19,19 +19,14 @@ on:
 
 jobs:
   audit:
-    name: Cargo Audit (SARIF)
+    name: Cargo Audit
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
+      checks: write
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.94"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -42,22 +37,7 @@ jobs:
           key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-audit-
 
-      - name: Install cargo-audit (with SARIF support)
-        run: cargo install cargo-audit --features sarif --locked
-
-      - name: Run cargo audit → SARIF
-        # Continue on findings so the upload step always runs
-        run: |
-          cargo audit --output-format sarif --quiet 2>/dev/null \
-            > redshank-audit.sarif || cargo audit --output-format sarif \
-            > redshank-audit.sarif 2>&1 || true
-
-      - name: Upload SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+      - name: cargo audit
+        uses: rustsec/audit-check@v2
         with:
-          sarif_file: redshank-audit.sarif
-          category: cargo-audit
-
-      - name: Fail on vulnerabilities with fixes available
-        run: cargo audit --deny warnings
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -62,7 +62,6 @@ credentials/
 
 tasks/
 docs/dev
-docs/src
 
 plan.toml
 IMPLEMENTATION_PLAN.md
