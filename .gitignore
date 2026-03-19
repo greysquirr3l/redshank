@@ -1,6 +1,8 @@
 # ─── Project-specific ─────────────────────────────────────────────────────────
 .coraline/
 .serena/
+.redshank/
+.env
 docs/dev/
 docs/book/
 docs/PROGRESS.md

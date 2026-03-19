@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy to .redshank/settings.json. All fields optional — unknown keys are silently ignored.",
+  "default_model": "claude-sonnet-4-20250514",
+  "default_reasoning_effort": "medium",
+  "default_model_anthropic": "claude-sonnet-4-20250514",
+  "default_model_openai": "gpt-4o",
+  "default_model_openrouter": "anthropic/claude-sonnet-4",
+  "default_model_cerebras": "llama-3.3-70b",
+  "default_model_ollama": "llama3.2"
+}
