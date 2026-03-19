@@ -11,24 +11,27 @@ const _BULK_URL: &str =
     "https://offshoreleaks-data.icij.org/offshoreleaks/csv/full-oldb.LATEST.zip";
 
 /// Parse a CSV line into entity fields (simplified parser for ICIJ nodes).
+#[must_use]
 pub fn parse_entity_csv_line(line: &str) -> Option<serde_json::Value> {
     let fields: Vec<&str> = line.split(',').collect();
     if fields.len() < 3 {
         return None;
     }
     Some(serde_json::json!({
-        "node_id": fields[0].trim_matches('"'),
-        "name": fields[1].trim_matches('"'),
-        "jurisdiction": fields.get(2).unwrap_or(&"").trim_matches('"'),
+        "node_id": fields.first().copied().unwrap_or("").trim_matches('"'),
+        "name": fields.get(1).copied().unwrap_or("").trim_matches('"'),
+        "jurisdiction": fields.get(2).copied().unwrap_or("").trim_matches('"'),
         "source": "icij-leaks"
     }))
 }
 
 /// Fetch ICIJ offshore leaks data (entity search via API).
-pub async fn fetch_entities(
-    query: &str,
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_entities(query: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let resp = client
         .get("https://offshoreleaks.icij.org/api/v1/search")
@@ -46,10 +49,7 @@ pub async fn fetch_entities(
     }
 
     let json: serde_json::Value = resp.json().await?;
-    let records = json
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let records = json.as_array().cloned().unwrap_or_default();
 
     let output_path = output_dir.join("icij_leaks.ndjson");
     let count = write_ndjson(&output_path, &records)?;
@@ -62,6 +62,7 @@ pub async fn fetch_entities(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

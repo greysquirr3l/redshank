@@ -12,10 +12,12 @@ const RDAP_DOMAIN_URL: &str = "https://rdap.org/domain";
 const RDAP_IP_URL: &str = "https://rdap.arin.net/registry/ip";
 
 /// Fetch RDAP data for a domain name.
-pub async fn fetch_domain_rdap(
-    domain: &str,
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_domain_rdap(domain: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
 
     let resp = client
@@ -47,10 +49,12 @@ pub async fn fetch_domain_rdap(
 }
 
 /// Fetch RDAP data for an IP address.
-pub async fn fetch_ip_rdap(
-    ip: &str,
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_ip_rdap(ip: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
 
     let resp = client
@@ -82,6 +86,7 @@ pub async fn fetch_ip_rdap(
 }
 
 /// Extract key fields from an RDAP domain response.
+#[must_use]
 pub fn extract_domain_fields(json: &serde_json::Value) -> serde_json::Value {
     let registrar = json
         .get("entities")
@@ -90,9 +95,7 @@ pub fn extract_domain_fields(json: &serde_json::Value) -> serde_json::Value {
             entities.iter().find(|e| {
                 e.get("roles")
                     .and_then(|r| r.as_array())
-                    .is_some_and(|roles| {
-                        roles.iter().any(|r| r.as_str() == Some("registrar"))
-                    })
+                    .is_some_and(|roles| roles.iter().any(|r| r.as_str() == Some("registrar")))
             })
         })
         .and_then(|e| {
@@ -160,6 +163,7 @@ pub fn extract_domain_fields(json: &serde_json::Value) -> serde_json::Value {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

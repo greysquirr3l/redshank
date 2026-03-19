@@ -7,6 +7,9 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Public data fetcher binaries for the Redshank investigation agent"
+readme = "../README.md"
+keywords = ["osint", "data", "fetcher", "investigation", "agent"]
+categories = ["command-line-utilities", "web-programming"]
 
 [dependencies]
 redshank-core = { workspace = true, features = ["runtime"] }
@@ -20,3 +23,6 @@ clap = { workspace = true, features = ["env"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

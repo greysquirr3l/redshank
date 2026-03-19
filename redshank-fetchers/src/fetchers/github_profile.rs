@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://api.github.com";
 
 /// Fetch a GitHub user's public profile, organizations, and repositories.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_github_profile(
     username: &str,
     token: Option<&str>,
@@ -20,7 +25,8 @@ pub async fn fetch_github_profile(
     let mut records = Vec::new();
 
     // Fetch user profile
-    let user_resp = send_github_request(&client, &format!("{API_BASE}/users/{username}"), token).await?;
+    let user_resp =
+        send_github_request(&client, &format!("{API_BASE}/users/{username}"), token).await?;
     let profile: serde_json::Value = user_resp;
 
     // Fetch organizations
@@ -54,6 +60,11 @@ pub async fn fetch_github_profile(
 }
 
 /// Reverse-lookup a GitHub username from an email address.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn search_user_by_email(
     email: &str,
     token: Option<&str>,
@@ -101,6 +112,7 @@ async fn send_github_request(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn github_profile_fixture_parses_user_and_orgs() {

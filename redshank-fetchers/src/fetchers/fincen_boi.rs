@@ -1,4 +1,4 @@
-//! FinCEN BOI — Beneficial Ownership Information database.
+//! `FinCEN` BOI — Beneficial Ownership Information database.
 //!
 //! API: POST `https://boiefiling.fincen.gov/api/v1/search`
 //! Requires API key in `Authorization: Bearer` header.
@@ -9,7 +9,12 @@ use std::path::Path;
 
 const API_BASE: &str = "https://boiefiling.fincen.gov/api/v1";
 
-/// Search the FinCEN Beneficial Ownership database for entities matching `query`.
+/// Search the `FinCEN` Beneficial Ownership database for entities matching `query`.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_boi_entities(
     query: &str,
     api_key: &str,
@@ -55,11 +60,13 @@ pub async fn fetch_boi_entities(
         }
         all_records.extend(results);
 
-        let total_pages = json
-            .get("pagination")
-            .and_then(|p| p.get("totalPages"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let total_pages = u32::try_from(
+            json.get("pagination")
+                .and_then(|p| p.get("totalPages"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1),
+        )
+        .unwrap_or(u32::MAX);
 
         if page >= total_pages {
             break;
@@ -78,6 +85,7 @@ pub async fn fetch_boi_entities(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn fincen_boi_parses_entity_response() {

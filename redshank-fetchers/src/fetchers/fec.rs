@@ -1,7 +1,7 @@
 //! FEC — Federal Election Commission campaign finance data.
 //!
 //! API: <https://api.open.fec.gov/v1/>
-//! Pagination: page-based (1-indexed), per_page max 100.
+//! Pagination: page-based (1-indexed), `per_page` max 100.
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, rate_limit_delay, write_ndjson};
@@ -11,6 +11,11 @@ const API_BASE: &str = "https://api.open.fec.gov/v1";
 const DEFAULT_PER_PAGE: u32 = 100;
 
 /// Fetch FEC candidate data for the given query.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_candidates(
     query: &str,
     api_key: &str,
@@ -55,11 +60,13 @@ pub async fn fetch_candidates(
         }
         all_records.extend(results);
 
-        let total_pages = json
-            .get("pagination")
-            .and_then(|p| p.get("pages"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let total_pages = u32::try_from(
+            json.get("pagination")
+                .and_then(|p| p.get("pages"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1),
+        )
+        .unwrap_or(u32::MAX);
 
         if page >= total_pages {
             break;
@@ -79,6 +86,7 @@ pub async fn fetch_candidates(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn fec_parses_candidate_search_response() {
@@ -89,10 +97,7 @@ mod tests {
             ],
             "pagination": {"pages": 1, "page": 1, "count": 2, "per_page": 100}
         });
-        let results = mock_json
-            .get("results")
-            .and_then(|v| v.as_array())
-            .unwrap();
+        let results = mock_json.get("results").and_then(|v| v.as_array()).unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0]["name"], "DOE, JOHN");
         assert_eq!(results[1]["party"], "DEM");

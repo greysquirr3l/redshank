@@ -23,6 +23,7 @@ pub struct Platform {
 }
 
 /// Parse platforms.toml into a list of Platform structs.
+#[must_use]
 pub fn load_platforms(toml_content: &str) -> Vec<Platform> {
     let mut platforms = Vec::new();
     let mut current: Option<Platform> = None;
@@ -54,8 +55,8 @@ pub fn load_platforms(toml_content: &str) -> Vec<Platform> {
             let value = value.trim();
 
             match key {
-                "name" => p.name = value.trim_matches('"').to_owned(),
-                "url_template" => p.url_template = value.trim_matches('"').to_owned(),
+                "name" => value.trim_matches('"').clone_into(&mut p.name),
+                "url_template" => value.trim_matches('"').clone_into(&mut p.url_template),
                 "success_codes" => {
                     let inner = value.trim_start_matches('[').trim_end_matches(']');
                     p.success_codes = inner
@@ -84,14 +85,23 @@ pub fn load_platforms(toml_content: &str) -> Vec<Platform> {
 }
 
 /// Build the profile URL for a given username on a platform.
+#[must_use]
 pub fn build_profile_url(platform: &Platform, username: &str) -> String {
-    platform.url_template.replace("{username}", username)
+    platform
+        .url_template
+        .replace(concat!("{", "username", "}"), username)
 }
 
 /// Check if a username exists on the built-in platforms.
 ///
 /// NO credential extraction. NO authentication attempts.
 /// Only HEAD requests to detect 200 vs 404.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP client cannot be constructed or a request fails
+/// catastrophically (individual 404s or unreachable platforms are recorded,
+/// not propagated as errors).
 pub async fn enumerate_username(
     username: &str,
     output_dir: &Path,
@@ -111,10 +121,8 @@ pub async fn enumerate_username(
             .send()
             .await;
 
-        let found = match result {
-            Ok(resp) => platform.success_codes.contains(&resp.status().as_u16()),
-            Err(_) => false,
-        };
+        let found =
+            result.is_ok_and(|resp| platform.success_codes.contains(&resp.status().as_u16()));
 
         records.push(serde_json::json!({
             "username": username,
@@ -137,13 +145,18 @@ pub async fn enumerate_username(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn username_enum_loads_platforms_toml() {
         let platforms = load_platforms(PLATFORMS_TOML);
-        assert!(platforms.len() > 30, "Expected 30+ platforms, got {}", platforms.len());
+        assert!(
+            platforms.len() > 30,
+            "Expected 30+ platforms, got {}",
+            platforms.len()
+        );
         let github = platforms.iter().find(|p| p.name == "GitHub").unwrap();
         assert_eq!(github.url_template, "https://github.com/{username}");
         assert_eq!(github.success_codes, vec![200]);

@@ -1,6 +1,6 @@
 //! File-based credential storage, `.env` parser, and multi-source resolution.
 //!
-//! Mirrors `agent/credentials.py` from the OpenPlanter Python implementation.
+//! Mirrors `agent/credentials.py` from the `OpenPlanter` Python implementation.
 
 use crate::domain::credentials::{CredentialBundle, CredentialGuard};
 use crate::domain::errors::DomainError;
@@ -12,11 +12,14 @@ use std::path::{Path, PathBuf};
 /// Strip matching single or double quotes from a value.
 fn strip_quotes(value: &str) -> &str {
     let v = value.trim();
-    if v.len() >= 2 {
-        let bytes = v.as_bytes();
-        if (bytes[0] == b'\'' || bytes[0] == b'"') && bytes[0] == bytes[v.len() - 1] {
-            return &v[1..v.len() - 1];
-        }
+    if v.len() >= 2
+        && let bytes = v.as_bytes()
+        && let (Some(&b0), Some(&blast)) = (bytes.first(), bytes.last())
+        && (b0 == b'\'' || b0 == b'"')
+        && b0 == blast
+        && let Some(inner) = v.get(1..v.len() - 1)
+    {
+        return inner;
     }
     v
 }
@@ -25,10 +28,10 @@ fn strip_quotes(value: &str) -> &str {
 ///
 /// Handles `KEY=value`, `KEY='value'`, `KEY="value"`, `export KEY=value`,
 /// `#` comments, and blank lines.
+#[must_use]
 pub fn parse_env_file(path: &Path) -> HashMap<String, String> {
-    let contents = match std::fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return HashMap::new(),
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return HashMap::new();
     };
 
     let mut env = HashMap::new();
@@ -81,6 +84,7 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
 }
 
 /// Build a `CredentialBundle` from a `.env` file.
+#[must_use]
 pub fn credentials_from_env_file(path: &Path) -> CredentialBundle {
     let env = parse_env_file(path);
     bundle_from_env_map(&env)
@@ -89,6 +93,7 @@ pub fn credentials_from_env_file(path: &Path) -> CredentialBundle {
 // ── Environment variable source ─────────────────────────────
 
 /// Build a `CredentialBundle` from process environment variables.
+#[must_use]
 pub fn credentials_from_env() -> CredentialBundle {
     let get = |openplanter_key: &str, bare_key: &str| -> Option<CredentialGuard<String>> {
         let val = std::env::var(openplanter_key)
@@ -131,12 +136,14 @@ pub struct FileCredentialStore {
 
 impl FileCredentialStore {
     /// Workspace-level credential store at `<workspace>/.redshank/credentials.json`.
+    #[must_use]
     pub fn workspace(workspace: &Path) -> Self {
         let credentials_path = workspace.join(".redshank").join("credentials.json");
         Self { credentials_path }
     }
 
     /// User-level credential store at `~/.redshank/credentials.json`.
+    #[must_use]
     pub fn user_level() -> Self {
         let home = dirs_path();
         let credentials_path = home.join(".redshank").join("credentials.json");
@@ -144,20 +151,26 @@ impl FileCredentialStore {
     }
 
     /// Path to the credentials file.
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.credentials_path
     }
 
     /// Load credentials from the JSON file. Returns an empty bundle on error.
+    #[must_use]
     pub fn load(&self) -> CredentialBundle {
-        let contents = match std::fs::read_to_string(&self.credentials_path) {
-            Ok(c) => c,
-            Err(_) => return CredentialBundle::default(),
+        let Ok(contents) = std::fs::read_to_string(&self.credentials_path) else {
+            return CredentialBundle::default();
         };
         serde_json::from_str(&contents).unwrap_or_default()
     }
 
     /// Save credentials to JSON and set file permissions to `0o600`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the directory cannot be created, the file cannot be
+    /// written, or permissions cannot be set.
     pub fn save(&self, bundle: &CredentialBundle) -> Result<(), DomainError> {
         if let Some(parent) = self.credentials_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -168,9 +181,8 @@ impl FileCredentialStore {
             })?;
         }
 
-        let json = serde_json::to_string_pretty(bundle).map_err(|e| {
-            DomainError::Other(format!("failed to serialize credentials: {e}"))
-        })?;
+        let json = serde_json::to_string_pretty(bundle)
+            .map_err(|e| DomainError::Other(format!("failed to serialize credentials: {e}")))?;
 
         std::fs::write(&self.credentials_path, &json).map_err(|e| {
             DomainError::Other(format!(
@@ -206,9 +218,7 @@ fn set_owner_only_perms(_path: &Path) -> Result<(), DomainError> {
 
 /// Get the user's home directory.
 fn dirs_path() -> PathBuf {
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
+    std::env::var("HOME").map_or_else(|_| PathBuf::from("."), PathBuf::from)
 }
 
 // ── Multi-source resolution ─────────────────────────────────
@@ -221,6 +231,7 @@ fn dirs_path() -> PathBuf {
 /// 3. `.env` file in workspace root
 /// 4. `.redshank/credentials.json` in workspace
 /// 5. `~/.redshank/credentials.json` (user-level)
+#[must_use]
 pub fn resolve_credentials(
     workspace: &Path,
     explicit: Option<&CredentialBundle>,
@@ -253,11 +264,13 @@ pub fn resolve_credentials(
 }
 
 /// Discover candidate `.env` file paths for a workspace.
+#[must_use]
 pub fn discover_env_candidates(workspace: &Path) -> Vec<PathBuf> {
     vec![workspace.join(".env")]
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use std::io::Write;
@@ -312,9 +325,18 @@ mod tests {
         .unwrap();
 
         let bundle = credentials_from_env_file(&env_path);
-        assert_eq!(bundle.anthropic_api_key.as_ref().unwrap().expose(), "sk-ant-test");
-        assert_eq!(bundle.openai_api_key.as_ref().unwrap().expose(), "sk-op-test");
-        assert_eq!(bundle.ollama_base_url.as_deref(), Some("http://local:11434"));
+        assert_eq!(
+            bundle.anthropic_api_key.as_ref().unwrap().expose(),
+            "sk-ant-test"
+        );
+        assert_eq!(
+            bundle.openai_api_key.as_ref().unwrap().expose(),
+            "sk-op-test"
+        );
+        assert_eq!(
+            bundle.ollama_base_url.as_deref(),
+            Some("http://local:11434")
+        );
     }
 
     #[test]
@@ -333,7 +355,10 @@ mod tests {
         };
 
         let resolved = resolve_credentials(workspace, Some(&explicit));
-        assert_eq!(resolved.anthropic_api_key.as_ref().unwrap().expose(), "from-explicit");
+        assert_eq!(
+            resolved.anthropic_api_key.as_ref().unwrap().expose(),
+            "from-explicit"
+        );
     }
 
     #[test]
@@ -350,8 +375,14 @@ mod tests {
         store.save(&bundle).unwrap();
 
         let loaded = store.load();
-        assert_eq!(loaded.anthropic_api_key.as_ref().unwrap().expose(), "sk-ant-persist");
-        assert_eq!(loaded.ollama_base_url.as_deref(), Some("http://localhost:11434"));
+        assert_eq!(
+            loaded.anthropic_api_key.as_ref().unwrap().expose(),
+            "sk-ant-persist"
+        );
+        assert_eq!(
+            loaded.ollama_base_url.as_deref(),
+            Some("http://localhost:11434")
+        );
     }
 
     #[cfg(unix)]
@@ -367,7 +398,10 @@ mod tests {
 
         let meta = std::fs::metadata(store.path()).unwrap();
         let mode = meta.permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "credentials file should be chmod 600, got {mode:o}");
+        assert_eq!(
+            mode, 0o600,
+            "credentials file should be chmod 600, got {mode:o}"
+        );
     }
 
     #[test]
@@ -398,6 +432,21 @@ mod tests {
         let resolved = resolve_credentials(workspace, None);
         // Both should be populated (from different sources)
         assert!(resolved.openai_api_key.is_some() || std::env::var("OPENAI_API_KEY").is_ok());
-        assert_eq!(resolved.anthropic_api_key.as_ref().unwrap().expose(), "from-ws-store");
+        // The workspace-store value wins only when no higher-priority env var is set.
+        // If the developer has a real ANTHROPIC_API_KEY set, that takes priority (level 2
+        // vs level 4) — which is correct behaviour. We still assert the key is present.
+        let no_env_anthropic = std::env::var("ANTHROPIC_API_KEY").is_err()
+            && std::env::var("OPENPLANTER_ANTHROPIC_API_KEY").is_err();
+        if no_env_anthropic {
+            assert_eq!(
+                resolved.anthropic_api_key.as_ref().unwrap().expose(),
+                "from-ws-store"
+            );
+        } else {
+            assert!(
+                resolved.anthropic_api_key.is_some(),
+                "anthropic key must be present from env or workspace store"
+            );
+        }
     }
 }

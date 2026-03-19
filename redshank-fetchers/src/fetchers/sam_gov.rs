@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://api.sam.gov/entity-information/v3/entities";
 
 /// Fetch SAM.gov entity data.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_entities(
     query: &str,
     api_key: &str,
@@ -54,10 +59,12 @@ pub async fn fetch_entities(
         }
         all_records.extend(entities);
 
-        let total = json
-            .get("totalRecords")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let total = usize::try_from(
+            json.get("totalRecords")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+        )
+        .unwrap_or(usize::MAX);
 
         if all_records.len() >= total {
             break;
@@ -77,6 +84,7 @@ pub async fn fetch_entities(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn sam_gov_parses_entity_response() {

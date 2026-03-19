@@ -76,7 +76,8 @@ pub enum DomainEvent {
 
 impl DomainEvent {
     /// Get the session ID from any event variant.
-    pub fn session_id(&self) -> SessionId {
+    #[must_use]
+    pub const fn session_id(&self) -> SessionId {
         match self {
             Self::SessionCreated { session_id, .. }
             | Self::AgentStarted { session_id, .. }
@@ -88,7 +89,8 @@ impl DomainEvent {
     }
 
     /// Get the timestamp from any event variant.
-    pub fn timestamp(&self) -> DateTime<Utc> {
+    #[must_use]
+    pub const fn timestamp(&self) -> DateTime<Utc> {
         match self {
             Self::SessionCreated { timestamp, .. }
             | Self::AgentStarted { timestamp, .. }
@@ -101,6 +103,7 @@ impl DomainEvent {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::domain::agent::AgentConfig;

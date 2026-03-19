@@ -1,9 +1,9 @@
 //! Voter Registration — State voter file parsers.
 //!
 //! Free/cheap states with public voter files:
-//! - FL: https://dos.fl.gov/elections/data-statistics/
-//! - NC: https://www.ncsbe.gov/results-data/voter-registration-data
-//! - OH: https://www.ohiosos.gov/elections/voters/
+//! - FL: <https://dos.fl.gov/elections/data-statistics/>
+//! - NC: <https://www.ncsbe.gov/results-data/voter-registration-data>
+//! - OH: <https://www.ohiosos.gov/elections/voters/>
 //!
 //! Each provides tab-delimited or CSV files (zip download).
 
@@ -13,14 +13,16 @@ use std::path::Path;
 
 /// Parse a tab-delimited voter registration row (NC format).
 ///
-/// NC fields: county_id, county_desc, voter_reg_num, ncid, last_name, first_name,
-/// middle_name, name_suffix, status_cd, voter_status_desc, reason_cd, reason_desc,
-/// res_street_address, res_city_desc, state_cd, zip_code, mail_addr1, mail_city,
-/// mail_state, mail_zipcode, full_phone_number, confidential_ind, registr_dt,
-/// race_code, ethnic_code, party_cd, gender_code, birth_year, age_at_year_end,
-/// birth_state, drivers_lic, precinct_abbrv, precinct_desc, municipality_abbrv,
-/// municipality_desc, ward_abbrv, ward_desc, cong_dist_abbrv, super_court_abbrv,
-/// judic_dist_abbrv, nc_senate_abbrv, nc_house_abbrv
+/// NC fields: `county_id`, `county_desc`, `voter_reg_num`, `ncid`, `last_name`, `first_name`,
+/// `middle_name`, `name_suffix`, `status_cd`, `voter_status_desc`, `reason_cd`, `reason_desc`,
+/// `res_street_address`, `res_city_desc`, `state_cd`, `zip_code`, `mail_addr1`, `mail_city`,
+/// `mail_state`, `mail_zipcode`, `full_phone_number`, `confidential_ind`, `registr_dt`,
+/// `race_code`, `ethnic_code`, `party_cd`, `gender_code`, `birth_year`, `age_at_year_end`,
+/// `birth_state`, `drivers_lic`, `precinct_abbrv`, `precinct_desc`, `municipality_abbrv`,
+/// `municipality_desc`, `ward_abbrv`, `ward_desc`, `cong_dist_abbrv`, `super_court_abbrv`,
+/// `judic_dist_abbrv`, `nc_senate_abbrv`, `nc_house_abbrv`
+#[must_use]
+#[allow(clippy::indexing_slicing)]
 pub fn parse_nc_voter_row(row: &str) -> Option<serde_json::Value> {
     let fields: Vec<&str> = row.split('\t').collect();
     if fields.len() < 30 {
@@ -48,10 +50,11 @@ pub fn parse_nc_voter_row(row: &str) -> Option<serde_json::Value> {
 }
 
 /// Parse voter registration rows from a tab-delimited file and write as NDJSON.
-pub fn parse_voter_file(
-    content: &str,
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the output file cannot be written.
+pub fn parse_voter_file(content: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let records: Vec<serde_json::Value> = content
         .lines()
         .skip(1) // skip header
@@ -69,6 +72,7 @@ pub fn parse_voter_file(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

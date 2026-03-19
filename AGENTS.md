@@ -2,17 +2,16 @@
 
 ## Project
 
-redshank — Redshank is an autonomous recursive language-model investigation agent written
-in Rust 1.94 (edition 2024). It ingests heterogeneous public datasets — campaign
-finance, lobbying disclosures, federal contracts, corporate registries,
-sanctions lists (OFAC, UN, EU, World Bank), property records, nonprofit
-filings, corporate registries (GLEIF, OpenCorporates, FinCEN BOI, state SOS
-portals), federal courts (RECAP/CourtListener), individual-person OSINT
-(breach exposure, username enumeration across 300+ platforms, voter rolls,
-github profiles, WHOIS history, patent/trademark inventors), and media
-intelligence (GDELT) — resolves entities across all of them, and surfaces
-non-obvious connections through evidence-backed analysis written into a live
-knowledge-graph wiki.
+redshank — Redshank is an autonomous recursive language-model investigation agent
+written in Rust 1.94 (edition 2024). It ingests heterogeneous public datasets —
+campaign finance, lobbying disclosures, federal contracts, corporate registries,
+sanctions lists (OFAC, UN, EU, World Bank), property records, nonprofit filings,
+corporate registries (GLEIF, OpenCorporates, FinCEN BOI, state SOS portals),
+federal courts (RECAP/CourtListener), individual-person OSINT (breach exposure,
+username enumeration across 300+ platforms, voter rolls, github profiles, WHOIS
+history, patent/trademark inventors), and media intelligence (GDELT) — resolves
+entities across all of them, and surfaces non-obvious connections through
+evidence-backed analysis written into a live knowledge-graph wiki.
 
 The agent runs a tool-calling loop that can recursively delegate subtasks to
 child agent invocations, condense context on long runs, apply a cheap judge
@@ -62,7 +61,7 @@ single executable with no Python or Node.js runtime dependency.
 
 - Security First (fail-secure): every repository/store port method that accesses or mutates keyed data accepts auth: &AuthContext and enforces a SecurityPolicy check before any data access. Security rules live in src/domain/auth.rs as pure functions (no I/O, no async). Default deny — return Err(SecurityError::AccessDenied) unless the policy explicitly grants the required Permission.
 
-- Aggregate repositories: one repository per aggregate root, not one per table. Use the UpdateFn pattern for transactional mutations: `async fn update_by_id<F, R>(&self, id, auth: &AuthContext, update_fn: F) -> Result<R>`. The closure holds business logic; the repo manages the transaction. Use TransactionProvider only for cross-aggregate consistency.
+- Aggregate repositories: one repository per aggregate root, not one per table. Use the UpdateFn pattern for transactional mutations: async fn update_by_id<F, R>(&self, id, auth: &AuthContext, update_fn: F) -> Result<R>. The closure holds business logic; the repo manages the transaction. Use TransactionProvider only for cross-aggregate consistency.
 
 - Domain events: every significant state transition emits a typed DomainEvent variant (SessionCreated, AgentStarted, ToolCalled, AgentCompleted, WikiEntryWritten). Events are immutable value types. Aggregate methods append them to a pending_events Vec; the session store persists them via append_event.
 
@@ -73,41 +72,8 @@ single executable with no Python or Node.js runtime dependency.
 ## Testing instructions
 
 - Run `cargo test --workspace` before committing
-- Run `cargo clippy --workspace --tests -- -D warnings` — zero warnings policy
 - Every new public function needs at least one test
 - Fix all test failures before marking a task complete
-- To test with optional features: `cargo test -p redshank-core --features coraline`
-
-## Coraline MCP tool usage
-
-When exploring or modifying the redshank workspace, prefer Coraline MCP tools
-over raw filesystem access:
-
-| Tool | Purpose | Example |
-| --- | --- | --- |
-| `coraline_read_file` | Code-aware file reading | `{"path": "redshank-core/src/domain.rs"}` |
-| `coraline_search` | Semantic code search | `{"query": "SecurityPolicy", "max_results": 10}` |
-| `coraline_repo_map` | Repository file tree with symbols | `{"max_depth": 3}` |
-| `coraline_edit_file` | Code-aware file editing | `{"path": "src/lib.rs", "old_str": "...", "new_str": "..."}` |
-
-These tools require the `coraline` feature flag and a Coraline binary on `$PATH`.
-Without the feature, the dispatch returns a helpful error message instead of failing.
-
-## Workspace layout
-
-```text
-redshank/
-├── redshank-core/       Core library (domain, ports, application, adapters)
-│   └── src/
-│       ├── domain/      Pure types, zero I/O deps (agent, auth, credentials, events, session, wiki, errors)
-│       ├── ports/       Trait interfaces (ModelProvider, ToolDispatcher, SessionStore, WikiStore, ReplayLog)
-│       ├── application/ CQRS handlers + RLMEngine service + context condensation
-│       └── adapters/    Anthropic/OpenAI providers, WorkspaceTools, SQLite, Coraline MCP, stygian
-├── redshank-tui/        ratatui TUI (domain, renderer, event_loop, crossterm_reader)
-├── redshank-fetchers/   34 data-source fetcher libraries + pipeline configs
-├── redshank-cli/        clap CLI (run, tui, fetch, session, configure, version)
-└── plan.toml            Build plan — 26 tasks across 11 phases
-```
 
 ## Commit conventions
 

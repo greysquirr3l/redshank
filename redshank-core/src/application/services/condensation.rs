@@ -21,6 +21,7 @@ const KEEP_RECENT_TURNS: usize = 4;
 /// Well-known model context window sizes (tokens).
 ///
 /// Models not listed here fall back to [`DEFAULT_CONTEXT_WINDOW`].
+#[must_use]
 pub fn model_context_window(model: &str) -> u64 {
     let lower = model.to_ascii_lowercase();
     if lower.contains("claude") {
@@ -55,7 +56,8 @@ pub struct ContextTracker {
 
 impl ContextTracker {
     /// Create a tracker for a model with the given context window.
-    pub fn new(window_size: u64) -> Self {
+    #[must_use]
+    pub const fn new(window_size: u64) -> Self {
         Self {
             window_size,
             used_tokens: 0,
@@ -64,28 +66,34 @@ impl ContextTracker {
     }
 
     /// Create a tracker from a model name (looks up the context window).
+    #[must_use]
     pub fn for_model(model_name: &str) -> Self {
         Self::new(model_context_window(model_name))
     }
 
     /// Update the recorded token usage.
-    pub fn set_used_tokens(&mut self, tokens: u64) {
+    pub const fn set_used_tokens(&mut self, tokens: u64) {
         self.used_tokens = tokens;
     }
 
     /// Whether context usage exceeds the condensation threshold.
+    #[must_use]
+    // Token counts are well below 2^52; precision loss from u64→f64 is acceptable for threshold comparison.
+    #[allow(clippy::cast_precision_loss)]
     pub fn should_condense(&self) -> bool {
         self.window_size > 0
             && (self.used_tokens as f64) > CONDENSATION_THRESHOLD * (self.window_size as f64)
     }
 
     /// Current token usage.
-    pub fn used_tokens(&self) -> u64 {
+    #[must_use]
+    pub const fn used_tokens(&self) -> u64 {
         self.used_tokens
     }
 
     /// Context window size.
-    pub fn window_size(&self) -> u64 {
+    #[must_use]
+    pub const fn window_size(&self) -> u64 {
         self.window_size
     }
 
@@ -95,6 +103,7 @@ impl ContextTracker {
     }
 
     /// All accumulated turn summaries.
+    #[must_use]
     pub fn summaries(&self) -> &[TurnSummary] {
         &self.turn_summaries
     }
@@ -117,11 +126,15 @@ pub fn condense_tool_outputs(messages: &mut [ChatMessage]) -> usize {
         return 0;
     }
 
-    let to_condense = &tool_indices[..tool_indices.len() - KEEP_RECENT_TURNS];
+    let end = tool_indices.len() - KEEP_RECENT_TURNS;
+    let to_condense = tool_indices.get(..end).unwrap_or_default();
     let mut condensed = 0;
     for &idx in to_condense {
-        if messages[idx].content != CONDENSED_PLACEHOLDER {
-            messages[idx].content = CONDENSED_PLACEHOLDER.to_owned();
+        if let Some(msg) = messages.get_mut(idx)
+            && msg.content != CONDENSED_PLACEHOLDER
+        {
+            msg.content.clear();
+            msg.content.push_str(CONDENSED_PLACEHOLDER);
             condensed += 1;
         }
     }
@@ -135,15 +148,16 @@ pub fn condense_tool_outputs(messages: &mut [ChatMessage]) -> usize {
 /// Returns the new, shorter conversation.
 ///
 /// The original user objective (first user message) is always preserved.
+///
+/// # Errors
+///
+/// Returns `Err` if the judge model fails to produce a completion.
 pub async fn condense_with_judge<M: ModelProvider>(
     messages: &[ChatMessage],
     judge: &M,
 ) -> Result<Vec<ChatMessage>, DomainError> {
     // Find the first user message (the objective).
-    let first_user_idx = messages
-        .iter()
-        .position(|m| m.role == "user")
-        .unwrap_or(0);
+    let first_user_idx = messages.iter().position(|m| m.role == "user").unwrap_or(0);
 
     // Build the summary request.
     let summary_prompt = ChatMessage {
@@ -168,7 +182,9 @@ pub async fn condense_with_judge<M: ModelProvider>(
     let mut result = Vec::new();
 
     // Preserve the objective.
-    result.push(messages[first_user_idx].clone());
+    if let Some(first_msg) = messages.get(first_user_idx) {
+        result.push(first_msg.clone());
+    }
 
     // Insert condensation turn.
     result.push(ChatMessage {
@@ -185,7 +201,7 @@ pub async fn condense_with_judge<M: ModelProvider>(
     } else {
         first_user_idx + 1
     };
-    for msg in &messages[start..] {
+    for msg in messages.get(start..).unwrap_or_default() {
         result.push(msg.clone());
     }
 
@@ -193,6 +209,7 @@ pub async fn condense_with_judge<M: ModelProvider>(
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use chrono::Utc;
@@ -321,6 +338,9 @@ mod tests {
         assert_eq!(model_context_window("gpt-4.1"), 128_000);
         assert_eq!(model_context_window("gpt-4o"), 128_000);
         assert_eq!(model_context_window("o4-mini"), 128_000);
-        assert_eq!(model_context_window("unknown-model"), DEFAULT_CONTEXT_WINDOW);
+        assert_eq!(
+            model_context_window("unknown-model"),
+            DEFAULT_CONTEXT_WINDOW
+        );
     }
 }

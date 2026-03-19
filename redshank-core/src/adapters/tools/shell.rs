@@ -1,4 +1,4 @@
-//! Shell tools: run_shell, run_shell_bg, check_shell_bg, kill_shell_bg, cleanup_bg_jobs.
+//! Shell tools: `run_shell`, `run_shell_bg`, `check_shell_bg`, `kill_shell_bg`, `cleanup_bg_jobs`.
 
 use super::workspace_tools::WorkspaceTools;
 use regex::Regex;
@@ -12,11 +12,15 @@ pub struct BgJob {
     pub output_path: std::path::PathBuf,
 }
 
-static HEREDOC_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"<<-?\s*['"]?\w+['"]?"#).unwrap());
+static HEREDOC_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"<<-?\s*['"?\w+'"?]?"#)
+        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+});
 
-static INTERACTIVE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(^|[;&|]\s*)(vim|nano|less|more|top|htop|man)\b").unwrap());
+static INTERACTIVE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(^|[;&|]\s*)(vim|nano|less|more|top|htop|man)\b")
+        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+});
 
 /// Check shell command against policy (heredoc, interactive).
 fn check_shell_policy(command: &str) -> Option<String> {
@@ -31,8 +35,7 @@ fn check_shell_policy(command: &str) -> Option<String> {
         let prog = INTERACTIVE_RE
             .captures(command)
             .and_then(|c| c.get(2))
-            .map(|m| m.as_str())
-            .unwrap_or("unknown");
+            .map_or("unknown", |m| m.as_str());
         return Some(format!(
             "BLOCKED: Interactive terminal program '{prog}' is not allowed by runtime policy."
         ));
@@ -42,9 +45,8 @@ fn check_shell_policy(command: &str) -> Option<String> {
 
 /// Execute a shell command synchronously.
 pub async fn run_shell(ws: &WorkspaceTools, args: &Value) -> String {
-    let command = match args.get("command").and_then(|v| v.as_str()) {
-        Some(c) => c,
-        None => return "run_shell requires 'command' parameter".to_string(),
+    let Some(command) = args.get("command").and_then(Value::as_str) else {
+        return "run_shell requires 'command' parameter".to_string();
     };
 
     if let Some(blocked) = check_shell_policy(command) {
@@ -53,7 +55,7 @@ pub async fn run_shell(ws: &WorkspaceTools, args: &Value) -> String {
 
     let timeout_secs = args
         .get("timeout")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(ws.command_timeout_secs)
         .clamp(1, 600);
 
@@ -85,17 +87,14 @@ pub async fn run_shell(ws: &WorkspaceTools, args: &Value) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let code = output.status.code().unwrap_or(-1);
-    let merged = format!(
-        "$ {command}\n[exit_code={code}]\n[stdout]\n{stdout}\n[stderr]\n{stderr}"
-    );
+    let merged = format!("$ {command}\n[exit_code={code}]\n[stdout]\n{stdout}\n[stderr]\n{stderr}");
     WorkspaceTools::clip(&merged, ws.max_shell_output_chars)
 }
 
 /// Start a background shell job.
 pub async fn run_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
-    let command = match args.get("command").and_then(|v| v.as_str()) {
-        Some(c) => c,
-        None => return "run_shell_bg requires 'command' parameter".to_string(),
+    let Some(command) = args.get("command").and_then(Value::as_str) else {
+        return "run_shell_bg requires 'command' parameter".to_string();
     };
 
     if let Some(blocked) = check_shell_policy(command) {
@@ -130,29 +129,31 @@ pub async fn run_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
     };
 
     let pid = child.id().unwrap_or(0);
-    let mut jobs = ws.bg_jobs.lock().await;
-    jobs.insert(
-        job_id,
-        BgJob {
-            child,
-            output_path: out_path,
-        },
-    );
+    {
+        let mut jobs = ws.bg_jobs.lock().await;
+        jobs.insert(
+            job_id,
+            BgJob {
+                child,
+                output_path: out_path,
+            },
+        );
+    }
 
     format!("Background job started: job_id={job_id}, pid={pid}")
 }
 
 /// Check on a background job.
 pub async fn check_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
-    let job_id = match args.get("job_id").and_then(|v| v.as_u64()) {
-        Some(id) => id as u32,
-        None => return "check_shell_bg requires 'job_id' parameter".to_string(),
+    let Some(raw_id) = args.get("job_id").and_then(Value::as_u64) else {
+        return "check_shell_bg requires 'job_id' parameter".to_string();
     };
+    let job_id = u32::try_from(raw_id).unwrap_or(u32::MAX);
 
-    let mut jobs = ws.bg_jobs.lock().await;
-    let job = match jobs.get_mut(&job_id) {
-        Some(j) => j,
-        None => return format!("No background job with id {job_id}"),
+    // Remove job from map to release the lock before calling try_wait.
+    // Re-insert if the job is still running.
+    let Some(mut job) = ws.bg_jobs.lock().await.remove(&job_id) else {
+        return format!("No background job with id {job_id}");
     };
 
     let output = std::fs::read_to_string(&job.output_path).unwrap_or_default();
@@ -161,30 +162,31 @@ pub async fn check_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
     match job.child.try_wait() {
         Ok(Some(status)) => {
             let code = status.code().unwrap_or(-1);
-            let out_path = job.output_path.clone();
-            jobs.remove(&job_id);
-            let _ = std::fs::remove_file(&out_path);
+            let _ = std::fs::remove_file(&job.output_path);
             format!("[job {job_id} finished, exit_code={code}]\n{clipped}")
         }
         Ok(None) => {
             let pid = job.child.id().unwrap_or(0);
+            ws.bg_jobs.lock().await.insert(job_id, job);
             format!("[job {job_id} still running, pid={pid}]\n{clipped}")
         }
-        Err(e) => format!("[job {job_id} status error: {e}]\n{clipped}"),
+        Err(e) => {
+            ws.bg_jobs.lock().await.insert(job_id, job);
+            format!("[job {job_id} status error: {e}]\n{clipped}")
+        }
     }
 }
 
 /// Kill a background job.
 pub async fn kill_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
-    let job_id = match args.get("job_id").and_then(|v| v.as_u64()) {
-        Some(id) => id as u32,
-        None => return "kill_shell_bg requires 'job_id' parameter".to_string(),
+    let Some(raw_id) = args.get("job_id").and_then(Value::as_u64) else {
+        return "kill_shell_bg requires 'job_id' parameter".to_string();
     };
+    let job_id = u32::try_from(raw_id).unwrap_or(u32::MAX);
 
-    let mut jobs = ws.bg_jobs.lock().await;
-    let mut job = match jobs.remove(&job_id) {
-        Some(j) => j,
-        None => return format!("No background job with id {job_id}"),
+    let job = ws.bg_jobs.lock().await.remove(&job_id);
+    let Some(mut job) = job else {
+        return format!("No background job with id {job_id}");
     };
 
     let _ = job.child.kill().await;
@@ -196,10 +198,13 @@ pub async fn kill_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
 
 /// Kill all background jobs.
 pub async fn cleanup_bg_jobs(ws: &WorkspaceTools) -> String {
-    let mut jobs = ws.bg_jobs.lock().await;
-    let count = jobs.len();
+    let drained: Vec<_> = {
+        let mut jobs = ws.bg_jobs.lock().await;
+        jobs.drain().map(|(_, job)| job).collect()
+    };
+    let count = drained.len();
 
-    for (_, mut job) in jobs.drain() {
+    for mut job in drained {
         let _ = job.child.kill().await;
         let _ = job.child.wait().await;
         let _ = std::fs::remove_file(&job.output_path);

@@ -7,7 +7,7 @@
 use std::sync::Mutex;
 
 #[cfg(feature = "runtime")]
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 #[cfg(feature = "runtime")]
 use crate::domain::agent::AgentSession;
@@ -21,7 +21,7 @@ use crate::domain::events::DomainEvent;
 use crate::domain::session::SessionId;
 
 #[cfg(feature = "runtime")]
-const CREATE_TABLES: &str = r#"
+const CREATE_TABLES: &str = r"
 CREATE TABLE IF NOT EXISTS sessions (
     id              TEXT PRIMARY KEY,
     owner_user_id   TEXT NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     result      TEXT NOT NULL,
     created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
-"#;
+";
 
 /// SQLite-backed session store.
 #[cfg(feature = "runtime")]
@@ -56,13 +56,21 @@ pub struct SqliteSessionStore {
 #[cfg(feature = "runtime")]
 impl SqliteSessionStore {
     /// Open or create a session store at the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the database file cannot be opened or initialized.
     pub fn open(path: &str) -> Result<Self, DomainError> {
-        let conn = Connection::open(path)
-            .map_err(|e| DomainError::Other(format!("sqlite open: {e}")))?;
+        let conn =
+            Connection::open(path).map_err(|e| DomainError::Other(format!("sqlite open: {e}")))?;
         Self::init(conn)
     }
 
     /// Create an in-memory session store (for tests).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the in-memory database cannot be initialized.
     pub fn in_memory() -> Result<Self, DomainError> {
         let conn = Connection::open_in_memory()
             .map_err(|e| DomainError::Other(format!("sqlite open: {e}")))?;
@@ -94,7 +102,10 @@ impl SqliteSessionStore {
         if Self::is_privileged(auth) {
             return Ok(());
         }
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let owner: Option<String> = conn
             .query_row(
                 "SELECT owner_user_id FROM sessions WHERE id = ?1",
@@ -102,6 +113,7 @@ impl SqliteSessionStore {
                 |row| row.get(0),
             )
             .ok();
+        drop(conn);
         match owner {
             Some(owner_id) if owner_id == auth.user_id.to_string() => Ok(()),
             Some(_) => Err(DomainError::Security(SecurityError::AccessDenied {
@@ -109,8 +121,7 @@ impl SqliteSessionStore {
                 required_permission: Permission::ReadSession,
             })),
             None => Err(DomainError::NotFound(format!(
-                "Session {} not found",
-                session_id
+                "Session {session_id} not found"
             ))),
         }
     }
@@ -118,33 +129,43 @@ impl SqliteSessionStore {
     // ── SessionStore port methods ───────────────────────────────────────
 
     /// Save or update an agent session.
-    pub fn save(
-        &self,
-        auth: &AuthContext,
-        session: &AgentSession,
-    ) -> Result<(), DomainError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails or the database write fails.
+    pub fn save(&self, auth: &AuthContext, session: &AgentSession) -> Result<(), DomainError> {
         use crate::domain::auth::can_write_session;
         can_write_session(auth, &self.policy)?;
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let metadata = serde_json::to_string(session)
             .map_err(|e| DomainError::Other(format!("serialize session: {e}")))?;
 
-        conn.execute(
-            "INSERT INTO sessions (id, owner_user_id, metadata) VALUES (?1, ?2, ?3)
+        let save_result = conn
+            .execute(
+                "INSERT INTO sessions (id, owner_user_id, metadata) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET metadata = excluded.metadata",
-            params![
-                session.session_id.to_string(),
-                auth.user_id.to_string(),
-                metadata,
-            ],
-        )
-        .map_err(|e| DomainError::Other(format!("sqlite save: {e}")))?;
+                params![
+                    session.session_id.to_string(),
+                    auth.user_id.to_string(),
+                    metadata,
+                ],
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite save: {e}")));
+        drop(conn);
+        save_result?;
 
         Ok(())
     }
 
     /// Load a session by ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, the database read fails, or deserialization fails.
     pub fn load(
         &self,
         auth: &AuthContext,
@@ -158,7 +179,10 @@ impl SqliteSessionStore {
             self.check_session_access(auth, &id)?;
         }
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let result: Option<String> = conn
             .query_row(
                 "SELECT metadata FROM sessions WHERE id = ?1",
@@ -166,6 +190,7 @@ impl SqliteSessionStore {
                 |row| row.get(0),
             )
             .ok();
+        drop(conn);
 
         match result {
             Some(json) => {
@@ -178,14 +203,18 @@ impl SqliteSessionStore {
     }
 
     /// List all sessions visible to the caller.
-    pub fn list(
-        &self,
-        auth: &AuthContext,
-    ) -> Result<Vec<AgentSession>, DomainError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails or the database read fails.
+    pub fn list(&self, auth: &AuthContext) -> Result<Vec<AgentSession>, DomainError> {
         use crate::domain::auth::can_read_session;
         can_read_session(auth, &self.policy)?;
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
 
         let mut stmt = if Self::is_privileged(auth) {
             conn.prepare("SELECT metadata FROM sessions ORDER BY created_at DESC")
@@ -200,14 +229,16 @@ impl SqliteSessionStore {
         let rows: Vec<String> = if Self::is_privileged(auth) {
             stmt.query_map([], |row| row.get(0))
                 .map_err(|e| DomainError::Other(format!("sqlite query: {e}")))?
-                .filter_map(|r| r.ok())
+                .filter_map(Result::ok)
                 .collect()
         } else {
             stmt.query_map(params![auth.user_id.to_string()], |row| row.get(0))
                 .map_err(|e| DomainError::Other(format!("sqlite query: {e}")))?
-                .filter_map(|r| r.ok())
+                .filter_map(Result::ok)
                 .collect()
         };
+        drop(stmt);
+        drop(conn);
 
         let mut sessions = Vec::new();
         for json in rows {
@@ -219,11 +250,11 @@ impl SqliteSessionStore {
     }
 
     /// Delete a session by ID.
-    pub fn delete(
-        &self,
-        auth: &AuthContext,
-        id: SessionId,
-    ) -> Result<(), DomainError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails or the database write fails.
+    pub fn delete(&self, auth: &AuthContext, id: SessionId) -> Result<(), DomainError> {
         use crate::domain::auth::can_delete_session;
         can_delete_session(auth, &self.policy)?;
 
@@ -232,27 +263,52 @@ impl SqliteSessionStore {
             self.check_session_access(auth, &id)?;
         }
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
-        conn.execute(
-            "DELETE FROM sessions WHERE id = ?1",
-            params![id.to_string()],
-        )
-        .map_err(|e| DomainError::Other(format!("sqlite delete: {e}")))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+        let delete_result = conn
+            .execute(
+                "DELETE FROM sessions WHERE id = ?1",
+                params![id.to_string()],
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite delete: {e}")));
+        drop(conn);
+        delete_result?;
 
         Ok(())
     }
 
     /// Append a domain event to the session's event log.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, serialization fails, or the database write fails.
     pub fn append_event(
         &self,
         auth: &AuthContext,
         session_id: SessionId,
-        event: DomainEvent,
+        event: &DomainEvent,
     ) -> Result<(), DomainError> {
         use crate::domain::auth::can_write_session;
         can_write_session(auth, &self.policy)?;
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let event_type = match event {
+            DomainEvent::SessionCreated { .. } => "SessionCreated",
+            DomainEvent::AgentStarted { .. } => "AgentStarted",
+            DomainEvent::ToolCalled { .. } => "ToolCalled",
+            DomainEvent::AgentCompleted { .. } => "AgentCompleted",
+            DomainEvent::InvestigationFailed { .. } => "InvestigationFailed",
+            DomainEvent::WikiEntryWritten { .. } => "WikiEntryWritten",
+        };
+
+        let payload = serde_json::to_string(event)
+            .map_err(|e| DomainError::Other(format!("serialize event: {e}")))?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
 
         // Get next seq number.
         let seq: i64 = conn
@@ -263,28 +319,23 @@ impl SqliteSessionStore {
             )
             .map_err(|e| DomainError::Other(format!("sqlite seq: {e}")))?;
 
-        let event_type = match &event {
-            DomainEvent::SessionCreated { .. } => "SessionCreated",
-            DomainEvent::AgentStarted { .. } => "AgentStarted",
-            DomainEvent::ToolCalled { .. } => "ToolCalled",
-            DomainEvent::AgentCompleted { .. } => "AgentCompleted",
-            DomainEvent::InvestigationFailed { .. } => "InvestigationFailed",
-            DomainEvent::WikiEntryWritten { .. } => "WikiEntryWritten",
-        };
-
-        let payload = serde_json::to_string(&event)
-            .map_err(|e| DomainError::Other(format!("serialize event: {e}")))?;
-
-        conn.execute(
-            "INSERT INTO events (session_id, seq, event_type, payload) VALUES (?1, ?2, ?3, ?4)",
-            params![session_id.to_string(), seq, event_type, payload],
-        )
-        .map_err(|e| DomainError::Other(format!("sqlite append_event: {e}")))?;
+        let append_result = conn
+            .execute(
+                "INSERT INTO events (session_id, seq, event_type, payload) VALUES (?1, ?2, ?3, ?4)",
+                params![session_id.to_string(), seq, event_type, payload],
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite append_event: {e}")));
+        drop(conn);
+        append_result?;
 
         Ok(())
     }
 
     /// List all events for a session, ordered by sequence.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, the query fails, or deserialization fails.
     pub fn list_events(
         &self,
         auth: &AuthContext,
@@ -293,7 +344,10 @@ impl SqliteSessionStore {
         use crate::domain::auth::can_read_session;
         can_read_session(auth, &self.policy)?;
 
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let mut stmt = conn
             .prepare("SELECT payload FROM events WHERE session_id = ?1 ORDER BY seq ASC")
             .map_err(|e| DomainError::Other(format!("sqlite prepare: {e}")))?;
@@ -312,16 +366,22 @@ impl SqliteSessionStore {
                     })
             })
             .collect();
+        drop(stmt);
+        drop(conn);
 
         events
     }
 
     /// Check if an idempotency key has been used (within 24h).
-    pub fn check_idempotency_key(
-        &self,
-        key: &uuid::Uuid,
-    ) -> Result<Option<String>, DomainError> {
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the database read fails.
+    pub fn check_idempotency_key(&self, key: &uuid::Uuid) -> Result<Option<String>, DomainError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let result: Option<String> = conn
             .query_row(
                 "SELECT result FROM idempotency_keys WHERE key = ?1 AND created_at > unixepoch() - 86400",
@@ -329,31 +389,106 @@ impl SqliteSessionStore {
                 |row| row.get(0),
             )
             .ok();
+        drop(conn);
         Ok(result)
     }
 
     /// Record an idempotency key with its result.
-    pub fn set_idempotency_key(
-        &self,
-        key: &uuid::Uuid,
-        result: &str,
-    ) -> Result<(), DomainError> {
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
-        conn.execute(
-            "INSERT OR REPLACE INTO idempotency_keys (key, result) VALUES (?1, ?2)",
-            params![key.to_string(), result],
-        )
-        .map_err(|e| DomainError::Other(format!("sqlite set idem key: {e}")))?;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the database write fails.
+    pub fn set_idempotency_key(&self, key: &uuid::Uuid, result: &str) -> Result<(), DomainError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+        let set_result = conn
+            .execute(
+                "INSERT OR REPLACE INTO idempotency_keys (key, result) VALUES (?1, ?2)",
+                params![key.to_string(), result],
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite set idem key: {e}")));
+        drop(conn);
+        set_result?;
         Ok(())
     }
 
     /// Verify WAL mode is active (for test assertions).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the database query fails.
     pub fn journal_mode(&self) -> Result<String, DomainError> {
-        let conn = self.conn.lock().map_err(|e| DomainError::Other(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
         let mode: String = conn
             .query_row("PRAGMA journal_mode", [], |row| row.get(0))
             .map_err(|e| DomainError::Other(format!("sqlite pragma: {e}")))?;
+        drop(conn);
         Ok(mode)
+    }
+}
+
+// ── SessionStore port implementation ────────────────────────────────────────
+
+#[cfg(feature = "runtime")]
+impl crate::ports::session_store::SessionStore for SqliteSessionStore {
+    fn save(
+        &self,
+        auth: &AuthContext,
+        session: &AgentSession,
+    ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
+        std::future::ready(Self::save(self, auth, session))
+    }
+
+    fn load(
+        &self,
+        auth: &AuthContext,
+        id: SessionId,
+    ) -> impl std::future::Future<Output = Result<Option<AgentSession>, DomainError>> + Send {
+        std::future::ready(Self::load(self, auth, id))
+    }
+
+    fn list(
+        &self,
+        auth: &AuthContext,
+    ) -> impl std::future::Future<Output = Result<Vec<AgentSession>, DomainError>> + Send {
+        std::future::ready(Self::list(self, auth))
+    }
+
+    fn delete(
+        &self,
+        auth: &AuthContext,
+        id: SessionId,
+    ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
+        std::future::ready(Self::delete(self, auth, id))
+    }
+
+    fn append_event(
+        &self,
+        auth: &AuthContext,
+        session_id: SessionId,
+        event: DomainEvent,
+    ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
+        std::future::ready(Self::append_event(self, auth, session_id, &event))
+    }
+
+    fn check_idempotency_key(
+        &self,
+        key: &uuid::Uuid,
+    ) -> impl std::future::Future<Output = Result<Option<String>, DomainError>> + Send {
+        std::future::ready(Self::check_idempotency_key(self, key))
+    }
+
+    fn set_idempotency_key(
+        &self,
+        key: &uuid::Uuid,
+        result: &str,
+    ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
+        std::future::ready(Self::set_idempotency_key(self, key, result))
     }
 }
 
@@ -361,6 +496,7 @@ impl SqliteSessionStore {
 
 #[cfg(test)]
 #[cfg(feature = "runtime")]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::domain::agent::{AgentConfig, AgentSession};
@@ -421,7 +557,10 @@ mod tests {
 
         // Load as different user → error.
         let result = store.load(&other, sid);
-        assert!(result.is_err(), "Should deny access to other user's session");
+        assert!(
+            result.is_err(),
+            "Should deny access to other user's session"
+        );
         let err = result.unwrap_err();
         assert!(
             matches!(err, DomainError::Security(_)),
@@ -487,8 +626,8 @@ mod tests {
             timestamp: chrono::Utc::now(),
         };
 
-        store.append_event(&auth, sid, e1).unwrap();
-        store.append_event(&auth, sid, e2).unwrap();
+        store.append_event(&auth, sid, &e1).unwrap();
+        store.append_event(&auth, sid, &e2).unwrap();
 
         let events = store.list_events(&auth, sid).unwrap();
         assert_eq!(events.len(), 2);
@@ -537,7 +676,7 @@ mod tests {
             objective: "test".into(),
             timestamp: chrono::Utc::now(),
         };
-        store.append_event(&auth, sid, event).unwrap();
+        store.append_event(&auth, sid, &event).unwrap();
 
         store.delete(&auth, sid).unwrap();
 

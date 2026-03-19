@@ -1,4 +1,4 @@
-//! USASpending — Federal spending data.
+//! `USASpending` — Federal spending data.
 //!
 //! API: POST <https://api.usaspending.gov/api/v2/search/spending_by_award/>
 //! Pagination: page-based (1-indexed), limit max 500.
@@ -9,7 +9,12 @@ use std::path::Path;
 
 const API_BASE: &str = "https://api.usaspending.gov/api/v2";
 
-/// Fetch USASpending award data for the given recipient query.
+/// Fetch `USASpending` award data for the given recipient query.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_awards(
     query: &str,
     output_dir: &Path,
@@ -62,7 +67,7 @@ pub async fn fetch_awards(
         let has_next = json
             .get("page_metadata")
             .and_then(|p| p.get("hasNext"))
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         if !has_next {
@@ -83,6 +88,7 @@ pub async fn fetch_awards(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn usaspending_parses_award_response() {

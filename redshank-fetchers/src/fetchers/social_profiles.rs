@@ -1,7 +1,7 @@
 //! Social Profile Scraping — Public profile extraction pipeline.
 //!
-//! Targets: LinkedIn (public), Twitter/X, Mastodon (ActivityPub JSON).
-//! Uses stygian-browser Advanced stealth + ai_extract for JS-rendered pages.
+//! Targets: `LinkedIn` (public), Twitter/X, Mastodon (`ActivityPub` JSON).
+//! Uses stygian-browser Advanced stealth + `ai_extract` for JS-rendered pages.
 //! Only public, search-engine-indexable pages are accessed.
 //! Rate: one profile per 5 seconds minimum.
 //!
@@ -27,6 +27,7 @@ pub struct ProfileTarget {
 }
 
 /// Parse the social profiles pipeline config.
+#[must_use]
 pub fn parse_pipeline_config(toml_str: &str) -> Vec<ProfileTarget> {
     let mut targets = Vec::new();
     let mut current: Option<ProfileTarget> = None;
@@ -58,8 +59,8 @@ pub fn parse_pipeline_config(toml_str: &str) -> Vec<ProfileTarget> {
             let value = value.trim();
 
             match key {
-                "platform" => t.platform = value.trim_matches('"').to_owned(),
-                "url_template" => t.url_template = value.trim_matches('"').to_owned(),
+                "platform" => value.trim_matches('"').clone_into(&mut t.platform),
+                "url_template" => value.trim_matches('"').clone_into(&mut t.url_template),
                 "requires_browser" => t.requires_browser = value == "true",
                 "extract_fields" => {
                     let inner = value.trim_start_matches('[').trim_end_matches(']');
@@ -81,7 +82,12 @@ pub fn parse_pipeline_config(toml_str: &str) -> Vec<ProfileTarget> {
     targets
 }
 
-/// Fetch a Mastodon profile via ActivityPub JSON (no browser needed).
+/// Fetch a Mastodon profile via `ActivityPub` JSON (no browser needed).
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_mastodon_profile(
     instance: &str,
     username: &str,
@@ -121,6 +127,7 @@ pub async fn fetch_mastodon_profile(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

@@ -9,23 +9,22 @@
 
 use crate::domain::{AppState, ChatRole};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 /// Figlet-style banner for startup.
-pub const BANNER: &str = r#"
-              __     __              __  
-   ________  / /__  / /_  ____ ___  / /__
-  / ___/ _ \/ __  \/ __ \/ __ `__ \/ //_/
- / /  /  __/ /_/ / / / / / / / / / ,<   
-/_/   \___/\____/_/ /_/_/ /_/ /_/_/|_|  
-"#;
+pub const BANNER: &str = r"
+┏━┓┏━╸╺┳┓┏━┓╻ ╻┏━┓┏┓╻╻┏ 
+┣┳┛┣╸  ┃┃┗━┓┣━┫┣━┫┃┗┫┣┻┓
+╹┗╸┗━╸╺┻┛┗━┛╹ ╹╹ ╹╹ ╹╹ ╹
+";
 
 /// Render the full TUI frame.
+#[allow(clippy::indexing_slicing)]
 pub fn render(frame: &mut Frame, state: &AppState) {
     let size = frame.area();
 
@@ -34,7 +33,7 @@ pub fn render(frame: &mut Frame, state: &AppState) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // header
-            Constraint::Min(3),   // body
+            Constraint::Min(3),    // body
             Constraint::Length(1), // footer
         ])
         .split(size);
@@ -50,11 +49,12 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
         state.model_display,
         state.reasoning_effort.as_str()
     );
-    let header = Paragraph::new(model_text)
-        .style(Style::default().fg(Color::Black).bg(Color::Cyan));
+    let header =
+        Paragraph::new(model_text).style(Style::default().fg(Color::Black).bg(Color::Cyan));
     frame.render_widget(header, area);
 }
 
+#[allow(clippy::indexing_slicing)]
 fn render_body(frame: &mut Frame, area: Rect, state: &AppState) {
     // Three panes: Sidebar(20%) | Chat(55%) | Graph(25%)
     let panes = Layout::default()
@@ -89,11 +89,11 @@ fn render_sidebar(frame: &mut Frame, area: Rect, state: &AppState) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(" Sessions "));
+    let list = List::new(items).block(Block::default().borders(Borders::ALL).title(" Sessions "));
     frame.render_widget(list, area);
 }
 
+#[allow(clippy::indexing_slicing)]
 fn render_chat(frame: &mut Frame, area: Rect, state: &AppState) {
     let block = Block::default().borders(Borders::ALL).title(" Chat ");
     let inner = block.inner(area);
@@ -116,16 +116,24 @@ fn render_chat(frame: &mut Frame, area: Rect, state: &AppState) {
                 ChatRole::System => ("sys> ", Color::Yellow),
                 ChatRole::Tool => ("tool> ", Color::Magenta),
             };
-            entry.content.lines().enumerate().map(move |(i, line)| {
-                if i == 0 {
-                    Line::from(vec![
-                        Span::styled(prefix, Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                        Span::raw(line),
-                    ])
-                } else {
-                    Line::from(format!("      {line}"))
-                }
-            }).collect::<Vec<_>>()
+            entry
+                .content
+                .lines()
+                .enumerate()
+                .map(move |(i, line)| {
+                    if i == 0 {
+                        Line::from(vec![
+                            Span::styled(
+                                prefix,
+                                Style::default().fg(color).add_modifier(Modifier::BOLD),
+                            ),
+                            Span::raw(line),
+                        ])
+                    } else {
+                        Line::from(format!("      {line}"))
+                    }
+                })
+                .collect::<Vec<_>>()
         })
         .collect();
 
@@ -148,8 +156,7 @@ fn render_graph(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(block, area);
 
     if state.wiki_nodes.is_empty() {
-        let empty = Paragraph::new("  (no nodes yet)")
-            .style(Style::default().fg(Color::DarkGray));
+        let empty = Paragraph::new("  (no nodes yet)").style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner);
         return;
     }
@@ -161,8 +168,11 @@ fn render_graph(frame: &mut Frame, area: Rect, state: &AppState) {
         .enumerate()
         .map(|(i, (label, category))| {
             let color = category_color(category);
-            let truncated: String = label.chars().take(inner.width.saturating_sub(6) as usize).collect();
-            let prefix = format!("[{:>2}]", i);
+            let truncated: String = label
+                .chars()
+                .take(inner.width.saturating_sub(6) as usize)
+                .collect();
+            let prefix = format!("[{i:>2}]");
             Line::from(vec![
                 Span::styled(prefix, Style::default().fg(Color::DarkGray)),
                 Span::raw(" "),
@@ -180,8 +190,8 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
     let nodes = state.wiki_nodes.len();
     let edges = state.wiki_edges.len();
     let footer_text = format!(" {status} │ nodes: {nodes} │ edges: {edges} │ /help for commands ");
-    let footer = Paragraph::new(footer_text)
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
+    let footer =
+        Paragraph::new(footer_text).style(Style::default().fg(Color::White).bg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
 
@@ -198,7 +208,8 @@ fn category_color(category: &str) -> Color {
 }
 
 /// Check that the layout renders without panic on a minimal terminal size.
-pub fn check_minimum_size(width: u16, height: u16) -> bool {
+#[must_use]
+pub const fn check_minimum_size(width: u16, height: u16) -> bool {
     width >= 80 && height >= 24
 }
 
@@ -206,17 +217,15 @@ pub fn check_minimum_size(width: u16, height: u16) -> bool {
 mod tests {
     use super::*;
     use crate::domain::AppState;
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     #[test]
     fn tui_renders_without_panic_on_80x24() {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         let state = AppState::default();
-        terminal
-            .draw(|frame| render(frame, &state))
-            .unwrap();
+        terminal.draw(|frame| render(frame, &state)).unwrap();
     }
 
     #[test]
@@ -232,10 +241,10 @@ mod tests {
             role: ChatRole::Assistant,
             content: "Starting investigation…".into(),
         });
-        state.wiki_nodes.push(("ACME Corp".into(), "company".into()));
-        terminal
-            .draw(|frame| render(frame, &state))
-            .unwrap();
+        state
+            .wiki_nodes
+            .push(("ACME Corp".into(), "company".into()));
+        terminal.draw(|frame| render(frame, &state)).unwrap();
     }
 
     #[test]
@@ -249,6 +258,6 @@ mod tests {
     #[test]
     fn banner_is_non_empty() {
         assert!(!BANNER.is_empty());
-        assert!(BANNER.contains("redshank") || BANNER.contains("__"));
+        assert!(BANNER.contains("┏━┓") || BANNER.contains("redshank"));
     }
 }

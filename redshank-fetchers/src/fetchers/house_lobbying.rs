@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://clerkapi.house.gov/Lobbying";
 
 /// Fetch House lobbying disclosures matching the given registrant or client name.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_house_lobbying(
     query: &str,
     output_dir: &Path,
@@ -23,10 +28,7 @@ pub async fn fetch_house_lobbying(
     for page in 1..=max {
         let resp = client
             .get(format!("{API_BASE}/Registrations"))
-            .query(&[
-                ("registrantName", query),
-                ("page", &page.to_string()),
-            ])
+            .query(&[("registrantName", query), ("page", &page.to_string())])
             .send()
             .await?;
 
@@ -66,6 +68,7 @@ pub async fn fetch_house_lobbying(
 /// Parse House lobbying XML response into JSON value records.
 ///
 /// Extracts `<Registration>` elements with registrant, client, and issue codes.
+#[must_use]
 pub fn parse_house_registrations(xml: &str) -> Vec<serde_json::Value> {
     let mut records = Vec::new();
 
@@ -105,12 +108,13 @@ fn extract_tag(xml: &str, tag: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn house_lobbying_parses_registration_xml() {
-        let xml = r#"
+        let xml = r"
 <Registrations>
   <Registration>
     <RegistrantName>PATTON BOGGS LLP</RegistrantName>
@@ -127,7 +131,7 @@ mod tests {
     <GeneralIssueCodeDisplay>DEF</GeneralIssueCodeDisplay>
   </Registration>
 </Registrations>
-"#;
+";
         let records = parse_house_registrations(xml);
         assert_eq!(records.len(), 2);
         assert_eq!(records[0]["registrant"], "PATTON BOGGS LLP");

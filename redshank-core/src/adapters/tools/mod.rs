@@ -3,6 +3,8 @@
 //! Sub-modules: filesystem, patching, shell, stygian, web.
 //! Stygian module requires the `stygian` feature flag.
 
+#[cfg(feature = "coraline")]
+mod coraline;
 #[cfg(feature = "runtime")]
 mod filesystem;
 #[cfg(feature = "runtime")]
@@ -11,8 +13,6 @@ mod patching;
 mod shell;
 #[cfg(feature = "stygian")]
 mod stygian;
-#[cfg(feature = "coraline")]
-mod coraline;
 #[cfg(feature = "runtime")]
 mod web;
 
@@ -56,11 +56,11 @@ mod workspace_tools {
     /// Parallel write group tracking.
     #[derive(Debug, Default)]
     pub struct WriteGroup {
-        /// group_id → (path → owner_id)
+        /// `group_id` → (path → `owner_id`)
         pub(super) claims: HashMap<String, HashMap<PathBuf, String>>,
     }
 
-    /// WorkspaceTools: filesystem, shell, web tool dispatch.
+    /// `WorkspaceTools`: filesystem, shell, web tool dispatch.
     pub struct WorkspaceTools {
         /// Workspace root directory (canonicalized).
         pub(crate) root: PathBuf,
@@ -86,7 +86,7 @@ mod workspace_tools {
         pub(crate) max_search_hits: usize,
         /// Shell command timeout in seconds.
         pub(crate) command_timeout_secs: u64,
-        /// Current execution scope (group_id, owner_id) for parallel writes.
+        /// Current execution scope (`group_id`, `owner_id`) for parallel writes.
         pub(crate) scope_group_id: Arc<Mutex<Option<String>>>,
         pub(crate) scope_owner_id: Arc<Mutex<Option<String>>>,
     }
@@ -103,7 +103,11 @@ mod workspace_tools {
         /// Create a new `WorkspaceTools` instance.
         ///
         /// `root` is canonicalized on construction.
-        pub fn new(root: PathBuf, creds: CredentialBundle) -> Result<Self, ToolError> {
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err` if `root` cannot be canonicalized or is not a directory.
+        pub fn new(root: &std::path::Path, creds: CredentialBundle) -> Result<Self, ToolError> {
             let canonical = root
                 .canonicalize()
                 .map_err(|e| ToolError::Other(format!("cannot canonicalize workspace: {e}")))?;
@@ -132,19 +136,22 @@ mod workspace_tools {
         }
 
         /// Set a custom security policy (for testing).
+        #[must_use]
         pub fn with_policy(mut self, policy: Arc<dyn SecurityPolicy>) -> Self {
             self.policy = policy;
             self
         }
 
         /// Set command timeout.
-        pub fn with_command_timeout(mut self, secs: u64) -> Self {
+        #[must_use]
+        pub const fn with_command_timeout(mut self, secs: u64) -> Self {
             self.command_timeout_secs = secs;
             self
         }
 
         /// Set max file chars.
-        pub fn with_max_file_chars(mut self, chars: usize) -> Self {
+        #[must_use]
+        pub const fn with_max_file_chars(mut self, chars: usize) -> Self {
             self.max_file_chars = chars;
             self
         }
@@ -166,7 +173,15 @@ mod workspace_tools {
                 let parent = full
                     .parent()
                     .ok_or_else(|| ToolError::PathEscape(raw.to_string()))?;
-                if !parent.exists() {
+                if parent.exists() {
+                    let canon_parent = parent
+                        .canonicalize()
+                        .map_err(|e| ToolError::Other(format!("canonicalize failed: {e}")))?;
+                    let filename = full
+                        .file_name()
+                        .ok_or_else(|| ToolError::PathEscape(raw.to_string()))?;
+                    canon_parent.join(filename)
+                } else {
                     // Check that the would-be parent is under root
                     // Walk up to find an existing ancestor
                     let mut ancestor = parent.to_path_buf();
@@ -176,25 +191,17 @@ mod workspace_tools {
                             .ok_or_else(|| ToolError::PathEscape(raw.to_string()))?
                             .to_path_buf();
                     }
-                    let canon_ancestor = ancestor.canonicalize().map_err(|e| {
-                        ToolError::Other(format!("canonicalize failed: {e}"))
-                    })?;
+                    let canon_ancestor = ancestor
+                        .canonicalize()
+                        .map_err(|e| ToolError::Other(format!("canonicalize failed: {e}")))?;
                     if !canon_ancestor.starts_with(&self.root) {
                         return Err(ToolError::PathEscape(raw.to_string()));
                     }
                     // Reconstruct path under root
-                    let remaining = full.strip_prefix(&ancestor).map_err(|_| {
-                        ToolError::PathEscape(raw.to_string())
-                    })?;
+                    let remaining = full
+                        .strip_prefix(&ancestor)
+                        .map_err(|_| ToolError::PathEscape(raw.to_string()))?;
                     canon_ancestor.join(remaining)
-                } else {
-                    let canon_parent = parent.canonicalize().map_err(|e| {
-                        ToolError::Other(format!("canonicalize failed: {e}"))
-                    })?;
-                    let filename = full
-                        .file_name()
-                        .ok_or_else(|| ToolError::PathEscape(raw.to_string()))?;
-                    canon_parent.join(filename)
                 }
             };
 
@@ -206,14 +213,17 @@ mod workspace_tools {
         }
 
         /// Check if a write is allowed (pre-read guard).
-        pub(crate) async fn check_write_allowed(&self, resolved: &PathBuf) -> Result<(), ToolError> {
+        pub(crate) async fn check_write_allowed(
+            &self,
+            resolved: &PathBuf,
+        ) -> Result<(), ToolError> {
             if resolved.exists() && resolved.is_file() {
                 let read_set = self.files_read.lock().await;
                 if !read_set.contains(resolved) {
-                    let rel = resolved
-                        .strip_prefix(&self.root)
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|_| resolved.display().to_string());
+                    let rel = resolved.strip_prefix(&self.root).map_or_else(
+                        |_| resolved.display().to_string(),
+                        |p| p.display().to_string(),
+                    );
                     return Err(ToolError::PreReadGuard(rel));
                 }
             }
@@ -233,14 +243,16 @@ mod workspace_tools {
                 let claims = wg.claims.entry(gid).or_default();
                 if let Some(existing_owner) = claims.get(resolved) {
                     if existing_owner != &oid {
-                        let rel = resolved
-                            .strip_prefix(&self.root)
-                            .map(|p| p.display().to_string())
-                            .unwrap_or_else(|_| resolved.display().to_string());
-                        return Err(ToolError::ParallelWriteConflict {
+                        let rel = resolved.strip_prefix(&self.root).map_or_else(
+                            |_| resolved.display().to_string(),
+                            |p| p.display().to_string(),
+                        );
+                        let err = Err(ToolError::ParallelWriteConflict {
                             path: rel,
                             owner: existing_owner.clone(),
                         });
+                        drop(wg);
+                        return err;
                     }
                 } else {
                     claims.insert(resolved.clone(), oid);
@@ -254,19 +266,21 @@ mod workspace_tools {
             self.files_read.lock().await.insert(resolved.to_path_buf());
         }
 
-        /// Truncate text to max_chars with a truncation message.
+        /// Truncate text to `max_chars` bytes with a truncation message.
+        ///
+        /// Uses [`str::floor_char_boundary`] to avoid splitting multi-byte
+        /// UTF-8 codepoints, so the actual cut point may be up to 3 bytes
+        /// earlier than `max_chars`.
         pub(crate) fn clip(text: &str, max_chars: usize) -> String {
             if text.len() <= max_chars {
                 return text.to_string();
             }
-            let omitted = text.len() - max_chars;
-            format!(
-                "{}\n\n...[truncated {omitted} chars]...",
-                &text[..max_chars]
-            )
+            let safe_end = text.floor_char_boundary(max_chars);
+            let omitted = text.len() - safe_end;
+            format!("{}\n\n...[truncated {omitted} chars]...", &text[..safe_end])
         }
 
-        /// Check permission via security policy, returning a ToolResult error if denied.
+        /// Check permission via security policy, returning a `ToolResult` error if denied.
         fn check_permission(
             &self,
             auth: &AuthContext,
@@ -280,10 +294,12 @@ mod workspace_tools {
         fn permission_for_tool(tool_name: &str) -> Permission {
             match tool_name {
                 // Write tools
-                "write_file" | "edit_file" | "apply_patch" | "hashline_edit"
-                | "begin_parallel_write_group" | "end_parallel_write_group" => {
-                    Permission::WriteSession
-                }
+                "write_file"
+                | "edit_file"
+                | "apply_patch"
+                | "hashline_edit"
+                | "begin_parallel_write_group"
+                | "end_parallel_write_group" => Permission::WriteSession,
                 // Shell tools
                 "run_shell" | "run_shell_bg" | "check_shell_bg" | "kill_shell_bg"
                 | "cleanup_bg_jobs" => Permission::RunAgent,
@@ -301,8 +317,10 @@ mod workspace_tools {
                 .and_then(|v| v.as_str())
                 .unwrap_or("default")
                 .to_string();
-            let mut wg = self.write_group.lock().await;
-            wg.claims.entry(group_id.clone()).or_default();
+            {
+                let mut wg = self.write_group.lock().await;
+                wg.claims.entry(group_id.clone()).or_default();
+            }
             format!("Parallel write group '{group_id}' started.")
         }
 
@@ -313,8 +331,10 @@ mod workspace_tools {
                 .and_then(|v| v.as_str())
                 .unwrap_or("default")
                 .to_string();
-            let mut wg = self.write_group.lock().await;
-            wg.claims.remove(&group_id);
+            {
+                let mut wg = self.write_group.lock().await;
+                wg.claims.remove(&group_id);
+            }
             format!("Parallel write group '{group_id}' ended.")
         }
     }
@@ -362,35 +382,22 @@ mod workspace_tools {
                 }
                 #[cfg(not(feature = "stygian"))]
                 "run_scrape_pipeline" => {
-                    "run_scrape_pipeline requires the 'stygian' feature flag"
-                        .to_string()
+                    "run_scrape_pipeline requires the 'stygian' feature flag".to_string()
                 }
                 // Parallel write groups
-                "begin_parallel_write_group" => {
-                    self.begin_parallel_write_group(&arguments).await
-                }
-                "end_parallel_write_group" => {
-                    self.end_parallel_write_group(&arguments).await
-                }
+                "begin_parallel_write_group" => self.begin_parallel_write_group(&arguments).await,
+                "end_parallel_write_group" => self.end_parallel_write_group(&arguments).await,
                 // Patching
                 "apply_patch" => filesystem::apply_patch(self, &arguments).await,
                 // Coraline MCP (only available with coraline feature)
                 #[cfg(feature = "coraline")]
-                "coraline_read_file" => {
-                    super::coraline::coraline_read_file(self, &arguments).await
-                }
+                "coraline_read_file" => super::coraline::coraline_read_file(self, &arguments).await,
                 #[cfg(feature = "coraline")]
-                "coraline_search" => {
-                    super::coraline::coraline_search(self, &arguments).await
-                }
+                "coraline_search" => super::coraline::coraline_search(self, &arguments).await,
                 #[cfg(feature = "coraline")]
-                "coraline_repo_map" => {
-                    super::coraline::coraline_repo_map(self, &arguments).await
-                }
+                "coraline_repo_map" => super::coraline::coraline_repo_map(self, &arguments).await,
                 #[cfg(feature = "coraline")]
-                "coraline_edit_file" => {
-                    super::coraline::coraline_edit_file(self, &arguments).await
-                }
+                "coraline_edit_file" => super::coraline::coraline_edit_file(self, &arguments).await,
                 #[cfg(not(feature = "coraline"))]
                 "coraline_read_file" | "coraline_search" | "coraline_repo_map"
                 | "coraline_edit_file" => {
@@ -418,6 +425,12 @@ mod workspace_tools {
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(all(test, feature = "runtime"))]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::significant_drop_tightening
+)]
 mod tests {
     use super::WorkspaceTools;
     use crate::domain::auth::{AuthContext, Role, UserId};
@@ -449,7 +462,7 @@ mod tests {
     }
 
     fn ws(dir: &tempfile::TempDir) -> WorkspaceTools {
-        WorkspaceTools::new(dir.path().to_path_buf(), test_creds()).unwrap()
+        WorkspaceTools::new(dir.path(), test_creds()).unwrap()
     }
 
     // ── Path escape guard ───────────────
@@ -509,7 +522,11 @@ mod tests {
             .dispatch(&auth, "read_file", json!({"path": "existing.txt"}))
             .await
             .unwrap();
-        assert!(!read_result.is_error, "read failed: {}", read_result.content);
+        assert!(
+            !read_result.is_error,
+            "read failed: {}",
+            read_result.content
+        );
 
         // Now write
         let write_result = tools
@@ -520,7 +537,11 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(!write_result.is_error, "write failed: {}", write_result.content);
+        assert!(
+            !write_result.is_error,
+            "write failed: {}",
+            write_result.content
+        );
         assert!(write_result.content.contains("Wrote"));
     }
 
@@ -573,7 +594,13 @@ mod tests {
         let tools = ws(&dir);
         let auth = operator_auth();
 
-        for cmd in &["vim file.txt", "nano file.txt", "less file.txt", "top", "htop"] {
+        for cmd in &[
+            "vim file.txt",
+            "nano file.txt",
+            "less file.txt",
+            "top",
+            "htop",
+        ] {
             let result = tools
                 .dispatch(&auth, "run_shell", json!({"command": cmd}))
                 .await
@@ -592,7 +619,7 @@ mod tests {
     #[tokio::test]
     async fn run_shell_timeout_kills_process() {
         let dir = tempfile::tempdir().unwrap();
-        let tools = WorkspaceTools::new(dir.path().to_path_buf(), test_creds())
+        let tools = WorkspaceTools::new(dir.path(), test_creds())
             .unwrap()
             .with_command_timeout(1);
         let auth = operator_auth();
@@ -618,11 +645,7 @@ mod tests {
 
         // Start a bg job
         let start = tools
-            .dispatch(
-                &auth,
-                "run_shell_bg",
-                json!({"command": "sleep 30"}),
-            )
+            .dispatch(&auth, "run_shell_bg", json!({"command": "sleep 30"}))
             .await
             .unwrap();
         assert!(!start.is_error, "start failed: {}", start.content);
@@ -642,11 +665,7 @@ mod tests {
 
         // Check it (should be running)
         let check = tools
-            .dispatch(
-                &auth,
-                "check_shell_bg",
-                json!({"job_id": job_id}),
-            )
+            .dispatch(&auth, "check_shell_bg", json!({"job_id": job_id}))
             .await
             .unwrap();
         assert!(
@@ -657,11 +676,7 @@ mod tests {
 
         // Kill it
         let kill = tools
-            .dispatch(
-                &auth,
-                "kill_shell_bg",
-                json!({"job_id": job_id}),
-            )
+            .dispatch(&auth, "kill_shell_bg", json!({"job_id": job_id}))
             .await
             .unwrap();
         assert!(
@@ -829,7 +844,7 @@ mod tests {
     async fn web_search_without_key() {
         let dir = tempfile::tempdir().unwrap();
         let creds = CredentialBundle::default(); // no exa key
-        let tools = WorkspaceTools::new(dir.path().to_path_buf(), creds).unwrap();
+        let tools = WorkspaceTools::new(dir.path(), creds).unwrap();
         let auth = operator_auth();
 
         let result = tools
@@ -854,19 +869,11 @@ mod tests {
 
         // Start two bg jobs
         tools
-            .dispatch(
-                &auth,
-                "run_shell_bg",
-                json!({"command": "sleep 60"}),
-            )
+            .dispatch(&auth, "run_shell_bg", json!({"command": "sleep 60"}))
             .await
             .unwrap();
         tools
-            .dispatch(
-                &auth,
-                "run_shell_bg",
-                json!({"command": "sleep 60"}),
-            )
+            .dispatch(&auth, "run_shell_bg", json!({"command": "sleep 60"}))
             .await
             .unwrap();
 

@@ -10,6 +10,7 @@ pub struct SessionId(pub Uuid);
 
 impl SessionId {
     /// Generate a new random session ID.
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -87,6 +88,7 @@ pub struct TurnSummary {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -124,7 +126,12 @@ mod tests {
 
     #[test]
     fn stop_reason_variants_roundtrip() {
-        for reason in [StopReason::EndTurn, StopReason::ToolUse, StopReason::MaxTokens, StopReason::StopSequence] {
+        for reason in [
+            StopReason::EndTurn,
+            StopReason::ToolUse,
+            StopReason::MaxTokens,
+            StopReason::StopSequence,
+        ] {
             let json = serde_json::to_string(&reason).unwrap();
             let restored: StopReason = serde_json::from_str(&json).unwrap();
             assert_eq!(restored, reason);

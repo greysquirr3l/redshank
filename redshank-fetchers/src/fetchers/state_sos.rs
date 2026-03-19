@@ -29,6 +29,10 @@ pub struct StateSosPipeline {
 }
 
 /// Parse a state SOS pipeline TOML into a structured config.
+///
+/// # Errors
+///
+/// Returns `Err` if the TOML is missing required fields (`state_code`, `portal_url`).
 pub fn parse_pipeline_config(toml_str: &str) -> Result<StateSosPipeline, String> {
     // Minimal TOML parser for pipeline configs
     let mut state_code = String::new();
@@ -46,10 +50,10 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<StateSosPipeline, String>
             let key = key.trim();
             let value = value.trim().trim_matches('"');
             match key {
-                "state_code" => state_code = value.to_owned(),
-                "portal_url" => portal_url = value.to_owned(),
-                "search_selector" => search_selector = value.to_owned(),
-                "result_selector" => result_selector = value.to_owned(),
+                "state_code" => value.clone_into(&mut state_code),
+                "portal_url" => value.clone_into(&mut portal_url),
+                "search_selector" => value.clone_into(&mut search_selector),
+                "result_selector" => value.clone_into(&mut result_selector),
                 "detail_fields" => {
                     // Parse TOML array: ["field1", "field2"]
                     let inner = value.trim_start_matches('[').trim_end_matches(']');
@@ -78,6 +82,7 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<StateSosPipeline, String>
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

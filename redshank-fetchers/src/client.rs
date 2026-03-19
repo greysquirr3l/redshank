@@ -11,6 +11,10 @@ const REDSHANK_USER_AGENT: &str = "redshank/0.1.0 (research tool; contact in AGE
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Build a `reqwest::Client` with the standard Redshank User-Agent and timeout.
+///
+/// # Errors
+///
+/// Returns `Err` if the underlying HTTP client cannot be constructed.
 pub fn build_client() -> Result<reqwest::Client, FetchError> {
     reqwest::Client::builder()
         .user_agent(REDSHANK_USER_AGENT)
@@ -20,6 +24,10 @@ pub fn build_client() -> Result<reqwest::Client, FetchError> {
 }
 
 /// Build a `reqwest::Client` with extra default headers merged from a `FetchConfig`.
+///
+/// # Errors
+///
+/// Returns `Err` if a header name or value is invalid, or the client cannot be constructed.
 pub fn build_client_from_config(config: &FetchConfig) -> Result<reqwest::Client, FetchError> {
     let mut headers = HeaderMap::new();
     for (k, v) in &config.headers {
@@ -57,7 +65,11 @@ pub async fn rate_limit_delay(rate_limit_ms: u64) {
 use std::io::Write;
 use std::path::Path;
 
-/// Write a slice of serde_json::Value records as newline-delimited JSON to a file.
+/// Write a slice of `serde_json::Value` records as newline-delimited JSON to a file.
+///
+/// # Errors
+///
+/// Returns `Err` if the file cannot be created or a record cannot be serialized.
 pub fn write_ndjson(path: &Path, records: &[serde_json::Value]) -> Result<usize, FetchError> {
     let file = std::fs::File::create(path)?;
     let mut writer = std::io::BufWriter::new(file);
@@ -75,6 +87,7 @@ pub fn write_ndjson(path: &Path, records: &[serde_json::Value]) -> Result<usize,
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -92,7 +105,7 @@ mod tests {
         headers.insert("X-Custom".into(), "test-val".into());
         let config = FetchConfig {
             base_url: "https://example.com".into(),
-            query_params: Default::default(),
+            query_params: std::collections::HashMap::default(),
             headers,
             rate_limit_ms: 100,
             max_pages: 10,

@@ -10,6 +10,7 @@ use std::path::Path;
 const SDN_XML_URL: &str = "https://www.treasury.gov/ofac/downloads/sdn.xml";
 
 /// Parse SDN entity records from the XML content.
+#[must_use]
 pub fn parse_sdn_xml(xml_content: &str) -> Vec<serde_json::Value> {
     let mut records = Vec::new();
     let mut pos = 0;
@@ -55,6 +56,11 @@ fn extract_tag(text: &str, tag: &str) -> String {
 }
 
 /// Fetch the full OFAC SDN list.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_sdn(output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let resp = client.get(SDN_XML_URL).send().await?;
@@ -82,12 +88,13 @@ pub async fn fetch_sdn(output_dir: &Path) -> Result<FetchOutput, FetchError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn ofac_sdn_xml_parser_extracts_entity_name_and_program() {
-        let xml = r#"<sdnList>
+        let xml = r"<sdnList>
             <sdnEntry>
                 <uid>12345</uid>
                 <firstName>JOHN</firstName>
@@ -104,7 +111,7 @@ mod tests {
                 <program>IRAN</program>
                 <title></title>
             </sdnEntry>
-        </sdnList>"#;
+        </sdnList>";
 
         let records = parse_sdn_xml(xml);
         assert_eq!(records.len(), 2);

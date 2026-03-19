@@ -13,6 +13,11 @@ const CDX_API: &str = "https://web.archive.org/cdx/search/cdx";
 const WAYBACK_DELAY_MS: u64 = 500;
 
 /// Fetch archived snapshots of a URL from the Wayback Machine.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_wayback_snapshots(
     url: &str,
     output_dir: &Path,
@@ -57,29 +62,29 @@ pub async fn fetch_wayback_snapshots(
 }
 
 /// CDX API returns an array of arrays. First row is headers, rest are data.
-/// Headers: [urlkey, timestamp, original, mimetype, statuscode, digest, length]
+/// Headers: \[urlkey, timestamp, original, mimetype, statuscode, digest, length\]
+#[must_use]
 pub fn parse_cdx_response(json: &serde_json::Value) -> Vec<serde_json::Value> {
     let rows = match json.as_array() {
         Some(r) if r.len() > 1 => r,
         _ => return Vec::new(),
     };
 
-    let headers: Vec<&str> = rows[0]
-        .as_array()
+    let headers: Vec<&str> = rows
+        .first()
+        .and_then(|r| r.as_array())
         .map(|h| h.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
 
-    rows[1..]
+    rows.get(1..)
+        .unwrap_or_default()
         .iter()
         .filter_map(|row| {
             let values = row.as_array()?;
             let mut record = serde_json::Map::new();
             for (i, header) in headers.iter().enumerate() {
                 if let Some(val) = values.get(i) {
-                    record.insert(
-                        (*header).to_owned(),
-                        val.clone(),
-                    );
+                    record.insert((*header).to_owned(), val.clone());
                 }
             }
             Some(serde_json::Value::Object(record))
@@ -88,15 +93,40 @@ pub fn parse_cdx_response(json: &serde_json::Value) -> Vec<serde_json::Value> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
     #[test]
     fn wayback_cdx_parses_array_of_arrays_into_records() {
         let mock = serde_json::json!([
-            ["urlkey", "timestamp", "original", "mimetype", "statuscode", "digest", "length"],
-            ["com,example)/", "20200101120000", "https://example.com/", "text/html", "200", "ABC123", "5432"],
-            ["com,example)/about", "20200615080000", "https://example.com/about", "text/html", "200", "DEF456", "3210"],
+            [
+                "urlkey",
+                "timestamp",
+                "original",
+                "mimetype",
+                "statuscode",
+                "digest",
+                "length"
+            ],
+            [
+                "com,example)/",
+                "20200101120000",
+                "https://example.com/",
+                "text/html",
+                "200",
+                "ABC123",
+                "5432"
+            ],
+            [
+                "com,example)/about",
+                "20200615080000",
+                "https://example.com/about",
+                "text/html",
+                "200",
+                "DEF456",
+                "3210"
+            ],
         ]);
         let records = parse_cdx_response(&mock);
         assert_eq!(records.len(), 2);

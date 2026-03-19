@@ -1,14 +1,17 @@
 //! TUI event loop — ties together rendering, input, and agent events.
 
-use crate::domain::{parse_slash_command, AppEvent, AppState, ChatEntry, ChatRole, SlashCommand};
+use crate::domain::{
+    AppEvent, AppState, ChatEntry, ChatRole, ReasoningEffort, SlashCommand, UiCommand,
+    parse_slash_command,
+};
 use crate::renderer;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyModifiers},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyModifiers},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use std::io::stdout;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -20,7 +23,16 @@ const TICK_MS: u64 = 125;
 ///
 /// `rx` receives agent-side events (content deltas, tool starts/ends, etc.).
 /// Returns when the user quits.
-pub async fn run(rx: &mut mpsc::Receiver<AppEvent>) -> std::io::Result<()> {
+///
+/// # Errors
+///
+/// Returns `Err` if terminal setup or I/O operations fail.
+pub async fn run(
+    rx: &mut mpsc::Receiver<AppEvent>,
+    model_display: String,
+    reasoning_effort: ReasoningEffort,
+    command_tx: Option<mpsc::UnboundedSender<UiCommand>>,
+) -> std::io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
 
@@ -28,7 +40,11 @@ pub async fn run(rx: &mut mpsc::Receiver<AppEvent>) -> std::io::Result<()> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut state = AppState::default();
+    let mut state = AppState {
+        model_display,
+        reasoning_effort,
+        ..AppState::default()
+    };
 
     // Show startup banner as system message
     state.chat_log.push(ChatEntry {
@@ -36,7 +52,7 @@ pub async fn run(rx: &mut mpsc::Receiver<AppEvent>) -> std::io::Result<()> {
         content: renderer::BANNER.trim().to_owned(),
     });
 
-    let result = event_loop_inner(&mut terminal, &mut state, rx).await;
+    let result = event_loop_inner(&mut terminal, &mut state, rx, command_tx).await;
 
     // Clean up terminal state
     disable_raw_mode()?;
@@ -50,6 +66,7 @@ async fn event_loop_inner(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     state: &mut AppState,
     rx: &mut mpsc::Receiver<AppEvent>,
+    command_tx: Option<mpsc::UnboundedSender<UiCommand>>,
 ) -> std::io::Result<()> {
     loop {
         // Render
@@ -65,12 +82,12 @@ async fn event_loop_inner(
             Some(ev) = rx.recv() => {
                 handle_app_event(state, ev);
             }
-            // Terminal input (poll with timeout to not block)
-            _ = tokio::time::sleep(Duration::from_millis(TICK_MS)) => {
-                // Check crossterm events without blocking
+            () = tokio::time::sleep(Duration::from_millis(TICK_MS)) => {
                 while event::poll(Duration::ZERO)? {
-                    if let Event::Key(key) = event::read()? {
-                        handle_key(state, key);
+                    if let Event::Key(key) = event::read()?
+                        && let Some(cmd) = handle_key_with_command(state, key)
+                    {
+                        dispatch_ui_command(command_tx.as_ref(), cmd);
                     }
                 }
                 // Tick for animation
@@ -79,6 +96,12 @@ async fn event_loop_inner(
         }
     }
     Ok(())
+}
+
+fn dispatch_ui_command(command_tx: Option<&mpsc::UnboundedSender<UiCommand>>, cmd: UiCommand) {
+    if let Some(tx) = command_tx {
+        let _ = tx.send(cmd);
+    }
 }
 
 fn handle_app_event(state: &mut AppState, ev: AppEvent) {
@@ -132,14 +155,11 @@ fn handle_app_event(state: &mut AppState, ev: AppEvent) {
                 });
             }
         }
-        AppEvent::WikiChanged => {
-            // The wiki state is updated externally; we just redraw on next tick.
+        AppEvent::WikiChanged | AppEvent::Tick => {
+            // Triggers a redraw on next animation frame.
         }
-        AppEvent::Tick => {
-            // Triggers a redraw (animation frame).
-        }
-        AppEvent::Key(_) => {
-            // Handled separately by handle_key.
+        AppEvent::Key(key) => {
+            handle_key(state, key);
         }
         AppEvent::Quit => {
             state.should_quit = true;
@@ -148,67 +168,84 @@ fn handle_app_event(state: &mut AppState, ev: AppEvent) {
 }
 
 fn handle_key(state: &mut AppState, key: crossterm::event::KeyEvent) {
+    let _ = handle_key_with_command(state, key);
+}
+
+fn handle_key_with_command(
+    state: &mut AppState,
+    key: crossterm::event::KeyEvent,
+) -> Option<UiCommand> {
     match key.code {
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             state.should_quit = true;
+            None
         }
         KeyCode::Enter => {
             let input = state.input_buffer.trim().to_owned();
             if input.is_empty() {
-                return;
+                return None;
             }
             state.input_buffer.clear();
             state.input_cursor = 0;
 
             // Check for slash commands
             if let Some(cmd) = parse_slash_command(&input) {
-                handle_slash_command(state, cmd);
+                handle_slash_command_with_command(state, cmd)
             } else {
                 // Regular input — emit to chat log
                 state.chat_log.push(ChatEntry {
                     role: ChatRole::User,
-                    content: input,
+                    content: input.clone(),
                 });
                 state.agent_running = true;
                 state.activity = crate::domain::ActivityState::Thinking(std::time::Instant::now());
+                Some(UiCommand::SubmitObjective(input))
             }
         }
         KeyCode::Char(c) => {
             state.input_buffer.insert(state.input_cursor, c);
             state.input_cursor += 1;
+            None
         }
         KeyCode::Backspace => {
             if state.input_cursor > 0 {
                 state.input_cursor -= 1;
                 state.input_buffer.remove(state.input_cursor);
             }
+            None
         }
         KeyCode::Left => {
             state.input_cursor = state.input_cursor.saturating_sub(1);
+            None
         }
         KeyCode::Right => {
             if state.input_cursor < state.input_buffer.len() {
                 state.input_cursor += 1;
             }
+            None
         }
         KeyCode::Up => {
             state.chat_scroll = state.chat_scroll.saturating_add(1);
+            None
         }
         KeyCode::Down => {
             state.chat_scroll = state.chat_scroll.saturating_sub(1);
+            None
         }
-        _ => {}
+        _ => None,
     }
 }
 
-fn handle_slash_command(state: &mut AppState, cmd: SlashCommand) {
+fn handle_slash_command_with_command(state: &mut AppState, cmd: SlashCommand) -> Option<UiCommand> {
     match cmd {
         SlashCommand::Quit => {
             state.should_quit = true;
+            None
         }
         SlashCommand::Clear => {
             state.chat_log.clear();
             state.chat_scroll = 0;
+            None
         }
         SlashCommand::Help => {
             state.chat_log.push(ChatEntry {
@@ -225,13 +262,16 @@ fn handle_slash_command(state: &mut AppState, cmd: SlashCommand) {
                 ]
                 .join("\n"),
             });
+            None
         }
         SlashCommand::Status => {
             let session_info = if state.sessions.is_empty() {
                 "No active session".to_owned()
             } else {
-                let s = &state.sessions[state.selected_session];
-                format!("Session: {} ({} events)", s.label, s.event_count)
+                state.sessions.get(state.selected_session).map_or_else(
+                    || "No active session".to_owned(),
+                    |s| format!("Session: {} ({} events)", s.label, s.event_count),
+                )
             };
             let status = format!(
                 "Model: {}\nReasoning: {}\nActivity: {}\n{}",
@@ -244,9 +284,10 @@ fn handle_slash_command(state: &mut AppState, cmd: SlashCommand) {
                 role: ChatRole::System,
                 content: status,
             });
+            None
         }
         SlashCommand::Model { name, save } => {
-            state.model_display = name.clone();
+            state.model_display.clone_from(&name);
             let msg = if save {
                 format!("Model set to {name} (saved)")
             } else {
@@ -256,12 +297,11 @@ fn handle_slash_command(state: &mut AppState, cmd: SlashCommand) {
                 role: ChatRole::System,
                 content: msg,
             });
+            Some(UiCommand::SetModel { name, save })
         }
         SlashCommand::ModelList => {
-            state.chat_log.push(ChatEntry {
-                role: ChatRole::System,
-                content: "Available models: (not yet implemented)".into(),
-            });
+            state.activity = crate::domain::ActivityState::Thinking(std::time::Instant::now());
+            Some(UiCommand::ListModels)
         }
         SlashCommand::Reasoning(level) => {
             state.reasoning_effort = level;
@@ -269,6 +309,7 @@ fn handle_slash_command(state: &mut AppState, cmd: SlashCommand) {
                 role: ChatRole::System,
                 content: format!("Reasoning set to {}", state.reasoning_effort.as_str()),
             });
+            Some(UiCommand::SetReasoning(level))
         }
     }
 }
@@ -286,6 +327,7 @@ pub async fn run_headless(rx: &mut mpsc::Receiver<AppEvent>) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::domain::*;
@@ -329,7 +371,10 @@ mod tests {
             AppEvent::AgentComplete("Done investigating.".into()),
         );
         assert!(!state.agent_running);
-        assert_eq!(state.chat_log.last().unwrap().content, "Done investigating.");
+        assert_eq!(
+            state.chat_log.last().unwrap().content,
+            "Done investigating."
+        );
     }
 
     #[test]
@@ -340,9 +385,58 @@ mod tests {
     }
 
     #[test]
+    fn handle_key_event_updates_input_buffer() {
+        let mut state = AppState::default();
+        handle_app_event(
+            &mut state,
+            AppEvent::Key(crossterm::event::KeyEvent::from(KeyCode::Char('x'))),
+        );
+        assert_eq!(state.input_buffer, "x");
+        assert_eq!(state.input_cursor, 1);
+    }
+
+    #[test]
+    fn handle_enter_key_event_submits_input() {
+        let mut state = AppState {
+            input_buffer: "hello".into(),
+            input_cursor: 5,
+            ..Default::default()
+        };
+
+        handle_app_event(
+            &mut state,
+            AppEvent::Key(crossterm::event::KeyEvent::from(KeyCode::Enter)),
+        );
+
+        assert!(state.input_buffer.is_empty());
+        assert_eq!(state.input_cursor, 0);
+        assert_eq!(state.chat_log.len(), 1);
+        assert_eq!(state.chat_log[0].role, ChatRole::User);
+        assert_eq!(state.chat_log[0].content, "hello");
+        assert!(state.agent_running);
+    }
+
+    #[test]
+    fn handle_enter_returns_submit_command() {
+        let mut state = AppState {
+            input_buffer: "investigate acme".into(),
+            input_cursor: 16,
+            ..Default::default()
+        };
+
+        let command =
+            handle_key_with_command(&mut state, crossterm::event::KeyEvent::from(KeyCode::Enter));
+
+        assert_eq!(
+            command,
+            Some(UiCommand::SubmitObjective("investigate acme".into()))
+        );
+    }
+
+    #[test]
     fn slash_quit_sets_should_quit() {
         let mut state = AppState::default();
-        handle_slash_command(&mut state, SlashCommand::Quit);
+        let _ = handle_slash_command_with_command(&mut state, SlashCommand::Quit);
         assert!(state.should_quit);
     }
 
@@ -353,14 +447,14 @@ mod tests {
             role: ChatRole::User,
             content: "hello".into(),
         });
-        handle_slash_command(&mut state, SlashCommand::Clear);
+        let _ = handle_slash_command_with_command(&mut state, SlashCommand::Clear);
         assert!(state.chat_log.is_empty());
     }
 
     #[test]
     fn slash_help_adds_system_message() {
         let mut state = AppState::default();
-        handle_slash_command(&mut state, SlashCommand::Help);
+        let _ = handle_slash_command_with_command(&mut state, SlashCommand::Help);
         assert_eq!(state.chat_log.len(), 1);
         assert!(state.chat_log[0].content.contains("/model"));
     }
@@ -368,7 +462,7 @@ mod tests {
     #[test]
     fn slash_model_updates_display() {
         let mut state = AppState::default();
-        handle_slash_command(
+        let _ = handle_slash_command_with_command(
             &mut state,
             SlashCommand::Model {
                 name: "claude-opus-4-6".into(),
@@ -380,9 +474,38 @@ mod tests {
     }
 
     #[test]
+    fn slash_model_returns_set_model_command() {
+        let mut state = AppState::default();
+        let command = handle_slash_command_with_command(
+            &mut state,
+            SlashCommand::Model {
+                name: "ollama/gemma3:27b".into(),
+                save: false,
+            },
+        );
+
+        assert_eq!(
+            command,
+            Some(UiCommand::SetModel {
+                name: "ollama/gemma3:27b".into(),
+                save: false,
+            })
+        );
+    }
+
+    #[test]
+    fn slash_model_list_returns_command() {
+        let mut state = AppState::default();
+        let command = handle_slash_command_with_command(&mut state, SlashCommand::ModelList);
+
+        assert_eq!(command, Some(UiCommand::ListModels));
+        assert!(state.activity.is_active());
+    }
+
+    #[test]
     fn slash_reasoning_updates_effort() {
         let mut state = AppState::default();
-        handle_slash_command(
+        let _ = handle_slash_command_with_command(
             &mut state,
             SlashCommand::Reasoning(ReasoningEffort::High),
         );

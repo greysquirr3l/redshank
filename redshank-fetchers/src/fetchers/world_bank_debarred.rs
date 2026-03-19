@@ -7,12 +7,16 @@ use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, write_ndjson};
 use std::path::Path;
 
-const API_URL: &str = "https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_ACROBAT/FIRM/debarredFirms";
+const API_URL: &str =
+    "https://apigwext.worldbank.org/dvsvc/v1.0/json/APPLICATION/ADOBE_ACROBAT/FIRM/debarredFirms";
 
 /// Fetch the full World Bank debarred firms list.
-pub async fn fetch_debarred_firms(
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_debarred_firms(output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let resp = client.get(API_URL).send().await?;
 
@@ -26,10 +30,7 @@ pub async fn fetch_debarred_firms(
     }
 
     let json: serde_json::Value = resp.json().await?;
-    let records = json
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
+    let records = json.as_array().cloned().unwrap_or_default();
 
     let output_path = output_dir.join("world_bank_debarred.ndjson");
     let count = write_ndjson(&output_path, &records)?;
@@ -42,6 +43,7 @@ pub async fn fetch_debarred_firms(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     #[test]
     fn world_bank_parses_debarred_firms_response() {

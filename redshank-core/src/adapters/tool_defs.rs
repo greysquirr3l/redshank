@@ -1,7 +1,7 @@
 //! Provider-neutral tool definitions and provider-specific converters.
 //!
 //! Single source of truth for the tool schemas the agent can use.
-//! Converter helpers produce the shapes expected by OpenAI and Anthropic APIs.
+//! Converter helpers produce the shapes expected by `OpenAI` and `Anthropic` APIs.
 
 use crate::ports::model_provider::ToolDefinition;
 use serde_json::json;
@@ -13,6 +13,7 @@ use serde_json::json;
 /// 20 entries when `recursive=true` (includes `subtask` and `execute`).
 /// 18 entries when `recursive=false` (excludes them).
 /// +4 when the `coraline` feature is enabled.
+#[must_use]
 pub fn tool_definitions(recursive: bool) -> Vec<ToolDefinition> {
     let mut defs = base_tools();
     if recursive {
@@ -24,6 +25,9 @@ pub fn tool_definitions(recursive: bool) -> Vec<ToolDefinition> {
 }
 
 /// The 18 base tools (always available).
+// Justification: each tool definition is a data block; extracting individual
+// definitions into helpers would not improve readability.
+#[allow(clippy::too_many_lines)]
 fn base_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
@@ -493,6 +497,7 @@ fn coraline_tools() -> Vec<ToolDefinition> {
 /// Convert tool definitions to Anthropic's `tools` array format.
 ///
 /// Each entry becomes: `{name, description, input_schema: parameters}`.
+#[must_use]
 pub fn to_anthropic_tools(defs: &[ToolDefinition]) -> Vec<serde_json::Value> {
     defs.iter()
         .map(|d| {
@@ -505,9 +510,10 @@ pub fn to_anthropic_tools(defs: &[ToolDefinition]) -> Vec<serde_json::Value> {
         .collect()
 }
 
-/// Convert tool definitions to OpenAI's `tools` array format.
+/// Convert tool definitions to `OpenAI`'s `tools` array format.
 ///
 /// Each entry becomes: `{type: "function", function: {name, description, parameters}}`.
+#[must_use]
 pub fn to_openai_tools(defs: &[ToolDefinition]) -> Vec<serde_json::Value> {
     defs.iter()
         .map(|d| {
@@ -526,6 +532,7 @@ pub fn to_openai_tools(defs: &[ToolDefinition]) -> Vec<serde_json::Value> {
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -603,7 +610,11 @@ mod tests {
     fn parameters_are_json_schema_objects() {
         let defs = tool_definitions(true);
         for def in &defs {
-            assert_eq!(def.parameters["type"], "object", "tool {} must have type=object", def.name);
+            assert_eq!(
+                def.parameters["type"], "object",
+                "tool {} must have type=object",
+                def.name
+            );
             assert!(
                 def.parameters.get("properties").is_some(),
                 "tool {} must have properties",

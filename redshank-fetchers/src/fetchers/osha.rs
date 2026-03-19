@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://data.dol.gov/get/inspection";
 
 /// Fetch OSHA inspection data.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_inspections(
     query: &str,
     api_key: &str,
@@ -45,10 +50,7 @@ pub async fn fetch_inspections(
         }
 
         let json: serde_json::Value = resp.json().await?;
-        let results = json
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let results = json.as_array().cloned().unwrap_or_default();
 
         if results.is_empty() {
             break;
@@ -69,17 +71,16 @@ pub async fn fetch_inspections(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     #[test]
     fn osha_parses_inspection_response() {
-        let mock: Vec<serde_json::Value> = vec![
-            serde_json::json!({
-                "activity_nr": "1234567",
-                "estab_name": "ACME FACTORY",
-                "site_state": "OH",
-                "open_date": "2024-01-15"
-            }),
-        ];
+        let mock: Vec<serde_json::Value> = vec![serde_json::json!({
+            "activity_nr": "1234567",
+            "estab_name": "ACME FACTORY",
+            "site_state": "OH",
+            "open_date": "2024-01-15"
+        })];
         assert_eq!(mock.len(), 1);
         assert_eq!(mock[0]["estab_name"], "ACME FACTORY");
     }

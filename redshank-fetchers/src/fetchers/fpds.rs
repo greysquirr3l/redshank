@@ -1,7 +1,7 @@
 //! FPDS-NG — Federal Procurement Data System (granular contract awards).
 //!
 //! API: `https://api.sam.gov/prod/opportunities/v2/search`
-//! More granular than USASpending: individual line items, modification history,
+//! More granular than `USASpending`: individual line items, modification history,
 //! award type codes, NAICS.
 
 use crate::domain::{FetchError, FetchOutput};
@@ -11,6 +11,11 @@ use std::path::Path;
 const API_BASE: &str = "https://api.sam.gov/prod/opportunities/v2";
 
 /// Fetch granular FPDS contract awards for the given query.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_fpds_awards(
     query: &str,
     api_key: &str,
@@ -59,10 +64,10 @@ pub async fn fetch_fpds_awards(
 
         let total = json
             .get("totalRecords")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
 
-        if ((page + 1) as u64) * 100 >= total {
+        if u64::from(page + 1) * 100 >= total {
             break;
         }
         rate_limit_delay(rate_limit_ms).await;
@@ -79,6 +84,7 @@ pub async fn fetch_fpds_awards(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn fpds_parses_opportunity_response() {
@@ -89,18 +95,18 @@ mod tests {
                     "noticeId": "CONT-2024-001",
                     "title": "IT Services Contract",
                     "awardee": "ACME TECH INC",
-                    "awardAmount": 1500000,
+                    "awardAmount": 1_500_000,
                     "naicsCode": "541512",
                     "awardType": "Firm Fixed Price",
                     "modifications": [
-                        {"modNumber": "P00001", "amount": 250000}
+                        {"modNumber": "P00001", "amount": 250_000}
                     ]
                 },
                 {
                     "noticeId": "CONT-2024-002",
                     "title": "Consulting Services",
                     "awardee": "SHELL CONSULTING LLC",
-                    "awardAmount": 500000,
+                    "awardAmount": 500_000,
                     "naicsCode": "541611",
                     "awardType": "Time and Materials",
                     "modifications": []

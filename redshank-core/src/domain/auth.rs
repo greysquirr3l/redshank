@@ -23,22 +23,26 @@ pub struct UserId(Uuid);
 
 impl UserId {
     /// Create a new random user ID.
+    #[must_use]
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
 
     /// Create a user ID from an existing UUID.
-    pub fn from_uuid(id: Uuid) -> Self {
+    #[must_use]
+    pub const fn from_uuid(id: Uuid) -> Self {
         Self(id)
     }
 
     /// The well-known system user ID (nil UUID).
-    pub fn system() -> Self {
+    #[must_use]
+    pub const fn system() -> Self {
         Self(Uuid::nil())
     }
 
     /// Access the inner UUID.
-    pub fn as_uuid(&self) -> &Uuid {
+    #[must_use]
+    pub const fn as_uuid(&self) -> &Uuid {
         &self.0
     }
 }
@@ -184,6 +188,7 @@ pub struct AuthContext {
 
 impl AuthContext {
     /// Create a system-level auth context with `Role::Service`.
+    #[must_use]
     pub fn system() -> Self {
         Self {
             user_id: UserId::system(),
@@ -193,6 +198,7 @@ impl AuthContext {
     }
 
     /// Create an owner auth context.
+    #[must_use]
     pub fn owner(user_id: UserId, token: String) -> Self {
         Self {
             user_id,
@@ -202,6 +208,7 @@ impl AuthContext {
     }
 
     /// Check if the context has a specific role.
+    #[must_use]
     pub fn has_role(&self, role: Role) -> bool {
         self.roles.contains(&role)
     }
@@ -214,12 +221,12 @@ impl AuthContext {
 /// Object-safe: uses `&self` reference. Test code can inject mock policies.
 pub trait SecurityPolicy: Send + Sync {
     /// Check whether the given auth context has the specified permission.
-    /// Returns `Ok(())` if granted, `Err(SecurityError)` if denied.
-    fn check(
-        &self,
-        auth: &AuthContext,
-        permission: Permission,
-    ) -> Result<(), SecurityError>;
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(SecurityError::AccessDenied)` if the auth context does not
+    /// hold a role that grants `permission`.
+    fn check(&self, auth: &AuthContext, permission: Permission) -> Result<(), SecurityError>;
 }
 
 // ── StaticPolicy ────────────────────────────────────────────
@@ -228,15 +235,15 @@ pub trait SecurityPolicy: Send + Sync {
 ///
 /// Permission map:
 /// - **Owner** → all 8 permissions
-/// - **Operator** → RunAgent, ReadSession, WriteSession, ReadWiki, WriteWiki, FetchData
-/// - **Reader** → ReadSession, ReadWiki
-/// - **Service** → ReadSession, WriteSession, ReadWiki, WriteWiki, FetchData
+/// - **Operator** → `RunAgent`, `ReadSession`, `WriteSession`, `ReadWiki`, `WriteWiki`, `FetchData`
+/// - **Reader** → `ReadSession`, `ReadWiki`
+/// - **Service** → `ReadSession`, `WriteSession`, `ReadWiki`, `WriteWiki`, `FetchData`
 #[derive(Debug, Clone)]
 pub struct StaticPolicy;
 
 impl StaticPolicy {
     /// Returns `true` if the given role grants the given permission.
-    fn role_grants(role: Role, permission: Permission) -> bool {
+    const fn role_grants(role: Role, permission: Permission) -> bool {
         match role {
             Role::Owner => true,
             Role::Operator => matches!(
@@ -248,10 +255,7 @@ impl StaticPolicy {
                     | Permission::WriteWiki
                     | Permission::FetchData
             ),
-            Role::Reader => matches!(
-                permission,
-                Permission::ReadSession | Permission::ReadWiki
-            ),
+            Role::Reader => matches!(permission, Permission::ReadSession | Permission::ReadWiki),
             Role::Service => matches!(
                 permission,
                 Permission::ReadSession
@@ -265,11 +269,7 @@ impl StaticPolicy {
 }
 
 impl SecurityPolicy for StaticPolicy {
-    fn check(
-        &self,
-        auth: &AuthContext,
-        permission: Permission,
-    ) -> Result<(), SecurityError> {
+    fn check(&self, auth: &AuthContext, permission: Permission) -> Result<(), SecurityError> {
         for role in &auth.roles {
             if Self::role_grants(*role, permission) {
                 return Ok(());
@@ -285,6 +285,10 @@ impl SecurityPolicy for StaticPolicy {
 // ── Pure domain security check functions ────────────────────
 
 /// Check permission to read session data.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
 pub fn can_read_session(
     ctx: &AuthContext,
     policy: &dyn SecurityPolicy,
@@ -293,6 +297,10 @@ pub fn can_read_session(
 }
 
 /// Check permission to delete a session.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
 pub fn can_delete_session(
     ctx: &AuthContext,
     policy: &dyn SecurityPolicy,
@@ -301,6 +309,10 @@ pub fn can_delete_session(
 }
 
 /// Check permission to write (create/update) session data.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
 pub fn can_write_session(
     ctx: &AuthContext,
     policy: &dyn SecurityPolicy,
@@ -309,30 +321,46 @@ pub fn can_write_session(
 }
 
 /// Check permission to run an agent investigation.
-pub fn can_run_agent(
-    ctx: &AuthContext,
-    policy: &dyn SecurityPolicy,
-) -> Result<(), SecurityError> {
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_run_agent(ctx: &AuthContext, policy: &dyn SecurityPolicy) -> Result<(), SecurityError> {
     policy.check(ctx, Permission::RunAgent)
 }
 
 /// Check permission to write wiki entries.
-pub fn can_write_wiki(
-    ctx: &AuthContext,
-    policy: &dyn SecurityPolicy,
-) -> Result<(), SecurityError> {
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_write_wiki(ctx: &AuthContext, policy: &dyn SecurityPolicy) -> Result<(), SecurityError> {
     policy.check(ctx, Permission::WriteWiki)
 }
 
+/// Check permission to read wiki entries.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_read_wiki(ctx: &AuthContext, policy: &dyn SecurityPolicy) -> Result<(), SecurityError> {
+    policy.check(ctx, Permission::ReadWiki)
+}
+
 /// Check permission to fetch external data.
-pub fn can_fetch_data(
-    ctx: &AuthContext,
-    policy: &dyn SecurityPolicy,
-) -> Result<(), SecurityError> {
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_fetch_data(ctx: &AuthContext, policy: &dyn SecurityPolicy) -> Result<(), SecurityError> {
     policy.check(ctx, Permission::FetchData)
 }
 
 /// Check permission to configure credentials.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
 pub fn can_configure_credentials(
     ctx: &AuthContext,
     policy: &dyn SecurityPolicy,
@@ -341,6 +369,7 @@ pub fn can_configure_credentials(
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 
@@ -383,7 +412,10 @@ mod tests {
             Permission::FetchData,
         ];
         for perm in &all_perms {
-            assert!(policy.check(&ctx, *perm).is_ok(), "Owner should have {perm:?}");
+            assert!(
+                policy.check(&ctx, *perm).is_ok(),
+                "Owner should have {perm:?}"
+            );
         }
     }
 
@@ -398,7 +430,11 @@ mod tests {
     fn static_policy_denies_operator_configure_credentials() {
         let policy = StaticPolicy;
         let ctx = operator_ctx();
-        assert!(policy.check(&ctx, Permission::ConfigureCredentials).is_err());
+        assert!(
+            policy
+                .check(&ctx, Permission::ConfigureCredentials)
+                .is_err()
+        );
     }
 
     #[test]
@@ -412,7 +448,11 @@ mod tests {
         let policy = StaticPolicy;
         let result = can_delete_session(&reader_ctx(), &policy);
         assert!(result.is_err());
-        if let Err(SecurityError::AccessDenied { required_permission, .. }) = result {
+        if let Err(SecurityError::AccessDenied {
+            required_permission,
+            ..
+        }) = result
+        {
             assert_eq!(required_permission, Permission::DeleteSession);
         } else {
             panic!("expected AccessDenied");
@@ -481,7 +521,11 @@ mod tests {
         assert!(policy.check(&ctx, Permission::WriteWiki).is_ok());
         assert!(policy.check(&ctx, Permission::FetchData).is_ok());
         assert!(policy.check(&ctx, Permission::DeleteSession).is_err());
-        assert!(policy.check(&ctx, Permission::ConfigureCredentials).is_err());
+        assert!(
+            policy
+                .check(&ctx, Permission::ConfigureCredentials)
+                .is_err()
+        );
         assert!(policy.check(&ctx, Permission::RunAgent).is_err());
     }
 
@@ -491,4 +535,3 @@ mod tests {
         assert_eq!(format!("{id}"), Uuid::nil().to_string());
     }
 }
-

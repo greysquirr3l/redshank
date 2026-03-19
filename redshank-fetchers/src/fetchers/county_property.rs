@@ -13,14 +13,18 @@ use std::path::Path;
 const ACRIS_API: &str = "https://data.cityofnewyork.us/resource/636b-3b5g.json";
 
 /// County property pipeline config for NYC ACRIS.
-pub const PIPELINE_NYC_ACRIS: &str =
-    include_str!("../../pipelines/county_property/nyc_acris.toml");
+pub const PIPELINE_NYC_ACRIS: &str = include_str!("../../pipelines/county_property/nyc_acris.toml");
 
 /// County property pipeline config for Miami-Dade.
 pub const PIPELINE_MIAMI_DADE: &str =
     include_str!("../../pipelines/county_property/miami_dade.toml");
 
 /// Fetch NYC ACRIS property records matching the given owner name.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_acris_records(
     owner_name: &str,
     output_dir: &Path,
@@ -37,7 +41,13 @@ pub async fn fetch_acris_records(
         let resp = client
             .get(ACRIS_API)
             .query(&[
-                ("$where", &format!("upper(name) LIKE '%{}'", owner_name.to_uppercase().replace('\'', "''"))),
+                (
+                    "$where",
+                    &format!(
+                        "upper(name) LIKE '%{}'",
+                        owner_name.to_uppercase().replace('\'', "''")
+                    ),
+                ),
                 ("$limit", &limit.to_string()),
                 ("$offset", &offset.to_string()),
             ])
@@ -61,7 +71,7 @@ pub async fn fetch_acris_records(
         }
         all_records.extend(records);
 
-        if (all_records.len() as u32) < offset + limit {
+        if u32::try_from(all_records.len()).unwrap_or(u32::MAX) < offset + limit {
             break;
         }
         rate_limit_delay(rate_limit_ms).await;
@@ -89,6 +99,10 @@ pub struct CountyPropertyPipeline {
 }
 
 /// Parse a county property pipeline TOML into a structured config.
+///
+/// # Errors
+///
+/// Returns `Err` if the TOML is missing required fields (`county`, `portal_url`).
 pub fn parse_pipeline_config(toml_str: &str) -> Result<CountyPropertyPipeline, String> {
     let mut county = String::new();
     let mut portal_url = String::new();
@@ -106,11 +120,11 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<CountyPropertyPipeline, S
             let key = key.trim();
             let value = value.trim().trim_matches('"');
             match key {
-                "county" => county = value.to_owned(),
-                "portal_url" => portal_url = value.to_owned(),
+                "county" => value.clone_into(&mut county),
+                "portal_url" => value.clone_into(&mut portal_url),
                 "has_json_api" => has_json_api = value == "true",
-                "api_url" => api_url = value.to_owned(),
-                "search_selector" => search_selector = value.to_owned(),
+                "api_url" => value.clone_into(&mut api_url),
+                "search_selector" => value.clone_into(&mut search_selector),
                 "detail_fields" => {
                     let inner = value.trim_start_matches('[').trim_end_matches(']');
                     detail_fields = inner
@@ -139,13 +153,19 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<CountyPropertyPipeline, S
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic
+)]
 mod tests {
     use super::*;
 
     #[test]
     fn county_property_acris_pipeline_config_loads() {
-        let config = parse_pipeline_config(PIPELINE_NYC_ACRIS)
-            .expect("Failed to parse NYC ACRIS pipeline");
+        let config =
+            parse_pipeline_config(PIPELINE_NYC_ACRIS).expect("Failed to parse NYC ACRIS pipeline");
         assert_eq!(config.county, "NYC");
         assert!(config.has_json_api);
         assert!(!config.api_url.is_empty());

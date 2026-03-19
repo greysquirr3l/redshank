@@ -1,4 +1,4 @@
-//! TUI domain types — AppState, AppEvent, UiCommand, ActivityState.
+//! TUI domain types — `AppState`, `AppEvent`, `UiCommand`, `ActivityState`.
 
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
@@ -28,7 +28,7 @@ pub struct AppState {
     pub reasoning_effort: ReasoningEffort,
     /// Wiki graph node summary (label, category).
     pub wiki_nodes: Vec<(String, String)>,
-    /// Wiki graph edge pairs (from_idx, to_idx).
+    /// Wiki graph edge pairs (`from_idx`, `to_idx`).
     pub wiki_edges: Vec<(usize, usize)>,
     /// Whether the agent is currently running.
     pub agent_running: bool,
@@ -90,19 +90,14 @@ pub enum ActivityState {
     /// Agent is thinking (start time for elapsed display).
     Thinking(Instant),
     /// Agent is running a tool.
-    Running {
-        tool_name: String,
-        started: Instant,
-    },
+    Running { tool_name: String, started: Instant },
     /// Agent is streaming output.
-    Streaming {
-        started: Instant,
-        preview: String,
-    },
+    Streaming { started: Instant, preview: String },
 }
 
 impl ActivityState {
     /// Human-readable status string for the footer.
+    #[must_use]
     pub fn status_text(&self) -> String {
         match self {
             Self::Idle => "Ready".into(),
@@ -123,7 +118,8 @@ impl ActivityState {
     }
 
     /// Whether the indicator should animate (non-idle).
-    pub fn is_active(&self) -> bool {
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
         !matches!(self, Self::Idle)
     }
 }
@@ -139,7 +135,8 @@ pub enum ReasoningEffort {
 }
 
 impl ReasoningEffort {
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Off => "off",
             Self::Low => "low",
@@ -148,6 +145,7 @@ impl ReasoningEffort {
         }
     }
 
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "off" => Some(Self::Off),
@@ -184,6 +182,19 @@ pub enum AppEvent {
     Quit,
 }
 
+/// Commands emitted by the TUI to an external runtime worker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UiCommand {
+    /// Submit a new investigation objective.
+    SubmitObjective(String),
+    /// List available models for the active provider.
+    ListModels,
+    /// Update the active model selection.
+    SetModel { name: String, save: bool },
+    /// Update the active reasoning level.
+    SetReasoning(ReasoningEffort),
+}
+
 // ── Slash Commands (CQRS command variants) ───────────────────────────────────
 
 /// Parsed slash command.
@@ -206,6 +217,7 @@ pub enum SlashCommand {
 }
 
 /// Parse a slash command from input text.
+#[must_use]
 pub fn parse_slash_command(input: &str) -> Option<SlashCommand> {
     let input = input.trim();
     if !input.starts_with('/') {
@@ -217,15 +229,13 @@ pub fn parse_slash_command(input: &str) -> Option<SlashCommand> {
 
     match *cmd {
         "/model" => {
-            if parts.len() < 2 {
-                return None;
-            }
-            if parts[1] == "list" {
+            let &arg1 = parts.get(1)?;
+            if arg1 == "list" {
                 return Some(SlashCommand::ModelList);
             }
             let save = parts.contains(&"--save");
             Some(SlashCommand::Model {
-                name: parts[1].to_string(),
+                name: arg1.to_string(),
                 save,
             })
         }
@@ -242,6 +252,7 @@ pub fn parse_slash_command(input: &str) -> Option<SlashCommand> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -329,4 +340,3 @@ mod tests {
         }
     }
 }
-

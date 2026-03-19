@@ -1,13 +1,73 @@
+// Transitive dependency version conflicts are outside our control.
+#![allow(clippy::multiple_crate_versions)]
 //! Redshank CLI — thin entry point.
 //!
 //! Constructs commands from CLI args and dispatches them to core handlers.
 //! Zero business logic in this layer.
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use redshank_core::adapters::persistence::credential_store::{
+    FileCredentialStore, resolve_credentials,
+};
+use redshank_core::adapters::persistence::replay_log::FileReplayLogger;
+use redshank_core::adapters::persistence::sqlite::SqliteSessionStore;
+use redshank_core::adapters::providers::builder::{build_provider, infer_provider, list_models};
+use redshank_core::adapters::tool_defs::tool_definitions;
+use redshank_core::adapters::tools::WorkspaceTools;
+use redshank_core::application::services::engine::RLMEngine;
+use redshank_core::application::services::session_runtime::SessionRuntime;
+use redshank_core::domain::agent::{AgentConfig, ProviderKind, ReasoningEffort};
+use redshank_core::domain::auth::{AuthContext, UserId};
+use redshank_core::domain::credentials::{CredentialBundle, CredentialGuard};
+use redshank_core::domain::errors::DomainError;
+use redshank_core::domain::session::{SessionId, ToolResult};
+use redshank_core::ports::tool_dispatcher::ToolDispatcher;
+use std::io::{self, Write as _};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
 const GIT_SHA: &str = env!("REDSHANK_GIT_SHA");
+
+#[derive(Debug)]
+struct EventingWorkspaceTools {
+    inner: WorkspaceTools,
+    tx: mpsc::Sender<redshank_tui::domain::AppEvent>,
+}
+
+impl ToolDispatcher for EventingWorkspaceTools {
+    async fn dispatch(
+        &self,
+        auth: &redshank_core::domain::auth::AuthContext,
+        tool_name: &str,
+        arguments: serde_json::Value,
+    ) -> Result<ToolResult, DomainError> {
+        let _ = self
+            .tx
+            .send(redshank_tui::domain::AppEvent::ToolStart(
+                tool_name.to_string(),
+            ))
+            .await;
+
+        let result = self.inner.dispatch(auth, tool_name, arguments).await;
+
+        let summary = match &result {
+            Ok(tool_result) => summarize_tool_result(&tool_result.content, tool_result.is_error),
+            Err(err) => format!("error: {err}"),
+        };
+
+        let _ = self
+            .tx
+            .send(redshank_tui::domain::AppEvent::ToolEnd(
+                tool_name.to_string(),
+                summary,
+            ))
+            .await;
+
+        result
+    }
+}
 
 /// Redshank — autonomous recursive investigation agent.
 #[derive(Parser, Debug)]
@@ -116,32 +176,46 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Run { objective } => {
-            cmd_run(&workspace, &cli.model, &objective, cli.max_depth, cli.demo).await
+            cmd_run(
+                &workspace,
+                &cli.model,
+                &cli.reasoning,
+                &objective,
+                cli.max_depth,
+                cli.demo,
+            )
+            .await
         }
         Commands::Tui { session } => {
-            cmd_tui(&workspace, &cli.model, session.as_deref(), cli.no_tui).await
+            cmd_tui(
+                &workspace,
+                &cli.model,
+                &cli.reasoning,
+                session.as_deref(),
+                cli.no_tui,
+                cli.max_depth,
+                cli.demo,
+            )
+            .await
         }
         Commands::Fetch {
             source,
             output,
             query,
-        } => cmd_fetch(&source, output.as_deref(), query.as_deref()).await,
+        } => cmd_fetch(&source, output.as_deref(), query.as_deref()),
         Commands::Session { action } => cmd_session(action, &workspace).await,
-        Commands::Configure => cmd_configure().await,
+        Commands::Configure => cmd_configure(&workspace),
         Commands::Version => {
-            println!(
-                "redshank {} ({})",
-                env!("CARGO_PKG_VERSION"),
-                GIT_SHA,
-            );
+            println!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA,);
             Ok(())
         }
     }
 }
 
 async fn cmd_run(
-    workspace: &std::path::Path,
+    workspace: &Path,
     model: &str,
+    reasoning: &str,
     objective: &str,
     max_depth: u32,
     demo: bool,
@@ -149,22 +223,36 @@ async fn cmd_run(
     tracing::info!(
         objective,
         model,
+        reasoning,
         max_depth,
         demo,
         "starting headless investigation"
     );
-    let _ = (workspace, objective, model, max_depth, demo);
-    // TODO(T24): Wire to SessionRuntime.solve() once integration tests confirm the stack.
-    anyhow::bail!("headless run not yet wired — see T24 integration tests")
+    let answer = solve_objective(
+        workspace,
+        model,
+        parse_core_reasoning(reasoning)?,
+        objective,
+        max_depth,
+        demo,
+    )
+    .await?;
+    println!("{answer}");
+    Ok(())
 }
 
+#[allow(clippy::branches_sharing_code)]
 async fn cmd_tui(
-    _workspace: &std::path::Path,
-    _model: &str,
+    workspace: &Path,
+    model: &str,
+    reasoning: &str,
     session_id: Option<&str>,
     no_tui: bool,
+    max_depth: u32,
+    demo: bool,
 ) -> anyhow::Result<()> {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(256);
+    let (tx, mut rx) = mpsc::channel(256);
+    let tui_reasoning = parse_tui_reasoning(reasoning)?;
 
     if let Some(id) = session_id {
         tracing::info!(session_id = id, "resuming session");
@@ -172,25 +260,346 @@ async fn cmd_tui(
 
     if no_tui {
         tracing::info!("running in headless (--no-tui) mode");
-        // Send a quit event so headless returns immediately in tests.
-        let _ = tx;
+        drop(tx);
         redshank_tui::event_loop::run_headless(&mut rx).await;
         Ok(())
     } else {
-        // Spawn input reader in background
-        let reader_tx = tx.clone();
-        tokio::spawn(async move {
-            redshank_tui::crossterm_reader::spawn_reader(reader_tx).await;
-        });
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
+        let runtime_tx = tx.clone();
+        let active_model = model.to_string();
+        let active_reasoning = parse_core_reasoning(reasoning)?;
+        let workspace_buf = workspace.to_path_buf();
 
-        let _ = tx; // drop our sender so the loop can detect channel close
+        tokio::spawn(run_tui_command_loop(
+            workspace_buf,
+            active_model,
+            active_reasoning,
+            max_depth,
+            demo,
+            runtime_tx,
+            command_rx,
+        ));
 
-        redshank_tui::event_loop::run(&mut rx).await?;
+        redshank_tui::event_loop::run(&mut rx, model.to_string(), tui_reasoning, Some(command_tx))
+            .await?;
         Ok(())
     }
 }
 
-async fn cmd_fetch(
+async fn run_tui_command_loop(
+    workspace: PathBuf,
+    initial_model: String,
+    initial_reasoning: ReasoningEffort,
+    max_depth: u32,
+    demo: bool,
+    runtime_tx: mpsc::Sender<redshank_tui::domain::AppEvent>,
+    mut command_rx: mpsc::UnboundedReceiver<redshank_tui::domain::UiCommand>,
+) {
+    let mut active_model = initial_model;
+    let mut active_reasoning = initial_reasoning;
+    while let Some(cmd) = command_rx.recv().await {
+        match cmd {
+            redshank_tui::domain::UiCommand::SubmitObjective(objective) => {
+                match solve_objective_with_events(
+                    &workspace,
+                    &active_model,
+                    active_reasoning,
+                    &objective,
+                    max_depth,
+                    demo,
+                    runtime_tx.clone(),
+                )
+                .await
+                {
+                    Ok(answer) => {
+                        if runtime_tx
+                            .send(redshank_tui::domain::AppEvent::ContentDelta(answer))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        if runtime_tx
+                            .send(redshank_tui::domain::AppEvent::AgentComplete(String::new()))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        if runtime_tx
+                            .send(redshank_tui::domain::AppEvent::AgentComplete(format!(
+                                "Run failed: {err}"
+                            )))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            redshank_tui::domain::UiCommand::ListModels => {
+                match list_models_for_active_provider(&workspace, &active_model).await {
+                    Ok(listing) => {
+                        if runtime_tx
+                            .send(redshank_tui::domain::AppEvent::AgentComplete(listing))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        if runtime_tx
+                            .send(redshank_tui::domain::AppEvent::AgentComplete(format!(
+                                "Model listing failed: {err}"
+                            )))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            redshank_tui::domain::UiCommand::SetModel { name, .. } => {
+                active_model = name;
+            }
+            redshank_tui::domain::UiCommand::SetReasoning(level) => {
+                active_reasoning = tui_to_core_reasoning(level);
+            }
+        }
+    }
+}
+
+fn parse_core_reasoning(reasoning: &str) -> anyhow::Result<ReasoningEffort> {
+    match reasoning.to_ascii_lowercase().as_str() {
+        "off" | "none" => Ok(ReasoningEffort::None),
+        "low" => Ok(ReasoningEffort::Low),
+        "medium" | "med" => Ok(ReasoningEffort::Medium),
+        "high" => Ok(ReasoningEffort::High),
+        _ => anyhow::bail!("unsupported reasoning level: {reasoning}"),
+    }
+}
+
+fn parse_tui_reasoning(reasoning: &str) -> anyhow::Result<redshank_tui::domain::ReasoningEffort> {
+    redshank_tui::domain::ReasoningEffort::parse(reasoning)
+        .ok_or_else(|| anyhow::anyhow!("unsupported reasoning level: {reasoning}"))
+}
+
+const fn tui_to_core_reasoning(level: redshank_tui::domain::ReasoningEffort) -> ReasoningEffort {
+    match level {
+        redshank_tui::domain::ReasoningEffort::Off => ReasoningEffort::None,
+        redshank_tui::domain::ReasoningEffort::Low => ReasoningEffort::Low,
+        redshank_tui::domain::ReasoningEffort::Medium => ReasoningEffort::Medium,
+        redshank_tui::domain::ReasoningEffort::High => ReasoningEffort::High,
+    }
+}
+
+fn build_agent_config(
+    workspace: &Path,
+    model: &str,
+    reasoning_effort: ReasoningEffort,
+    max_depth: u32,
+    demo: bool,
+) -> anyhow::Result<AgentConfig> {
+    let provider = infer_provider(model)?;
+    Ok(AgentConfig {
+        workspace: workspace.to_path_buf(),
+        provider,
+        model: model.to_string(),
+        reasoning_effort,
+        max_depth: u8::try_from(max_depth.min(u32::from(u8::MAX))).unwrap_or(u8::MAX),
+        demo_mode: demo,
+        ..Default::default()
+    })
+}
+
+fn replay_log_path(workspace: &Path) -> anyhow::Result<PathBuf> {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| anyhow::anyhow!("system clock before unix epoch: {e}"))?
+        .as_secs();
+    Ok(workspace
+        .join(".redshank")
+        .join("replays")
+        .join(format!("session-{ts}.jsonl")))
+}
+
+async fn solve_objective(
+    workspace: &Path,
+    model: &str,
+    reasoning_effort: ReasoningEffort,
+    objective: &str,
+    max_depth: u32,
+    demo: bool,
+) -> anyhow::Result<String> {
+    let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
+    let creds = resolve_credentials(workspace, None);
+    let provider = build_provider(&config, &creds)?;
+    let tools = WorkspaceTools::new(workspace, creds.clone())?
+        .with_command_timeout(config.command_timeout.as_secs())
+        .with_max_file_chars(config.max_file_chars);
+    let replay_log = FileReplayLogger::new(replay_log_path(workspace)?);
+    let tool_defs = tool_definitions(config.recursive);
+    let engine = RLMEngine::new(config, provider, tools, replay_log);
+    engine
+        .solve(objective, &tool_defs)
+        .await
+        .map_err(Into::into)
+}
+
+async fn solve_objective_with_events(
+    workspace: &Path,
+    model: &str,
+    reasoning_effort: ReasoningEffort,
+    objective: &str,
+    max_depth: u32,
+    demo: bool,
+    tx: mpsc::Sender<redshank_tui::domain::AppEvent>,
+) -> anyhow::Result<String> {
+    let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
+    let creds = resolve_credentials(workspace, None);
+    let provider = build_provider(&config, &creds)?;
+    let tools = EventingWorkspaceTools {
+        inner: WorkspaceTools::new(workspace, creds.clone())?
+            .with_command_timeout(config.command_timeout.as_secs())
+            .with_max_file_chars(config.max_file_chars),
+        tx,
+    };
+    let replay_log = FileReplayLogger::new(replay_log_path(workspace)?);
+    let tool_defs = tool_definitions(config.recursive);
+    let engine = RLMEngine::new(config, provider, tools, replay_log);
+    engine
+        .solve(objective, &tool_defs)
+        .await
+        .map_err(Into::into)
+}
+
+async fn list_models_for_active_provider(workspace: &Path, model: &str) -> anyhow::Result<String> {
+    let provider = infer_provider(model)?;
+    let creds = resolve_credentials(workspace, None);
+    let models = list_models(provider, &creds).await?;
+    Ok(format_model_listing(provider, model, &models))
+}
+
+fn format_model_listing(provider: ProviderKind, active_model: &str, models: &[String]) -> String {
+    if models.is_empty() {
+        return format!(
+            "Available models for {}: none returned",
+            provider_label(provider)
+        );
+    }
+
+    let active_display = format_model_name_for_display(provider, active_model);
+    let mut display_models: Vec<String> = models
+        .iter()
+        .map(|model| format_model_name_for_display(provider, model))
+        .collect();
+    display_models.sort();
+
+    let contains_active = display_models.iter().any(|model| model == &active_display);
+
+    let mut lines = if provider == ProviderKind::OpenRouter {
+        format_grouped_openrouter_lines(&display_models, &active_display)
+    } else {
+        display_models
+            .iter()
+            .map(|model| format_model_line(model, &active_display))
+            .collect::<Vec<_>>()
+    };
+
+    if !contains_active {
+        lines.insert(0, format!("* {active_display} (active, unavailable)"));
+    }
+
+    format!(
+        "Available models for {}:\n{}",
+        provider_label(provider),
+        lines.join("\n")
+    )
+}
+
+fn format_model_name_for_display(provider: ProviderKind, model: &str) -> String {
+    match provider {
+        ProviderKind::Ollama if !model.starts_with("ollama/") => format!("ollama/{model}"),
+        ProviderKind::OpenRouter if !model.starts_with("openrouter/") => {
+            format!("openrouter/{model}")
+        }
+        ProviderKind::Cerebras if !model.starts_with("cerebras/") => format!("cerebras/{model}"),
+        _ => model.to_string(),
+    }
+}
+
+fn format_model_line(model: &str, active_display: &str) -> String {
+    if model == active_display {
+        format!("* {model} (active)")
+    } else {
+        format!("  {model}")
+    }
+}
+
+fn format_grouped_openrouter_lines(models: &[String], active_display: &str) -> Vec<String> {
+    let mut groups: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+
+    for model in models {
+        groups
+            .entry(openrouter_group_label(model))
+            .or_default()
+            .push(model.clone());
+    }
+
+    let mut lines = Vec::new();
+    for (group, group_models) in groups {
+        lines.push(format!("{group}:"));
+        for model in group_models {
+            lines.push(format!("  {}", format_model_line(&model, active_display)));
+        }
+    }
+    lines
+}
+
+fn openrouter_group_label(model: &str) -> String {
+    model
+        .strip_prefix("openrouter/")
+        .unwrap_or(model)
+        .split('/')
+        .next()
+        .unwrap_or("other")
+        .to_string()
+}
+
+const fn provider_label(provider: ProviderKind) -> &'static str {
+    match provider {
+        ProviderKind::Anthropic => "Anthropic",
+        ProviderKind::OpenAI => "OpenAI",
+        ProviderKind::OpenRouter => "OpenRouter",
+        ProviderKind::Cerebras => "Cerebras",
+        ProviderKind::Ollama => "Ollama",
+    }
+}
+
+fn summarize_tool_result(content: &str, is_error: bool) -> String {
+    let first_line = content.lines().next().unwrap_or_default().trim();
+    let mut summary: String = first_line.chars().take(80).collect();
+    if summary.is_empty() {
+        summary = if is_error {
+            "tool error".into()
+        } else {
+            "ok".into()
+        };
+    }
+    if is_error {
+        format!("error: {summary}")
+    } else {
+        summary
+    }
+}
+
+fn cmd_fetch(
     source: &str,
     output: Option<&std::path::Path>,
     query: Option<&str>,
@@ -201,36 +610,120 @@ async fn cmd_fetch(
 }
 
 async fn cmd_session(action: SessionAction, workspace: &std::path::Path) -> anyhow::Result<()> {
-    let _ = workspace;
+    let db_dir = workspace.join(".redshank");
+    std::fs::create_dir_all(&db_dir)?;
+    let db_path = db_dir.join("sessions.db");
+    let store = SqliteSessionStore::open(&db_path.to_string_lossy())?;
+    // CLI user is the workspace Owner — full access to local sessions.
+    let auth = AuthContext::owner(UserId::new(), "cli".to_string());
+    let runtime = SessionRuntime::new(store);
+
     match action {
         SessionAction::List => {
-            // TODO(T24): Query SqliteSessionStore
-            println!("ID | Created | Last Objective");
-            println!("---|---------|---------------");
-            println!("(no sessions)");
+            let sessions = runtime.list_sessions(auth).await?;
+            if sessions.is_empty() {
+                println!("No sessions found.");
+            } else {
+                println!("{:<40}  {:<12}  Model", "ID", "Status");
+                println!("{}", "-".repeat(72));
+                for s in &sessions {
+                    println!(
+                        "{:<40}  {:<12}  {}",
+                        s.session_id,
+                        format!("{:?}", s.status),
+                        s.config.model,
+                    );
+                }
+            }
             Ok(())
         }
         SessionAction::Delete { id } => {
             tracing::info!(session_id = %id, "deleting session");
-            // TODO(T24): Wire to SqliteSessionStore.delete()
-            anyhow::bail!("session delete not yet wired — id: {id}")
+            let uuid = uuid::Uuid::parse_str(&id)
+                .map_err(|e| anyhow::anyhow!("invalid session ID '{id}': {e}"))?;
+            let session_id = SessionId(uuid);
+            runtime.delete_session(auth, session_id).await?;
+            println!("Session {id} deleted.");
+            Ok(())
         }
         SessionAction::Resume { id } => {
             tracing::info!(session_id = %id, "resuming session");
-            // TODO(T24): Wire to TUI with session resume
-            anyhow::bail!("session resume not yet wired — id: {id}")
+            // Resume is implemented as a TUI launch with the session pre-selected.
+            drop(runtime);
+            cmd_tui(
+                workspace,
+                "claude-sonnet-4-20250514",
+                "medium",
+                Some(&id),
+                false,
+                3,
+                false,
+            )
+            .await
         }
     }
 }
 
-async fn cmd_configure() -> anyhow::Result<()> {
-    // TODO(T24): Interactive rpassword prompts for credentials
-    println!("Interactive credential setup — not yet implemented.");
-    println!("Credentials are stored in ~/.redshank/credentials.json");
+fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
+    println!("Redshank — interactive credential setup");
+    println!(
+        "Credentials are saved to: {}",
+        workspace
+            .join(".redshank")
+            .join("credentials.json")
+            .display()
+    );
+    println!("Leave a value empty to skip it.\n");
+
+    let mut bundle = CredentialBundle::default();
+
+    let prompt = |label: &str| -> anyhow::Result<Option<String>> {
+        eprint!("{label}: ");
+        io::stderr().flush().ok();
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
+        let trimmed = line.trim().to_string();
+        Ok(if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        })
+    };
+
+    if let Some(k) = prompt("Anthropic API key (ANTHROPIC_API_KEY)")? {
+        bundle.anthropic_api_key = Some(CredentialGuard::new(k));
+    }
+    if let Some(k) = prompt("OpenAI API key (OPENAI_API_KEY)")? {
+        bundle.openai_api_key = Some(CredentialGuard::new(k));
+    }
+    if let Some(k) = prompt("OpenRouter API key (OPENROUTER_API_KEY)")? {
+        bundle.openrouter_api_key = Some(CredentialGuard::new(k));
+    }
+    if let Some(k) = prompt("Exa API key (EXA_API_KEY)")? {
+        bundle.exa_api_key = Some(CredentialGuard::new(k));
+    }
+    if let Some(k) = prompt("GitHub token (GITHUB_TOKEN)")? {
+        bundle.github_token = Some(CredentialGuard::new(k));
+    }
+    if let Some(k) = prompt("Have I Been Pwned key (HIBP_API_KEY)")? {
+        bundle.hibp_api_key = Some(CredentialGuard::new(k));
+    }
+    if let Some(url) = prompt("Ollama base URL (default: http://localhost:11434)")? {
+        bundle.ollama_base_url = Some(url);
+    }
+
+    if !bundle.has_any() {
+        println!("No credentials provided — nothing saved.");
+        return Ok(());
+    }
+
+    FileCredentialStore::workspace(workspace).save(&bundle)?;
+    println!("\nCredentials saved successfully (0600 permissions).");
     Ok(())
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use clap::Parser;
@@ -245,7 +738,9 @@ mod tests {
     #[test]
     fn cli_parses_run_with_objective() {
         let cli = Cli::try_parse_from(["redshank", "run", "Investigate ACME Corp"]).unwrap();
-        assert!(matches!(cli.command, Commands::Run { objective } if objective == "Investigate ACME Corp"));
+        assert!(
+            matches!(cli.command, Commands::Run { objective } if objective == "Investigate ACME Corp")
+        );
     }
 
     #[test]
@@ -309,8 +804,7 @@ mod tests {
 
     #[test]
     fn cli_parses_tui_with_session() {
-        let cli =
-            Cli::try_parse_from(["redshank", "tui", "--session", "my-session-id"]).unwrap();
+        let cli = Cli::try_parse_from(["redshank", "tui", "--session", "my-session-id"]).unwrap();
         match cli.command {
             Commands::Tui { session } => assert_eq!(session.as_deref(), Some("my-session-id")),
             _ => panic!("expected Tui"),
@@ -364,5 +858,93 @@ mod tests {
         let result = cmd_session(SessionAction::List, workspace).await;
         assert!(result.is_ok());
     }
-}
 
+    #[tokio::test]
+    async fn cmd_tui_no_tui_returns_without_hanging() {
+        let workspace = std::path::Path::new("/tmp");
+        let result = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            cmd_tui(workspace, "gpt-5.4", "medium", None, true, 5, false),
+        )
+        .await;
+
+        assert!(result.is_ok(), "cmd_tui --no-tui should not hang");
+        assert!(result.unwrap().is_ok());
+    }
+
+    #[test]
+    fn parse_core_reasoning_maps_off_to_none() {
+        assert_eq!(parse_core_reasoning("off").unwrap(), ReasoningEffort::None);
+        assert_eq!(parse_core_reasoning("high").unwrap(), ReasoningEffort::High);
+    }
+
+    #[test]
+    fn build_agent_config_infers_ollama_provider() {
+        let config = build_agent_config(
+            std::path::Path::new("/tmp"),
+            "ollama/gemma3:27b",
+            ReasoningEffort::Medium,
+            5,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(config.model, "ollama/gemma3:27b");
+        assert_eq!(
+            config.provider,
+            redshank_core::domain::agent::ProviderKind::Ollama
+        );
+    }
+
+    #[test]
+    fn format_model_listing_prefixes_ollama_models() {
+        let listing = format_model_listing(
+            ProviderKind::Ollama,
+            "ollama/llama3:latest",
+            &["llama3:latest".into(), "gemma3:27b".into()],
+        );
+
+        assert!(listing.contains("ollama/llama3:latest"));
+        assert!(listing.contains("ollama/gemma3:27b"));
+    }
+
+    #[test]
+    fn format_model_listing_prefixes_openrouter_models() {
+        let listing = format_model_listing(
+            ProviderKind::OpenRouter,
+            "openrouter/anthropic/claude-3.7-sonnet",
+            &["anthropic/claude-3.7-sonnet".into(), "openai/gpt-4o".into()],
+        );
+
+        assert!(listing.contains("openrouter/anthropic/claude-3.7-sonnet"));
+        assert!(listing.contains("openrouter/openai/gpt-4o"));
+    }
+
+    #[test]
+    fn format_model_listing_marks_active_model() {
+        let listing = format_model_listing(
+            ProviderKind::Ollama,
+            "ollama/gemma3:27b",
+            &["llama3:latest".into(), "gemma3:27b".into()],
+        );
+
+        assert!(listing.contains("* ollama/gemma3:27b (active)"));
+    }
+
+    #[test]
+    fn format_model_listing_groups_openrouter_models() {
+        let listing = format_model_listing(
+            ProviderKind::OpenRouter,
+            "openrouter/openai/gpt-4o",
+            &[
+                "anthropic/claude-3.7-sonnet".into(),
+                "openai/gpt-4o".into(),
+                "openai/gpt-4o-mini".into(),
+            ],
+        );
+
+        assert!(listing.contains("anthropic:"));
+        assert!(listing.contains("openai:"));
+        assert!(listing.contains("* openrouter/openai/gpt-4o (active)"));
+    }
+}

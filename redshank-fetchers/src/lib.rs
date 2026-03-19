@@ -1,3 +1,5 @@
+// Transitive dependency version conflicts are outside our control.
+#![allow(clippy::multiple_crate_versions)]
 //! # redshank-fetchers
 //!
 //! Public data fetcher binaries and shared infrastructure for the

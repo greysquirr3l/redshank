@@ -2,7 +2,7 @@
 //!
 //! Implements [`ModelProvider`] for Anthropic's `/v1/messages` endpoint.
 //! Handles:
-//! - SSE event parsing (content_block_delta, content_block_stop, message_stop)
+//! - SSE event parsing (`content_block_delta`, `content_block_stop`, `message_stop`)
 //! - Tool-call JSON fragment accumulation across multiple deltas
 //! - Thinking budgets for claude-opus-4-6+ models
 //! - Token counting via `/v1/messages/count_tokens`
@@ -61,14 +61,14 @@ enum ContentDelta {
     ThinkingDelta { thinking: String },
 }
 
-/// SSE data payload for content_block_start.
+/// SSE data payload for `content_block_start`.
 #[derive(Debug, Deserialize)]
 struct ContentBlockStart {
     index: usize,
     content_block: ContentBlock,
 }
 
-/// SSE data payload for content_block_delta.
+/// SSE data payload for `content_block_delta`.
 #[derive(Debug, Deserialize)]
 struct ContentBlockDelta {
     #[allow(dead_code)]
@@ -76,13 +76,13 @@ struct ContentBlockDelta {
     delta: ContentDelta,
 }
 
-/// SSE data payload for message_start.
+/// SSE data payload for `message_start`.
 #[derive(Debug, Deserialize)]
 struct MessageStart {
     message: MessagePayload,
 }
 
-/// Top-level message payload (for non-streaming or message_start).
+/// Top-level message payload (for non-streaming or `message_start`).
 #[derive(Debug, Deserialize)]
 struct MessagePayload {
     #[serde(default)]
@@ -104,20 +104,20 @@ struct UsagePayload {
     output_tokens: u32,
 }
 
-/// SSE data payload for message_delta.
+/// SSE data payload for `message_delta`.
 #[derive(Debug, Deserialize)]
 struct MessageDeltaEvent {
     delta: MessageDeltaPayload,
 }
 
-/// Inner delta within message_delta.
+/// Inner delta within `message_delta`.
 #[derive(Debug, Deserialize)]
 struct MessageDeltaPayload {
     #[serde(default)]
     stop_reason: Option<String>,
 }
 
-/// Token count response from the count_tokens endpoint.
+/// Token count response from the `count_tokens` endpoint.
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct TokenCountResponse {
@@ -154,7 +154,7 @@ impl StreamAccumulator {
             }
             ContentBlock::ToolUse { id, name, input } => {
                 // If the initial block has a complete input, serialize it
-                let initial_json = if input.is_object() && !input.as_object().unwrap().is_empty() {
+                let initial_json = if input.as_object().is_some_and(|m| !m.is_empty()) {
                     vec![serde_json::to_string(&input).unwrap_or_default()]
                 } else {
                     vec![]
@@ -167,7 +167,8 @@ impl StreamAccumulator {
             }
             ContentBlock::Thinking { thinking } => {
                 if !thinking.is_empty() {
-                    self.text_parts.push(format!("<thinking>{thinking}</thinking>"));
+                    self.text_parts
+                        .push(format!("<thinking>{thinking}</thinking>"));
                 }
             }
         }
@@ -210,7 +211,8 @@ impl StreamAccumulator {
                 let arguments = if json_str.is_empty() {
                     Value::Object(serde_json::Map::new())
                 } else {
-                    serde_json::from_str(&json_str).unwrap_or(Value::Object(serde_json::Map::new()))
+                    serde_json::from_str(&json_str)
+                        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
                 };
                 ToolCall {
                     id: tc.id,
@@ -226,10 +228,10 @@ impl StreamAccumulator {
             Some("max_tokens") => StopReason::MaxTokens,
             Some("stop_sequence") => StopReason::StopSequence,
             _ => {
-                if !tool_calls.is_empty() {
-                    StopReason::ToolUse
-                } else {
+                if tool_calls.is_empty() {
                     StopReason::EndTurn
+                } else {
+                    StopReason::ToolUse
                 }
             }
         };
@@ -310,8 +312,10 @@ fn build_request_body(
         "messages": api_messages,
     });
 
-    if let Some(system) = system_prompt {
-        body["system"] = Value::String(system);
+    if let Some(system) = system_prompt
+        && let Some(obj) = body.as_object_mut()
+    {
+        obj.insert("system".to_owned(), Value::String(system));
     }
 
     if !tools.is_empty() {
@@ -325,7 +329,9 @@ fn build_request_body(
                 })
             })
             .collect();
-        body["tools"] = Value::Array(api_tools);
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("tools".to_owned(), Value::Array(api_tools));
+        }
     }
 
     // Thinking budgets
@@ -334,10 +340,15 @@ fn build_request_body(
         && supports_native_thinking(model)
     {
         let budget = thinking_budget_tokens(effort);
-        body["thinking"] = serde_json::json!({
-            "type": "enabled",
-            "budget_tokens": budget
-        });
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert(
+                "thinking".to_owned(),
+                serde_json::json!({
+                    "type": "enabled",
+                    "budget_tokens": budget
+                }),
+            );
+        }
     }
 
     body
@@ -351,7 +362,7 @@ fn extract_system_prompt(messages: &[ChatMessage]) -> Option<String> {
         .map(|m| m.content.clone())
 }
 
-/// Convert ChatMessage slice to Anthropic API message format.
+/// Convert [`ChatMessage`] slice to Anthropic API message format.
 fn build_api_messages(messages: &[ChatMessage]) -> Vec<Value> {
     messages
         .iter()
@@ -404,7 +415,7 @@ fn supports_native_thinking(model: &str) -> bool {
 }
 
 /// Map reasoning effort to thinking budget tokens.
-fn thinking_budget_tokens(effort: ReasoningEffort) -> u32 {
+const fn thinking_budget_tokens(effort: ReasoningEffort) -> u32 {
     match effort {
         ReasoningEffort::None => 0,
         ReasoningEffort::Low => 2_048,
@@ -413,11 +424,10 @@ fn thinking_budget_tokens(effort: ReasoningEffort) -> u32 {
     }
 }
 
-/// Map Anthropic stop_reason string to StopReason enum.
+/// Map Anthropic `stop_reason` string to `StopReason` enum.
 #[cfg(test)]
 fn map_stop_reason(reason: &str) -> StopReason {
     match reason {
-        "end_turn" => StopReason::EndTurn,
         "tool_use" => StopReason::ToolUse,
         "max_tokens" => StopReason::MaxTokens,
         "stop_sequence" => StopReason::StopSequence,
@@ -447,7 +457,7 @@ impl std::fmt::Debug for AnthropicModel {
             .field("reasoning_effort", &self.reasoning_effort)
             .field("max_tokens", &self.max_tokens)
             .field("context_window", &self.context_window)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -458,6 +468,7 @@ impl AnthropicModel {
     /// - `api_key`: Anthropic API key (redacted in debug output)
     /// - `model`: Model identifier (e.g. "claude-sonnet-4-20250514")
     /// - `reasoning_effort`: Optional reasoning effort level
+    #[must_use]
     pub fn new(
         api_key: CredentialGuard<String>,
         model: String,
@@ -476,12 +487,13 @@ impl AnthropicModel {
     }
 
     /// Override max tokens.
-    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+    #[must_use]
+    pub const fn with_max_tokens(mut self, max_tokens: u32) -> Self {
         self.max_tokens = max_tokens;
         self
     }
 
-    /// Process a complete SSE response body into a ModelTurn.
+    /// Process a complete SSE response body into a `ModelTurn`.
     fn process_sse_body(body: &[u8]) -> ModelTurn {
         let events = parse_sse_events(body);
         let mut acc = StreamAccumulator::default();
@@ -517,11 +529,8 @@ impl AnthropicModel {
                         acc.handle_message_delta(md.delta.stop_reason);
                     }
                 }
-                "message_stop" | "content_block_stop" | "ping" | "error" => {
-                    // No accumulation needed
-                }
                 _ => {
-                    // Ignore unknown event types
+                    // No accumulation needed for these event types.
                 }
             }
         }
@@ -531,7 +540,7 @@ impl AnthropicModel {
 }
 
 /// Infer context window size from model name.
-fn infer_context_window(_model: &str) -> u64 {
+const fn infer_context_window(_model: &str) -> u64 {
     // All current Claude models have 200k context windows.
     // TODO(T08): differentiate when older models are supported.
     200_000
@@ -589,8 +598,11 @@ impl ModelProvider for AnthropicModel {
 
     fn count_tokens(&self, messages: &[ChatMessage]) -> Result<u32, DomainError> {
         // Rough estimation: ~4 chars per token for English text
-        let total_chars: usize = messages.iter().map(|m| m.content.len() + m.role.len()).sum();
-        Ok((total_chars / 4) as u32)
+        let total_chars: usize = messages
+            .iter()
+            .map(|m| m.content.len() + m.role.len())
+            .sum();
+        Ok(u32::try_from(total_chars / 4).unwrap_or(u32::MAX))
     }
 
     fn context_window(&self) -> u64 {
@@ -603,6 +615,7 @@ impl ModelProvider for AnthropicModel {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

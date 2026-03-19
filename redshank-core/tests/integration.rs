@@ -1,6 +1,13 @@
 //! Full-stack integration tests with scripted model — no live API calls.
 //!
-//! Exercises: CLI → SessionRuntime → RLMEngine → WorkspaceTools stack.
+//! Exercises: CLI → `SessionRuntime` → `RLMEngine` → `WorkspaceTools` stack.
+
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::missing_const_for_fn,
+    clippy::indexing_slicing
+)]
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -13,7 +20,7 @@ use redshank_core::domain::session::{ModelTurn, StopReason, ToolCall, ToolResult
 use redshank_core::ports::model_provider::{ChatMessage, ModelProvider, ToolDefinition};
 use redshank_core::ports::replay_log::ReplayLog;
 use redshank_core::ports::tool_dispatcher::ToolDispatcher;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tempfile::TempDir;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -66,7 +73,7 @@ impl ModelProvider for ScriptedModel {
         self.context_window
     }
 
-    fn model_name(&self) -> &str {
+    fn model_name(&self) -> &'static str {
         "scripted-integration"
     }
 }
@@ -190,21 +197,13 @@ async fn multi_turn_write_read_shell_answer() {
         // Turn 2: Read the file back
         ModelTurn {
             content: Some("Now reading it back.".into()),
-            tool_calls: vec![tool_call(
-                "tc2",
-                "read_file",
-                json!({"path": "notes.txt"}),
-            )],
+            tool_calls: vec![tool_call("tc2", "read_file", json!({"path": "notes.txt"}))],
             stop_reason: StopReason::ToolUse,
         },
         // Turn 3: Run a shell command
         ModelTurn {
             content: Some("Let me check the workspace.".into()),
-            tool_calls: vec![tool_call(
-                "tc3",
-                "run_shell",
-                json!({"command": "ls -la"}),
-            )],
+            tool_calls: vec![tool_call("tc3", "run_shell", json!({"command": "ls -la"}))],
             stop_reason: StopReason::ToolUse,
         },
         // Turn 4: Final answer
@@ -255,11 +254,7 @@ async fn context_condensation_triggers_at_high_usage() {
         // Turn 1: tool call to generate context
         ModelTurn {
             content: Some("Gathering data...".into()),
-            tool_calls: vec![tool_call(
-                "tc1",
-                "read_file",
-                json!({"path": "data.txt"}),
-            )],
+            tool_calls: vec![tool_call("tc1", "read_file", json!({"path": "data.txt"}))],
             stop_reason: StopReason::ToolUse,
         },
         // Turn 2: final answer after condensation
@@ -271,9 +266,7 @@ async fn context_condensation_triggers_at_high_usage() {
     ])
     .with_token_pressure(155_000, 200_000);
 
-    let dispatcher = RecordingDispatcher::new(vec![
-        tool_result("tc1", &"x".repeat(10_000)),
-    ]);
+    let dispatcher = RecordingDispatcher::new(vec![tool_result("tc1", &"x".repeat(10_000))]);
 
     let engine = make_engine(tmp.path(), model, dispatcher);
     let result = engine.solve("Analyze data", &tool_defs()).await;
@@ -294,9 +287,7 @@ async fn model_exhaustion_returns_error() {
         stop_reason: StopReason::ToolUse,
     }]);
 
-    let dispatcher = RecordingDispatcher::new(vec![
-        tool_result("tc1", "file contents"),
-    ]);
+    let dispatcher = RecordingDispatcher::new(vec![tool_result("tc1", "file contents")]);
 
     let engine = make_engine(tmp.path(), model, dispatcher);
     let result = engine.solve("Do something", &tool_defs()).await;
@@ -305,7 +296,7 @@ async fn model_exhaustion_returns_error() {
     assert!(err.contains("exhausted"));
 }
 
-/// Subtask delegation at depth 0 exercises recursive solve_recursive path.
+/// Subtask delegation at depth 0 exercises recursive `solve_recursive` path.
 #[tokio::test]
 async fn subtask_delegation_works() {
     let tmp = TempDir::new().unwrap();
@@ -337,7 +328,9 @@ async fn subtask_delegation_works() {
 
     let dispatcher = RecordingDispatcher::new(vec![]);
     let engine = make_engine(tmp.path(), model, dispatcher);
-    let result = engine.solve("Investigate corporate structure", &tool_defs()).await;
+    let result = engine
+        .solve("Investigate corporate structure", &tool_defs())
+        .await;
     assert!(result.is_ok());
     assert!(result.unwrap().contains("3 subsidiaries"));
 }
@@ -351,29 +344,17 @@ async fn repeated_shell_command_blocked() {
     let model = ScriptedModel::new(vec![
         ModelTurn {
             content: None,
-            tool_calls: vec![tool_call(
-                "tc1",
-                "run_shell",
-                json!({"command": "whoami"}),
-            )],
+            tool_calls: vec![tool_call("tc1", "run_shell", json!({"command": "whoami"}))],
             stop_reason: StopReason::ToolUse,
         },
         ModelTurn {
             content: None,
-            tool_calls: vec![tool_call(
-                "tc2",
-                "run_shell",
-                json!({"command": "whoami"}),
-            )],
+            tool_calls: vec![tool_call("tc2", "run_shell", json!({"command": "whoami"}))],
             stop_reason: StopReason::ToolUse,
         },
         ModelTurn {
             content: None,
-            tool_calls: vec![tool_call(
-                "tc3",
-                "run_shell",
-                json!({"command": "whoami"}),
-            )],
+            tool_calls: vec![tool_call("tc3", "run_shell", json!({"command": "whoami"}))],
             stop_reason: StopReason::ToolUse,
         },
         ModelTurn {
@@ -455,7 +436,7 @@ async fn tool_error_is_surfaced() {
     assert!(result.unwrap().contains("moving on"));
 }
 
-/// AgentConfig respects workspace path from tempdir.
+/// `AgentConfig` respects workspace path from tempdir.
 #[test]
 fn agent_config_workspace_path() {
     let tmp = TempDir::new().unwrap();
@@ -474,7 +455,7 @@ fn demo_mode_config() {
     assert!(config.demo_mode);
 }
 
-/// ToolDefinition list can be serialized and deserialized.
+/// `ToolDefinition` list can be serialized and deserialized.
 #[test]
 fn tool_defs_roundtrip() {
     let defs = tool_defs();
@@ -504,9 +485,7 @@ async fn cancellation_stops_engine() {
         },
     ]);
 
-    let dispatcher = RecordingDispatcher::new(vec![
-        tool_result("tc1", "data"),
-    ]);
+    let dispatcher = RecordingDispatcher::new(vec![tool_result("tc1", "data")]);
 
     let engine = make_engine(tmp.path(), model, dispatcher);
     // Cancel before the second turn

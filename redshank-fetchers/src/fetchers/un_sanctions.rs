@@ -7,13 +7,15 @@ use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, write_ndjson};
 use std::path::Path;
 
-const SANCTIONS_URL: &str =
-    "https://scsanctions.un.org/resources/xml/en/consolidated.xml";
+const SANCTIONS_URL: &str = "https://scsanctions.un.org/resources/xml/en/consolidated.xml";
 
 /// Fetch and parse the UN consolidated sanctions list.
-pub async fn fetch_un_sanctions(
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_un_sanctions(output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let resp = client.get(SANCTIONS_URL).send().await?;
 
@@ -43,6 +45,7 @@ pub async fn fetch_un_sanctions(
 ///
 /// Looks for `<INDIVIDUAL>` and `<ENTITY>` elements with name components,
 /// aliases, identifiers (passport, national ID), and listing info.
+#[must_use]
 pub fn parse_un_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
     let mut records = Vec::new();
 
@@ -65,10 +68,7 @@ pub fn parse_un_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
             let aliases: Vec<String> = block
                 .split("<ALIAS_NAME>")
                 .skip(1)
-                .filter_map(|a| {
-                    a.find("</ALIAS_NAME>")
-                        .map(|e| a[..e].trim().to_owned())
-                })
+                .filter_map(|a| a.find("</ALIAS_NAME>").map(|e| a[..e].trim().to_owned()))
                 .collect();
 
             // Collect document identifiers (passport, national ID)
@@ -86,12 +86,16 @@ pub fn parse_un_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
                 })
                 .collect();
 
-            let name = [first_name.as_str(), second_name.as_str(), third_name.as_str()]
-                .iter()
-                .filter(|s| !s.is_empty())
-                .copied()
-                .collect::<Vec<_>>()
-                .join(" ");
+            let name = [
+                first_name.as_str(),
+                second_name.as_str(),
+                third_name.as_str(),
+            ]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ");
 
             records.push(serde_json::json!({
                 "entity_type": entity_type,
@@ -123,12 +127,13 @@ fn extract_tag(xml: &str, tag: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn un_sanctions_xml_parser_extracts_aliases_and_identifiers() {
-        let xml = r#"
+        let xml = r"
 <CONSOLIDATED_LIST>
   <INDIVIDUALS>
     <INDIVIDUAL>
@@ -162,7 +167,7 @@ mod tests {
     </ENTITY>
   </ENTITIES>
 </CONSOLIDATED_LIST>
-"#;
+";
         let records = parse_un_sanctions_xml(xml);
         assert_eq!(records.len(), 2);
 

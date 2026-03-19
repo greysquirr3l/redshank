@@ -18,10 +18,10 @@ pub struct PersistentSettings {
     /// Default model for Anthropic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_model_anthropic: Option<String>,
-    /// Default model for OpenAI.
+    /// Default model for `OpenAI`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_model_openai: Option<String>,
-    /// Default model for OpenRouter.
+    /// Default model for `OpenRouter`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_model_openrouter: Option<String>,
     /// Default model for Cerebras.
@@ -36,6 +36,7 @@ impl PersistentSettings {
     /// Get the default model name for a given provider kind.
     ///
     /// Returns the per-provider default if set, otherwise falls back to `default_model`.
+    #[must_use]
     pub fn default_model_for_provider(&self, provider: ProviderKind) -> Option<&str> {
         let specific = match provider {
             ProviderKind::Anthropic => self.default_model_anthropic.as_deref(),
@@ -44,13 +45,16 @@ impl PersistentSettings {
             ProviderKind::Cerebras => self.default_model_cerebras.as_deref(),
             ProviderKind::Ollama => self.default_model_ollama.as_deref(),
         };
-        specific
-            .filter(|s| !s.trim().is_empty())
-            .or(self.default_model.as_deref().filter(|s| !s.trim().is_empty()))
+        specific.filter(|s| !s.trim().is_empty()).or_else(|| {
+            self.default_model
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+        })
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

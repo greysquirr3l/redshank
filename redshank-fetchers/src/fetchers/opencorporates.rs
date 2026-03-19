@@ -1,4 +1,4 @@
-//! OpenCorporates — Global corporate registry aggregator (200+ jurisdictions).
+//! `OpenCorporates` — Global corporate registry aggregator (200+ jurisdictions).
 //!
 //! API: `https://api.opencorporates.com/v0.4/companies/search`
 //! Free tier: 500 requests/day. API key for higher volume.
@@ -9,8 +9,13 @@ use std::path::Path;
 
 const API_BASE: &str = "https://api.opencorporates.com/v0.4";
 
-/// Search OpenCorporates for companies matching `name`, optionally filtered by
-/// `jurisdiction_code` (e.g. "us_de" for Delaware, "gb" for UK).
+/// Search `OpenCorporates` for companies matching `name`, optionally filtered by
+/// `jurisdiction_code` (e.g. `us_de` for Delaware, `gb` for UK).
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_companies(
     name: &str,
     jurisdiction_code: Option<&str>,
@@ -24,13 +29,11 @@ pub async fn fetch_companies(
     let max = if max_pages == 0 { u32::MAX } else { max_pages };
 
     for page in 1..=max {
-        let mut req = client
-            .get(format!("{API_BASE}/companies/search"))
-            .query(&[
-                ("q", name),
-                ("page", &page.to_string()),
-                ("per_page", "100"),
-            ]);
+        let mut req = client.get(format!("{API_BASE}/companies/search")).query(&[
+            ("q", name),
+            ("page", &page.to_string()),
+            ("per_page", "100"),
+        ]);
 
         if let Some(jc) = jurisdiction_code {
             req = req.query(&[("jurisdiction_code", jc)]);
@@ -63,11 +66,13 @@ pub async fn fetch_companies(
         }
         all_records.extend(companies);
 
-        let total_pages = json
-            .get("results")
-            .and_then(|r| r.get("total_pages"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let total_pages = u32::try_from(
+            json.get("results")
+                .and_then(|r| r.get("total_pages"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1),
+        )
+        .unwrap_or(u32::MAX);
 
         if page >= total_pages {
             break;
@@ -86,6 +91,7 @@ pub async fn fetch_companies(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn opencorporates_parses_company_search_response() {
@@ -113,9 +119,11 @@ mod tests {
         let co = &companies[0]["company"];
         assert_eq!(co["company_number"], "1234567");
         assert_eq!(co["jurisdiction_code"], "us_de");
-        assert!(co["registered_address_in_full"]
-            .as_str()
-            .unwrap()
-            .contains("Wilmington"));
+        assert!(
+            co["registered_address_in_full"]
+                .as_str()
+                .unwrap()
+                .contains("Wilmington")
+        );
     }
 }

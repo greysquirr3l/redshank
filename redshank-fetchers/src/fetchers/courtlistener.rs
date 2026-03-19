@@ -1,4 +1,4 @@
-//! CourtListener / RECAP — Free federal court archive.
+//! `CourtListener` / RECAP — Free federal court archive.
 //!
 //! API: `https://www.courtlistener.com/api/rest/v4/dockets/`
 //! No auth for basic use; API key for bulk (5000 req/day).
@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://www.courtlistener.com/api/rest/v4";
 
 /// Fetch federal court dockets matching the given query string.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_dockets(
     query: &str,
     api_token: Option<&str>,
@@ -57,10 +62,7 @@ pub async fn fetch_dockets(
         all_records.extend(results);
 
         // CourtListener uses cursor-based pagination with a `next` URL
-        next_url = json
-            .get("next")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        next_url = json.get("next").and_then(|v| v.as_str()).map(String::from);
 
         if next_url.is_none() {
             break;
@@ -79,6 +81,7 @@ pub async fn fetch_dockets(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     #[test]
     fn courtlistener_parses_docket_response() {

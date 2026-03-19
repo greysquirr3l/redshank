@@ -10,6 +10,7 @@ use std::path::Path;
 const DOWNLOAD_BASE: &str = "https://soprweb.senate.gov/index.cfm";
 
 /// Parse registrant and client names from LD-2 XML content.
+#[must_use]
 pub fn parse_ld2_registrants(xml_content: &str) -> Vec<serde_json::Value> {
     let mut records = Vec::new();
     // Simple tag extraction (not a full XML parser — production would use quick-xml).
@@ -48,6 +49,11 @@ fn extract_tag(text: &str, tag: &str) -> String {
 }
 
 /// Fetch Senate lobbying data for a given year and quarter.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_quarter(
     year: u32,
     quarter: u8,
@@ -82,12 +88,13 @@ pub async fn fetch_quarter(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn senate_lobbying_xml_parser_extracts_registrant_and_client() {
-        let xml = r#"<Filing>
+        let xml = r"<Filing>
             <Registrant>
                 <RegistrantName>Acme Lobbying LLC</RegistrantName>
                 <ClientName>MegaCorp Inc</ClientName>
@@ -98,7 +105,7 @@ mod tests {
                 <ClientName>Widget Co</ClientName>
                 <FilingID>F-67890</FilingID>
             </Registrant>
-        </Filing>"#;
+        </Filing>";
 
         let records = parse_ld2_registrants(xml);
         assert_eq!(records.len(), 2);

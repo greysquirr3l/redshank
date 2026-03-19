@@ -12,6 +12,11 @@ const API_BASE: &str = "https://api.gleif.org/api/v1";
 const GLEIF_RATE_LIMIT_MS: u64 = 1000;
 
 /// Fetch LEI records matching the given legal name.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_lei_records(
     legal_name: &str,
     output_dir: &Path,
@@ -56,12 +61,14 @@ pub async fn fetch_lei_records(
         all_records.extend(data);
 
         // GLEIF uses JSON:API pagination with meta.pagination
-        let total_pages = json
-            .get("meta")
-            .and_then(|m| m.get("pagination"))
-            .and_then(|p| p.get("lastPage"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let total_pages = u32::try_from(
+            json.get("meta")
+                .and_then(|m| m.get("pagination"))
+                .and_then(|p| p.get("lastPage"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1),
+        )
+        .unwrap_or(u32::MAX);
 
         if page >= total_pages {
             break;
@@ -80,9 +87,7 @@ pub async fn fetch_lei_records(
 }
 
 /// Extract LEI, legal name, and parent LEI from a GLEIF data record.
-pub fn extract_lei_fields(
-    record: &serde_json::Value,
-) -> Option<(String, String, Option<String>)> {
+pub fn extract_lei_fields(record: &serde_json::Value) -> Option<(String, String, Option<String>)> {
     let lei = record.get("id")?.as_str()?.to_owned();
     let legal_name = record
         .get("attributes")
@@ -102,6 +107,7 @@ pub fn extract_lei_fields(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 

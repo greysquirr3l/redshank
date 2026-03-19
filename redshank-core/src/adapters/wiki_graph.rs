@@ -41,12 +41,12 @@ pub const CATEGORY_COLORS: &[(WikiCategory, &str)] = &[
 
 /// Return the TUI colour for a wiki category.
 #[cfg(feature = "runtime")]
+#[must_use]
 pub fn category_color(cat: &WikiCategory) -> &'static str {
     CATEGORY_COLORS
         .iter()
         .find(|(c, _)| c == cat)
-        .map(|(_, color)| *color)
-        .unwrap_or("Gray")
+        .map_or("Gray", |(_, color)| *color)
 }
 
 // ── Node / Edge types ───────────────────────────────────────────────────────
@@ -89,25 +89,30 @@ fn slug_to_category(slug: &str) -> WikiCategory {
         "lobbying" => WikiCategory::Lobbying,
         "nonprofits" => WikiCategory::Nonprofits,
         "people" => WikiCategory::People,
-        "regulatory-enforcement" | "regulatory" | "sanctions" => WikiCategory::Other,
         _ => WikiCategory::Other,
     }
 }
 
 /// Parse `wiki/index.md` and return `(category, name, rel_path)` triples.
+///
+/// # Panics
+///
+/// Panics if the hard-coded regex patterns fail to compile (they are
+/// validated at compile time and cannot fail in practice).
 #[cfg(feature = "runtime")]
+#[must_use]
 pub fn parse_index(wiki_dir: &Path) -> Vec<(WikiCategory, String, PathBuf)> {
     let index_path = wiki_dir.join("index.md");
-    let text = match std::fs::read_to_string(&index_path) {
-        Ok(t) => t,
-        Err(_) => return Vec::new(),
+    let Ok(text) = std::fs::read_to_string(&index_path) else {
+        return Vec::new();
     };
 
-    let category_re = Regex::new(r"^###\s+(.+)$").expect("valid regex");
+    let category_re = Regex::new(r"^###\s+(.+)$")
+        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
     let row_re = Regex::new(
         r"^\|\s*(?P<name>[^|]+?)\s*\|\s*[^|]*?\s*\|\s*\[(?P<link_text>[^\]]+)\]\((?P<path>[^)]+)\)\s*\|",
     )
-    .expect("valid regex");
+    .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
 
     let mut entries = Vec::new();
     let mut current_category = WikiCategory::Other;
@@ -119,8 +124,12 @@ pub fn parse_index(wiki_dir: &Path) -> Vec<(WikiCategory, String, PathBuf)> {
             continue;
         }
         if let Some(caps) = row_re.captures(line) {
-            let name = caps.name("name").unwrap().as_str().trim().to_owned();
-            let path = caps.name("path").unwrap().as_str().trim();
+            let name = caps
+                .name("name")
+                .map_or("", |m| m.as_str())
+                .trim()
+                .to_owned();
+            let path = caps.name("path").map_or("", |m| m.as_str()).trim();
             entries.push((current_category.clone(), name, PathBuf::from(path)));
         }
     }
@@ -130,11 +139,19 @@ pub fn parse_index(wiki_dir: &Path) -> Vec<(WikiCategory, String, PathBuf)> {
 
 // ── Cross-reference extraction ──────────────────────────────────────────────
 
+/// Extract cross-references from a wiki file.
+///
+/// Returns `(title, cross_ref_names)`.
+///
+/// # Panics
+///
+/// Panics if the hard-coded regex pattern fails to compile (it is validated
+/// and cannot fail in practice).
 #[cfg(feature = "runtime")]
+#[must_use]
 pub fn extract_cross_refs(file_path: &Path) -> (String, Vec<String>) {
-    let text = match std::fs::read_to_string(file_path) {
-        Ok(t) => t,
-        Err(_) => return (String::new(), Vec::new()),
+    let Ok(text) = std::fs::read_to_string(file_path) else {
+        return (String::new(), Vec::new());
     };
     let lines: Vec<&str> = text.lines().collect();
 
@@ -146,7 +163,8 @@ pub fn extract_cross_refs(file_path: &Path) -> (String, Vec<String>) {
         .unwrap_or_default();
 
     // Find `## Cross-Reference Potential` section.
-    let bold_re = Regex::new(r"\*\*([^*]+)\*\*").expect("valid regex");
+    let bold_re = Regex::new(r"\*\*([^*]+)\*\*")
+        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
     let skip_prefixes = ["join", "critical", "geographic"];
 
     let mut in_section = false;
@@ -183,7 +201,10 @@ pub fn extract_cross_refs(file_path: &Path) -> (String, Vec<String>) {
 // ── Name registry and fuzzy matching ────────────────────────────────────────
 
 #[cfg(feature = "runtime")]
-pub fn build_name_registry(entries: &[(WikiCategory, String, PathBuf, String)]) -> HashMap<String, NodeIndex<u32>> {
+#[must_use]
+pub fn build_name_registry(
+    entries: &[(WikiCategory, String, PathBuf, String)],
+) -> HashMap<String, NodeIndex<u32>> {
     // Placeholder — populated during graph build.
     // The actual registry maps lowered name variants → NodeIndex.
     let _ = entries;
@@ -246,7 +267,11 @@ fn populate_registry(
 ///
 /// Returns the `NodeIndex` if a match is found.
 #[cfg(feature = "runtime")]
-pub fn match_reference(ref_text: &str, registry: &HashMap<String, NodeIndex>) -> Option<NodeIndex> {
+#[must_use]
+pub fn match_reference<S: std::hash::BuildHasher>(
+    ref_text: &str,
+    registry: &HashMap<String, NodeIndex, S>,
+) -> Option<NodeIndex> {
     let lower = ref_text.to_lowercase();
 
     // 1. Exact match.
@@ -292,10 +317,7 @@ pub fn match_reference(ref_text: &str, registry: &HashMap<String, NodeIndex>) ->
                 .split(|c: char| !c.is_alphanumeric())
                 .filter(|t| t.len() >= 3 && !generic.contains(t))
                 .collect();
-            let overlap = ref_tokens
-                .iter()
-                .filter(|t| key_tokens.contains(t))
-                .count();
+            let overlap = ref_tokens.iter().filter(|t| key_tokens.contains(t)).count();
             if overlap > best_overlap && overlap >= 2 {
                 best_overlap = overlap;
                 best = Some(*idx);
@@ -334,11 +356,13 @@ fn jaro_winkler(a: &str, b: &str) -> f64 {
         .take(4)
         .take_while(|(ca, cb)| ca == cb)
         .count();
-    jaro + (prefix_len as f64 * 0.1 * (1.0 - jaro))
+    let prefix_f64 = f64::from(u32::try_from(prefix_len).unwrap_or(4));
+    f64::mul_add(prefix_f64 * 0.1, 1.0 - jaro, jaro)
 }
 
 /// Jaro similarity score.
 #[cfg(feature = "runtime")]
+#[allow(clippy::indexing_slicing)] // bounds guaranteed by loop invariants on a_len/b_len
 fn jaro(a: &str, b: &str) -> f64 {
     if a.is_empty() && b.is_empty() {
         return 1.0;
@@ -394,8 +418,11 @@ fn jaro(a: &str, b: &str) -> f64 {
         k += 1;
     }
 
-    let m = matches as f64;
-    (m / a_len as f64 + m / b_len as f64 + (m - transpositions as f64 / 2.0) / m) / 3.0
+    let m = f64::from(matches);
+    (m / f64::from(u32::try_from(a_len).unwrap_or(u32::MAX))
+        + m / f64::from(u32::try_from(b_len).unwrap_or(u32::MAX))
+        + (m - f64::from(transpositions) / 2.0) / m)
+        / 3.0
 }
 
 // ── WikiGraphModel ──────────────────────────────────────────────────────────
@@ -429,8 +456,14 @@ impl WikiGraphModel {
         let parsed = parse_index(&self.wiki_dir);
 
         // First pass: add nodes, extract cross-refs.
-        let mut entries_with_refs: Vec<(String, WikiCategory, PathBuf, String, Vec<String>, NodeIndex)> =
-            Vec::new();
+        let mut entries_with_refs: Vec<(
+            String,
+            WikiCategory,
+            PathBuf,
+            String,
+            Vec<String>,
+            NodeIndex,
+        )> = Vec::new();
 
         for (category, name, rel_path) in &parsed {
             let file_path = self.wiki_dir.join(rel_path);
@@ -448,7 +481,14 @@ impl WikiGraphModel {
             });
 
             self.node_set.insert(name.clone(), idx);
-            entries_with_refs.push((name.clone(), category.clone(), rel_path.clone(), title, cross_refs, idx));
+            entries_with_refs.push((
+                name.clone(),
+                category.clone(),
+                rel_path.clone(),
+                title,
+                cross_refs,
+                idx,
+            ));
         }
 
         // Build name registry.
@@ -465,11 +505,7 @@ impl WikiGraphModel {
                     // No self-edges.
                     if target_idx != *src_idx {
                         // Avoid duplicate edges.
-                        if !self
-                            .graph
-                            .edges(*src_idx)
-                            .any(|e| e.target() == target_idx)
-                        {
+                        if !self.graph.edges(*src_idx).any(|e| e.target() == target_idx) {
                             self.graph.add_edge(
                                 *src_idx,
                                 target_idx,
@@ -486,36 +522,44 @@ impl WikiGraphModel {
     }
 
     /// Number of nodes in the graph.
+    #[must_use]
     pub fn node_count(&self) -> usize {
         self.graph.node_count()
     }
 
-    /// Number of edges in the graph.
+    /// Returns the number of edges in the graph.
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // petgraph DiGraph::edge_count is not const
     pub fn edge_count(&self) -> usize {
         self.graph.edge_count()
     }
 
     /// Get the underlying graph.
-    pub fn graph(&self) -> &DiGraph<WikiNode, WikiEdge> {
+    #[must_use]
+    pub const fn graph(&self) -> &DiGraph<WikiNode, WikiEdge> {
         &self.graph
     }
 
-    /// Get the name registry (lowered key → NodeIndex).
-    pub fn registry(&self) -> &HashMap<String, NodeIndex> {
+    /// Get the name registry (lowered key → `NodeIndex`).
+    #[must_use]
+    pub const fn registry(&self) -> &HashMap<String, NodeIndex> {
         &self.name_registry
     }
 
     /// Look up a node by canonical name.
+    #[must_use]
     pub fn node_by_name(&self, name: &str) -> Option<NodeIndex> {
         self.node_set.get(name).copied()
     }
 
     /// Wiki directory path.
-    pub fn wiki_dir(&self) -> &Path {
+    #[must_use]
+    pub const fn wiki_dir(&self) -> &PathBuf {
         &self.wiki_dir
     }
 
     /// Convert a `WikiEntry` (domain type) from a node.
+    #[must_use]
     pub fn to_wiki_entry(&self, idx: NodeIndex) -> Option<WikiEntry> {
         self.graph.node_weight(idx).map(|node| WikiEntry {
             path: node.rel_path.clone(),
@@ -553,10 +597,10 @@ impl WikiWatcher {
     }
 
     /// Start the background poll loop. Returns a [`tokio::task::JoinHandle`].
+    #[must_use]
     pub fn start(self: Arc<Self>) -> tokio::task::JoinHandle<()> {
-        let watcher = self.clone();
         tokio::spawn(async move {
-            watcher.poll_loop().await;
+            self.poll_loop().await;
         })
     }
 
@@ -572,7 +616,7 @@ impl WikiWatcher {
 
         loop {
             tokio::select! {
-                _ = self.cancel.cancelled() => break,
+                () = self.cancel.cancelled() => break,
                 _ = interval.tick() => {}
             }
 
@@ -619,8 +663,7 @@ fn walkdir_inner(dir: &Path, results: &mut Vec<(PathBuf, u64)>) -> std::io::Resu
                 .modified()
                 .ok()
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+                .map_or(0, |d| d.as_secs());
             results.push((path, mtime));
         }
     }
@@ -631,6 +674,7 @@ fn walkdir_inner(dir: &Path, results: &mut Vec<(PathBuf, u64)>) -> std::io::Resu
 
 #[cfg(test)]
 #[cfg(feature = "runtime")]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use std::fs;
@@ -643,7 +687,7 @@ mod tests {
 
         fs::write(
             dir.join("index.md"),
-            r#"# Data Sources Wiki
+            r"# Data Sources Wiki
 
 ### Campaign Finance
 
@@ -663,13 +707,13 @@ mod tests {
 | Source | Jurisdiction | Link |
 |--------|-------------|------|
 | Senate Lobbying Disclosures (LD-1/LD-2) | US federal | [senate-ld.md](lobbying/senate-ld.md) |
-"#,
+",
         )
         .unwrap();
 
         fs::write(
             dir.join("campaign-finance/fec-federal.md"),
-            r#"# FEC Federal Campaign Finance
+            r"# FEC Federal Campaign Finance
 
 ## Summary
 Federal campaign finance data.
@@ -679,13 +723,13 @@ Federal campaign finance data.
 - **SEC EDGAR** filings for corporate donors
 - **Senate Lobbying Disclosures** for lobbyist-donor connections
 - **Acme Corp** as a known entity
-"#,
+",
         )
         .unwrap();
 
         fs::write(
             dir.join("corporate/sec-edgar.md"),
-            r#"# SEC EDGAR
+            r"# SEC EDGAR
 
 ## Summary
 SEC corporate filings.
@@ -693,13 +737,13 @@ SEC corporate filings.
 ## Cross-Reference Potential
 
 - **FEC Federal** campaign contributions from corporate officers
-"#,
+",
         )
         .unwrap();
 
         fs::write(
             dir.join("corporate/acme-corp.md"),
-            r#"# Acme Corporation
+            r"# Acme Corporation
 
 ## Summary
 A test corporation.
@@ -707,13 +751,13 @@ A test corporation.
 ## Cross-Reference Potential
 
 - **FEC Federal Campaign Finance** donations by Acme employees
-"#,
+",
         )
         .unwrap();
 
         fs::write(
             dir.join("lobbying/senate-ld.md"),
-            r#"# Senate Lobbying Disclosures
+            r"# Senate Lobbying Disclosures
 
 ## Summary
 Federal lobbying disclosures.
@@ -722,7 +766,7 @@ Federal lobbying disclosures.
 
 - **FEC Federal** for related campaign contributions
 - **SEC EDGAR** for corporate lobbying entity matches
-"#,
+",
         )
         .unwrap();
     }
@@ -738,7 +782,10 @@ Federal lobbying disclosures.
 
         assert_eq!(entries[0].0, WikiCategory::CampaignFinance);
         assert_eq!(entries[0].1, "FEC Federal");
-        assert_eq!(entries[0].2, PathBuf::from("campaign-finance/fec-federal.md"));
+        assert_eq!(
+            entries[0].2,
+            PathBuf::from("campaign-finance/fec-federal.md")
+        );
 
         assert_eq!(entries[1].0, WikiCategory::Corporate);
         assert_eq!(entries[1].1, "SEC EDGAR");
@@ -858,13 +905,19 @@ Federal lobbying disclosures.
     #[test]
     fn jaro_winkler_similar_strings() {
         let score = jaro_winkler("acme corporation", "acme corp");
-        assert!(score >= 0.88, "Similar strings should score ≥ 0.88, got {score}");
+        assert!(
+            score >= 0.88,
+            "Similar strings should score ≥ 0.88, got {score}"
+        );
     }
 
     #[test]
     fn jaro_winkler_dissimilar_strings() {
         let score = jaro_winkler("zebra quantum", "acme corp");
-        assert!(score < 0.88, "Dissimilar strings should score < 0.88, got {score}");
+        assert!(
+            score < 0.88,
+            "Dissimilar strings should score < 0.88, got {score}"
+        );
     }
 
     #[test]

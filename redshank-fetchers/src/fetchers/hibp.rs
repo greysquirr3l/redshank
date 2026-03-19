@@ -20,10 +20,13 @@ const HIBP_RATE_LIMIT_MS: u64 = 1500;
 pub struct HibpApiKey(String);
 
 impl HibpApiKey {
-    pub fn new(key: String) -> Self {
+    #[must_use]
+    pub const fn new(key: String) -> Self {
         Self(key)
     }
 
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     fn as_str(&self) -> &str {
         &self.0
     }
@@ -45,6 +48,11 @@ impl std::fmt::Display for HibpApiKey {
 ///
 /// Returns breach metadata only — never raw credential data.
 /// Returns an empty list (not an error) if the email is clean (API returns 404).
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails or the response cannot be parsed
+/// (404 responses are not errors — they indicate a clean email).
 pub async fn fetch_breaches_for_email(
     email: &str,
     api_key: &HibpApiKey,
@@ -99,6 +107,7 @@ pub async fn fetch_breaches_for_email(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -123,7 +132,7 @@ mod tests {
                 "BreachDate": "2013-10-04",
                 "AddedDate": "2013-12-04T00:00:00Z",
                 "ModifiedDate": "2013-12-04T00:00:00Z",
-                "PwnCount": 152445165,
+                "PwnCount": 152_445_165,
                 "Description": "Adobe breach description",
                 "DataClasses": ["Email addresses", "Password hints", "Passwords", "Usernames"],
                 "IsVerified": true,
@@ -140,7 +149,7 @@ mod tests {
                 "BreachDate": "2012-05-05",
                 "AddedDate": "2016-05-21T21:35:40Z",
                 "ModifiedDate": "2016-05-21T21:35:40Z",
-                "PwnCount": 164611595,
+                "PwnCount": 164_611_595,
                 "Description": "LinkedIn breach description",
                 "DataClasses": ["Email addresses", "Passwords"],
                 "IsVerified": true,

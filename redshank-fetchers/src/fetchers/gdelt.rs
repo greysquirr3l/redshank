@@ -11,6 +11,11 @@ use std::path::Path;
 const API_URL: &str = "https://api.gdeltproject.org/api/v2/doc/doc";
 
 /// Fetch GDELT media articles mentioning the given entity.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_gdelt_articles(
     entity: &str,
     output_dir: &Path,
@@ -57,6 +62,7 @@ pub async fn fetch_gdelt_articles(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     #[test]
     fn gdelt_parses_artlist_json_response() {
@@ -86,10 +92,12 @@ mod tests {
         });
         let articles = mock.get("articles").and_then(|v| v.as_array()).unwrap();
         assert_eq!(articles.len(), 2);
-        assert!(articles[0]["title"]
-            .as_str()
-            .unwrap()
-            .contains("investigation"));
+        assert!(
+            articles[0]["title"]
+                .as_str()
+                .unwrap()
+                .contains("investigation")
+        );
         assert_eq!(articles[0]["tone"], -3.5);
         assert_eq!(articles[1]["domain"], "news.example.org");
     }

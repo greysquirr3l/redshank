@@ -7,6 +7,9 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Ratatui-based TUI for the Redshank investigation agent"
+readme = "../README.md"
+keywords = ["tui", "osint", "investigation", "agent", "llm"]
+categories = ["command-line-interface"]
 
 [dependencies]
 redshank-core = { workspace = true, features = ["runtime"] }
@@ -17,3 +20,6 @@ tokio = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

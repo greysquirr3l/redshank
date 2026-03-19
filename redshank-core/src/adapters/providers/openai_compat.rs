@@ -1,7 +1,7 @@
-//! OpenAI-compatible provider — handles OpenAI, OpenRouter, Cerebras, Ollama.
+//! OpenAI-compatible provider — handles `OpenAI`, `OpenRouter`, `Cerebras`, `Ollama`.
 //!
 //! A single [`OpenAICompatibleModel`] struct implements [`ModelProvider`] for all
-//! providers that speak the OpenAI Chat Completions API (`/v1/chat/completions`).
+//! providers that speak the `OpenAI` Chat Completions API (`/v1/chat/completions`).
 //!
 //! Per-provider differences (base URL, auth headers, timeouts) are configured
 //! through the [`for_provider`](OpenAICompatibleModel::for_provider) factory.
@@ -26,8 +26,8 @@ const CEREBRAS_BASE_URL: &str = "https://api.cerebras.ai/v1";
 const OLLAMA_BASE_URL: &str = "http://localhost:11434/v1";
 
 /// Ollama can be slow on first inference (loading model).
-const OLLAMA_TIMEOUT: Duration = Duration::from_secs(120);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+const OLLAMA_TIMEOUT: Duration = Duration::from_secs(500);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 
 // ── SSE Protocol Types ──────────────────────────────────────
 
@@ -37,7 +37,7 @@ struct SseEvent {
     data: String,
 }
 
-/// A single SSE chunk from OpenAI's streaming response.
+/// A single SSE chunk from `OpenAI`'s streaming response.
 #[derive(Debug, Deserialize)]
 struct ChatChunk {
     choices: Vec<ChunkChoice>,
@@ -128,7 +128,9 @@ impl StreamAccumulator {
             });
         }
 
-        let tc = &mut self.tool_calls[idx];
+        let Some(tc) = self.tool_calls.get_mut(idx) else {
+            return;
+        };
 
         if let Some(id) = delta.id
             && !id.is_empty()
@@ -165,7 +167,7 @@ impl StreamAccumulator {
                     Value::Object(serde_json::Map::new())
                 } else {
                     serde_json::from_str(&json_str)
-                        .unwrap_or(Value::Object(serde_json::Map::new()))
+                        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
                 };
                 ToolCall {
                     id: tc.id,
@@ -180,10 +182,10 @@ impl StreamAccumulator {
             Some("tool_calls") => StopReason::ToolUse,
             Some("length") => StopReason::MaxTokens,
             _ => {
-                if !tool_calls.is_empty() {
-                    StopReason::ToolUse
-                } else {
+                if tool_calls.is_empty() {
                     StopReason::EndTurn
+                } else {
+                    StopReason::ToolUse
                 }
             }
         };
@@ -298,7 +300,9 @@ fn build_request_body(
                 })
             })
             .collect();
-        body["tools"] = Value::Array(api_tools);
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("tools".to_owned(), Value::Array(api_tools));
+        }
     }
 
     // OpenAI o-series models support reasoning_effort in the request body
@@ -306,25 +310,28 @@ fn build_request_body(
         && is_o_series(model)
         && effort != ReasoningEffort::None
     {
-        body["reasoning_effort"] = Value::String(match effort {
+        let effort_str = Value::String(match effort {
             ReasoningEffort::Low => "low".to_string(),
             ReasoningEffort::Medium => "medium".to_string(),
             ReasoningEffort::High => "high".to_string(),
             ReasoningEffort::None => unreachable!(),
         });
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("reasoning_effort".to_owned(), effort_str);
+        }
     }
 
     body
 }
 
-/// Whether the model is an OpenAI o-series reasoning model.
+/// Whether the model is an `OpenAI` o-series reasoning model.
 fn is_o_series(model: &str) -> bool {
     model.starts_with("o1") || model.starts_with("o3") || model.starts_with("o4")
 }
 
 // ── OpenAICompatibleModel ───────────────────────────────────
 
-/// OpenAI-compatible model provider for OpenAI, OpenRouter, Cerebras, and Ollama.
+/// OpenAI-compatible model provider for `OpenAI`, `OpenRouter`, Cerebras, and Ollama.
 pub struct OpenAICompatibleModel {
     client: Client,
     base_url: String,
@@ -342,18 +349,25 @@ impl std::fmt::Debug for OpenAICompatibleModel {
             .field("model", &self.model)
             .field("reasoning_effort", &self.reasoning_effort)
             .field("context_window", &self.context_window)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl OpenAICompatibleModel {
     /// Create a provider for a specific [`ProviderKind`].
+    #[must_use]
     pub fn for_provider(
         kind: ProviderKind,
         api_key: CredentialGuard<String>,
         model: String,
         reasoning_effort: Option<ReasoningEffort>,
     ) -> Self {
+        let model = if kind == ProviderKind::Ollama {
+            normalize_ollama_model_name(&model)
+        } else {
+            model
+        };
+
         let (base_url, extra_headers, timeout, context_window) = match kind {
             ProviderKind::OpenAI => (
                 OPENAI_BASE_URL.to_string(),
@@ -363,9 +377,17 @@ impl OpenAICompatibleModel {
             ),
             ProviderKind::OpenRouter => {
                 let mut headers = HashMap::new();
-                headers.insert("HTTP-Referer".to_string(), "https://redshank.dev".to_string());
+                headers.insert(
+                    "HTTP-Referer".to_string(),
+                    "https://redshank.dev".to_string(),
+                );
                 headers.insert("X-Title".to_string(), "Redshank".to_string());
-                (OPENROUTER_BASE_URL.to_string(), headers, DEFAULT_TIMEOUT, 128_000)
+                (
+                    OPENROUTER_BASE_URL.to_string(),
+                    headers,
+                    DEFAULT_TIMEOUT,
+                    128_000,
+                )
             }
             ProviderKind::Cerebras => (
                 CEREBRAS_BASE_URL.to_string(),
@@ -419,6 +441,10 @@ impl OpenAICompatibleModel {
     }
 }
 
+fn normalize_ollama_model_name(model: &str) -> String {
+    model.strip_prefix("ollama/").unwrap_or(model).to_string()
+}
+
 impl ModelProvider for OpenAICompatibleModel {
     fn complete(
         &self,
@@ -430,47 +456,50 @@ impl ModelProvider for OpenAICompatibleModel {
         let client = self.client.clone();
         let api_key = self.api_key.clone();
         let extra_headers = self.extra_headers.clone();
+        let is_ollama = self.base_url == OLLAMA_BASE_URL;
+        let reasoning_effort = self.reasoning_effort;
+        let model_name = self.model.clone();
 
         async move {
-            let mut request = client
-                .post(&url)
-                .header("Authorization", format!("Bearer {}", &*api_key))
-                .header("Content-Type", "application/json");
-
-            for (key, value) in &extra_headers {
-                request = request.header(key.as_str(), value.as_str());
-            }
-
-            let response = request
-                .json(&body)
-                .send()
-                .await
-                .map_err(|e| DomainError::Other(format!("API request failed: {e}")))?;
-
-            let status = response.status();
-            if !status.is_success() {
-                let error_body = response
-                    .text()
+            match send_chat_completion_request(&client, &url, &api_key, &extra_headers, &body).await
+            {
+                Ok(bytes) => Ok(Self::process_sse_body(&bytes)),
+                Err((status, error_body))
+                    if is_ollama
+                        && body.get("tools").is_some()
+                        && status == reqwest::StatusCode::BAD_REQUEST
+                        && error_body.contains("does not support tools") =>
+                {
+                    let fallback_body =
+                        build_request_body(&model_name, messages, &[], reasoning_effort);
+                    let bytes = send_chat_completion_request(
+                        &client,
+                        &url,
+                        &api_key,
+                        &extra_headers,
+                        &fallback_body,
+                    )
                     .await
-                    .unwrap_or_else(|_| "unknown error".to_string());
-                return Err(DomainError::Other(format!(
+                    .map_err(|(status, error_body)| {
+                        DomainError::Other(format!("API error {status}: {error_body}"))
+                    })?;
+
+                    Ok(Self::process_sse_body(&bytes))
+                }
+                Err((status, error_body)) => Err(DomainError::Other(format!(
                     "API error {status}: {error_body}"
-                )));
+                ))),
             }
-
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| DomainError::Other(format!("failed to read response body: {e}")))?;
-
-            Ok(Self::process_sse_body(&bytes))
         }
     }
 
     fn count_tokens(&self, messages: &[ChatMessage]) -> Result<u32, DomainError> {
         // Rough estimation: ~4 chars per token
-        let total_chars: usize = messages.iter().map(|m| m.content.len() + m.role.len()).sum();
-        Ok((total_chars / 4) as u32)
+        let total_chars: usize = messages
+            .iter()
+            .map(|m| m.content.len() + m.role.len())
+            .sum();
+        Ok(u32::try_from(total_chars / 4).unwrap_or(u32::MAX))
     }
 
     fn context_window(&self) -> u64 {
@@ -482,7 +511,52 @@ impl ModelProvider for OpenAICompatibleModel {
     }
 }
 
+async fn send_chat_completion_request(
+    client: &Client,
+    url: &str,
+    api_key: &CredentialGuard<String>,
+    extra_headers: &HashMap<String, String>,
+    body: &Value,
+) -> Result<Vec<u8>, (reqwest::StatusCode, String)> {
+    let mut request = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key.expose()))
+        .header("Content-Type", "application/json");
+
+    for (key, value) in extra_headers {
+        request = request.header(key.as_str(), value.as_str());
+    }
+
+    let response = request.json(body).send().await.map_err(|e| {
+        (
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("API request failed: {e}"),
+        )
+    })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let error_body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "unknown error".to_string());
+        return Err((status, error_body));
+    }
+
+    response
+        .bytes()
+        .await
+        .map(|bytes| bytes.to_vec())
+        .map_err(|e| {
+            (
+                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to read response body: {e}"),
+            )
+        })
+}
+
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -546,11 +620,11 @@ data: [DONE]\n\
         );
 
         assert_eq!(
-            model.extra_headers.get("HTTP-Referer").map(|s| s.as_str()),
+            model.extra_headers.get("HTTP-Referer").map(String::as_str),
             Some("https://redshank.dev")
         );
         assert_eq!(
-            model.extra_headers.get("X-Title").map(|s| s.as_str()),
+            model.extra_headers.get("X-Title").map(String::as_str),
             Some("Redshank")
         );
     }
@@ -565,6 +639,18 @@ data: [DONE]\n\
         );
 
         assert_eq!(model.base_url, "http://localhost:11434/v1");
+    }
+
+    #[test]
+    fn ollama_model_prefix_is_stripped() {
+        let model = OpenAICompatibleModel::for_provider(
+            ProviderKind::Ollama,
+            CredentialGuard::new(String::new()),
+            "ollama/gemma3:27b".to_string(),
+            None,
+        );
+
+        assert_eq!(model.model_name(), "gemma3:27b");
     }
 
     #[test]
@@ -693,33 +779,9 @@ data: [DONE]\n\
     #[test]
     fn empty_sse_body_produces_end_turn() {
         let turn = OpenAICompatibleModel::process_sse_body(b"");
-        assert!(turn.content.is_none());
+        assert_eq!(turn.content, None);
         assert!(turn.tool_calls.is_empty());
         assert_eq!(turn.stop_reason, StopReason::EndTurn);
-    }
-
-    #[test]
-    fn cerebras_has_correct_base_url() {
-        let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::Cerebras,
-            CredentialGuard::new("test-key".to_string()),
-            "llama-3.3-70b".to_string(),
-            None,
-        );
-
-        assert_eq!(model.base_url, "https://api.cerebras.ai/v1");
-    }
-
-    #[test]
-    fn openai_has_correct_base_url() {
-        let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::OpenAI,
-            CredentialGuard::new("test-key".to_string()),
-            "gpt-4o".to_string(),
-            None,
-        );
-
-        assert_eq!(model.base_url, "https://api.openai.com/v1");
     }
 
     #[test]

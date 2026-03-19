@@ -11,6 +11,11 @@ use std::path::Path;
 const API_BASE: &str = "https://facdissem.census.gov/api/v1.0";
 
 /// Fetch single-audit submissions for the given entity name.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_audits(
     entity_name: &str,
     output_dir: &Path,
@@ -24,10 +29,7 @@ pub async fn fetch_audits(
     for page in 1..=max {
         let resp = client
             .get(format!("{API_BASE}/submissions"))
-            .query(&[
-                ("auditeeName", entity_name),
-                ("page", &page.to_string()),
-            ])
+            .query(&[("auditeeName", entity_name), ("page", &page.to_string())])
             .send()
             .await?;
 
@@ -52,10 +54,7 @@ pub async fn fetch_audits(
         }
         all_records.extend(results);
 
-        let has_next = json
-            .get("next")
-            .map(|v| !v.is_null())
-            .unwrap_or(false);
+        let has_next = json.get("next").is_some_and(|v| !v.is_null());
 
         if !has_next {
             break;
@@ -74,6 +73,7 @@ pub async fn fetch_audits(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn fac_parses_audit_submissions_response() {
@@ -83,11 +83,11 @@ mod tests {
                     "auditeeName": "CITY OF SPRINGFIELD",
                     "ein": "123456789",
                     "auditYear": "2023",
-                    "totalFederalExpenditure": 5000000,
+                    "totalFederalExpenditure": 5_000_000,
                     "findings": [
-                        {"type": "material_weakness", "amount": 250000}
+                        {"type": "material_weakness", "amount": 250_000}
                     ],
-                    "questionedCosts": 50000
+                    "questionedCosts": 50_000
                 }
             ],
             "next": null
@@ -95,7 +95,7 @@ mod tests {
         let results = mock.get("results").and_then(|v| v.as_array()).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0]["auditeeName"], "CITY OF SPRINGFIELD");
-        assert_eq!(results[0]["totalFederalExpenditure"], 5000000);
+        assert_eq!(results[0]["totalFederalExpenditure"], 5_000_000);
         let findings = results[0]["findings"].as_array().unwrap();
         assert_eq!(findings[0]["type"], "material_weakness");
     }

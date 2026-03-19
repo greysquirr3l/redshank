@@ -7,6 +7,11 @@ members = [
     "redshank-cli",
 ]
 
+# Transitive dependency version collisions are outside our control.
+# Allow this cargo lint so it doesn't mask actionable code-quality warnings.
+[workspace.lints.clippy]
+multiple_crate_versions = "allow"
+
 [workspace.package]
 edition = "2024"
 version = "0.1.0"

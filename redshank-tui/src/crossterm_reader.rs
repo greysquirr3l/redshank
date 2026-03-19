@@ -26,11 +26,8 @@ pub async fn spawn_reader(tx: mpsc::Sender<AppEvent>) {
                     break; // channel closed
                 }
             }
-            Ok(Some(_)) => {
-                // Mouse/resize events — ignore
-            }
-            Ok(None) => {
-                // No event within poll window — continue
+            Ok(Some(_) | None) => {
+                // Mouse/resize events or no event within poll window — ignore
             }
             Err(_) => {
                 // spawn_blocking panicked — exit

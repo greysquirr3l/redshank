@@ -15,26 +15,32 @@ impl SettingsStore {
     /// Create a settings store for the given workspace directory.
     ///
     /// Settings file: `<workspace>/.redshank/settings.json`.
+    #[must_use]
     pub fn new(workspace: &Path) -> Self {
         let settings_path = workspace.join(".redshank").join("settings.json");
         Self { settings_path }
     }
 
     /// Path to the settings file.
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.settings_path
     }
 
     /// Load settings from disk. Returns default settings if the file is missing or invalid.
+    #[must_use]
     pub fn load(&self) -> PersistentSettings {
-        let contents = match std::fs::read_to_string(&self.settings_path) {
-            Ok(c) => c,
-            Err(_) => return PersistentSettings::default(),
+        let Ok(contents) = std::fs::read_to_string(&self.settings_path) else {
+            return PersistentSettings::default();
         };
         serde_json::from_str(&contents).unwrap_or_default()
     }
 
     /// Save settings to disk as pretty-printed JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the directory cannot be created or the file cannot be written.
     pub fn save(&self, settings: &PersistentSettings) -> Result<(), DomainError> {
         if let Some(parent) = self.settings_path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -45,9 +51,8 @@ impl SettingsStore {
             })?;
         }
 
-        let json = serde_json::to_string_pretty(settings).map_err(|e| {
-            DomainError::Other(format!("failed to serialize settings: {e}"))
-        })?;
+        let json = serde_json::to_string_pretty(settings)
+            .map_err(|e| DomainError::Other(format!("failed to serialize settings: {e}")))?;
 
         std::fs::write(&self.settings_path, &json).map_err(|e| {
             DomainError::Other(format!(
@@ -59,6 +64,7 @@ impl SettingsStore {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::domain::agent::ReasoningEffort;

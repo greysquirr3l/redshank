@@ -1,6 +1,6 @@
 //! `RLMEngine` — recursive tool-calling agent loop.
 //!
-//! Mirrors `agent/engine.py` from the OpenPlanter Python implementation.
+//! Mirrors `agent/engine.py` from the `OpenPlanter` Python implementation.
 //! The engine runs a model → tool-dispatch → model loop, supporting:
 //!
 //! - Step budget (`max_steps`)
@@ -15,7 +15,7 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
-use crate::application::services::condensation::{condense_tool_outputs, ContextTracker};
+use crate::application::services::condensation::{ContextTracker, condense_tool_outputs};
 use crate::domain::agent::AgentConfig;
 use crate::domain::errors::DomainError;
 use crate::domain::session::{StopReason, ToolCall, ToolResult};
@@ -39,19 +39,21 @@ impl ExternalContext {
     }
 
     /// Summary of recent observations for prompt injection.
+    #[must_use]
     pub fn summary(&self, max_items: usize, max_chars: usize) -> String {
         if self.observations.is_empty() || max_items == 0 {
             return "(empty)".to_owned();
         }
         let start = self.observations.len().saturating_sub(max_items);
-        let recent = &self.observations[start..];
+        let recent = self.observations.get(start..).unwrap_or_default();
         let joined = recent.join("\n\n");
         if joined.len() <= max_chars {
             joined
         } else {
+            let safe_end = joined.floor_char_boundary(max_chars);
             format!(
                 "{}\n...[truncated external context]...",
-                &joined[..max_chars]
+                &joined[..safe_end]
             )
         }
     }
@@ -100,6 +102,10 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
     }
 
     /// Entry point: solve an objective.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the model provider or tool dispatcher fails.
     pub async fn solve(
         &self,
         objective: &str,
@@ -117,154 +123,164 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
         depth: u32,
         tools: &'a [ToolDefinition],
         context: &'a mut ExternalContext,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DomainError>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DomainError>> + Send + 'a>>
+    {
         Box::pin(async move {
-        let mut messages: Vec<ChatMessage> = vec![ChatMessage {
-            role: "user".to_owned(),
-            content: format!(
-                r#"{{"objective":"{}","depth":{},"max_depth":{},"workspace":"{}","external_context":"{}"}}"#,
-                objective,
-                depth,
-                self.config.max_depth,
-                self.config.workspace.display(),
-                context.summary(12, 8000),
-            ),
-            tool_calls: Vec::new(),
-            tool_call_id: None,
-        }];
-
-        for step in 1..=self.config.max_steps {
-            // Check cancellation.
-            #[cfg(feature = "runtime")]
-            if self.cancel_token.is_cancelled() {
-                return Ok("Task cancelled.".to_owned());
-            }
-
-            // Call the model.
-            let turn = self.model.complete(&messages, tools).await?;
-
-            // Update token tracking.
-            let input_tokens = self.model.count_tokens(&messages).unwrap_or(0);
-            self.context_tracker
-                .clone()
-                .set_used_tokens(input_tokens as u64);
-
-            // Condense if needed.
-            if self.context_tracker.should_condense() {
-                condense_tool_outputs(&mut messages);
-            }
-
-            // Append assistant message.
-            messages.push(ChatMessage {
-                role: "assistant".to_owned(),
-                content: turn.content.clone().unwrap_or_default(),
-                tool_calls: turn.tool_calls.clone(),
+            let mut messages: Vec<ChatMessage> = vec![ChatMessage {
+                role: "user".to_owned(),
+                content: format!(
+                    r#"{{"objective":"{}","depth":{},"max_depth":{},"workspace":"{}","external_context":"{}"}}"#,
+                    objective,
+                    depth,
+                    self.config.max_depth,
+                    self.config.workspace.display(),
+                    context.summary(12, 8000),
+                ),
+                tool_calls: Vec::new(),
                 tool_call_id: None,
-            });
+            }];
 
-            // No tool calls → final answer or empty nudge.
-            if turn.tool_calls.is_empty() {
-                if let Some(text) = &turn.content
-                    && !text.is_empty()
-                {
-                    return Ok(text.clone());
+            for step in 1..=self.config.max_steps {
+                // Check cancellation.
+                #[cfg(feature = "runtime")]
+                if self.cancel_token.is_cancelled() {
+                    return Ok("Task cancelled.".to_owned());
                 }
-                // Empty response — nudge.
+
+                // Call the model.
+                let turn = self.model.complete(&messages, tools).await?;
+
+                // Update token tracking.
+                let input_tokens = self.model.count_tokens(&messages).unwrap_or(0);
+                self.context_tracker
+                    .clone()
+                    .set_used_tokens(u64::from(input_tokens));
+
+                // Condense if needed.
+                if self.context_tracker.should_condense() {
+                    condense_tool_outputs(&mut messages);
+                }
+
+                // Append assistant message.
+                messages.push(ChatMessage {
+                    role: "assistant".to_owned(),
+                    content: turn.content.clone().unwrap_or_default(),
+                    tool_calls: turn.tool_calls.clone(),
+                    tool_call_id: None,
+                });
+
+                // No tool calls → final answer or empty nudge.
+                if turn.tool_calls.is_empty() {
+                    if let Some(text) = &turn.content
+                        && !text.is_empty()
+                    {
+                        return Ok(text.clone());
+                    }
+                    // Empty response — nudge.
+                    messages.push(ChatMessage {
+                        role: "tool".to_owned(),
+                        content: "No tool calls and no text in response. \
+                              Please use a tool or provide a final answer."
+                            .to_owned(),
+                        tool_calls: Vec::new(),
+                        tool_call_id: Some("empty".to_owned()),
+                    });
+                    continue;
+                }
+
+                // Dispatch tool calls; returns Some(answer) when done.
+                if let Some(answer) = self
+                    .process_tool_calls(&mut messages, &turn, depth, tools, context, step)
+                    .await?
+                {
+                    return Ok(answer);
+                }
+            }
+
+            // Step budget exhausted.
+            Ok(format!(
+                "Step budget exhausted at depth {depth} for objective: {objective}\n\
+             Try a more specific task, higher step budget, or deeper recursion."
+            ))
+        }) // end Box::pin
+    }
+
+    /// Dispatch the tool calls from one model turn, pushing results into `messages`.
+    ///
+    /// Returns `Ok(Some(answer))` when a final answer is determined, `Ok(None)` to continue.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`DomainError`] from the model provider on the `EndTurn` path exclusively;
+    /// tool dispatch errors are converted to error [`ToolResult`] entries instead.
+    async fn process_tool_calls<'a>(
+        &'a self,
+        messages: &mut Vec<ChatMessage>,
+        turn: &crate::domain::session::ModelTurn,
+        depth: u32,
+        tools: &'a [ToolDefinition],
+        context: &'a mut ExternalContext,
+        step: u32,
+    ) -> Result<Option<String>, DomainError> {
+        for tc in &turn.tool_calls {
+            // Runtime policy: block repeated shell commands.
+            if let Some(blocked_msg) = self.runtime_policy_check(&tc.name, &tc.arguments, depth) {
                 messages.push(ChatMessage {
                     role: "tool".to_owned(),
-                    content: "No tool calls and no text in response. \
-                              Please use a tool or provide a final answer."
-                        .to_owned(),
+                    content: blocked_msg,
                     tool_calls: Vec::new(),
-                    tool_call_id: Some("empty".to_owned()),
+                    tool_call_id: Some(tc.id.clone()),
                 });
                 continue;
             }
 
-            // Process tool calls.
-            let mut final_answer: Option<String> = None;
-
-            for tc in &turn.tool_calls {
-                // Runtime policy: block repeated shell commands.
-                if let Some(blocked_msg) = self.runtime_policy_check(&tc.name, &tc.arguments, depth)
-                {
-                    messages.push(ChatMessage {
-                        role: "tool".to_owned(),
-                        content: blocked_msg,
-                        tool_calls: Vec::new(),
-                        tool_call_id: Some(tc.id.clone()),
-                    });
-                    continue;
+            // Subtask handling.
+            if tc.name == "subtask" {
+                let result = self.handle_subtask(tc, depth, tools, context).await;
+                if !result.is_error {
+                    context.add(format!("[depth {depth} subtask] {}", &result.content));
                 }
-
-                // Subtask handling.
-                if tc.name == "subtask" {
-                    let result = self.handle_subtask(tc, depth, tools, context).await;
-                    messages.push(ChatMessage {
-                        role: "tool".to_owned(),
-                        content: result.content.clone(),
-                        tool_calls: Vec::new(),
-                        tool_call_id: Some(tc.id.clone()),
-                    });
-                    if !result.is_error {
-                        context.add(format!(
-                            "[depth {} subtask] {}",
-                            depth, &result.content
-                        ));
-                    }
-                    continue;
-                }
-
-                // Regular tool dispatch.
-                let auth = crate::domain::auth::AuthContext::system();
-                let result = self
-                    .tools
-                    .dispatch(&auth, &tc.name, tc.arguments.clone())
-                    .await
-                    .unwrap_or_else(|e| ToolResult {
-                        call_id: tc.id.clone(),
-                        content: format!("Tool error: {e}"),
-                        is_error: true,
-                    });
-
-                // Clip observation.
-                let content = clip_observation(&result.content, self.config.max_observation_chars);
-
                 messages.push(ChatMessage {
                     role: "tool".to_owned(),
-                    content: content.clone(),
+                    content: result.content,
                     tool_calls: Vec::new(),
                     tool_call_id: Some(tc.id.clone()),
                 });
-
-                context.add(format!(
-                    "[depth {} step {}] {}",
-                    depth,
-                    step,
-                    &content[..content.len().min(200)]
-                ));
+                continue;
             }
 
-            // Check for EndTurn stop reason (model finished).
-            if turn.stop_reason == StopReason::EndTurn
-                && let Some(text) = &turn.content
-                && !text.is_empty()
-            {
-                final_answer = Some(text.clone());
-            }
-
-            if let Some(answer) = final_answer {
-                return Ok(answer);
-            }
+            // Regular tool dispatch.
+            let auth = crate::domain::auth::AuthContext::system();
+            let raw = self
+                .tools
+                .dispatch(&auth, &tc.name, tc.arguments.clone())
+                .await
+                .unwrap_or_else(|e| ToolResult {
+                    call_id: tc.id.clone(),
+                    content: format!("Tool error: {e}"),
+                    is_error: true,
+                });
+            let observation = clip_observation(&raw.content, self.config.max_observation_chars);
+            context.add(format!(
+                "[depth {depth} step {step}] {}",
+                &observation[..observation.len().min(200)]
+            ));
+            messages.push(ChatMessage {
+                role: "tool".to_owned(),
+                content: observation,
+                tool_calls: Vec::new(),
+                tool_call_id: Some(tc.id.clone()),
+            });
         }
 
-        // Step budget exhausted.
-        Ok(format!(
-            "Step budget exhausted at depth {} for objective: {}\n\
-             Try a more specific task, higher step budget, or deeper recursion.",
-            depth, objective
-        ))
-        }) // end Box::pin
+        // Final answer check: EndTurn with non-empty text.
+        if turn.stop_reason == StopReason::EndTurn
+            && let Some(text) = &turn.content
+            && !text.is_empty()
+        {
+            return Ok(Some(text.clone()));
+        }
+        Ok(None)
     }
 
     /// Handle a subtask tool call by recursing.
@@ -275,7 +291,7 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
         tools: &[ToolDefinition],
         context: &mut ExternalContext,
     ) -> ToolResult {
-        if depth >= self.config.max_depth as u32 {
+        if depth >= u32::from(self.config.max_depth) {
             return ToolResult {
                 call_id: tc.id.clone(),
                 content: format!(
@@ -311,12 +327,7 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
     }
 
     /// Runtime policy: block identical `run_shell` commands repeated more than twice.
-    fn runtime_policy_check(
-        &self,
-        name: &str,
-        args: &Value,
-        depth: u32,
-    ) -> Option<String> {
+    fn runtime_policy_check(&self, name: &str, args: &Value, depth: u32) -> Option<String> {
         if name != "run_shell" {
             return None;
         }
@@ -330,30 +341,39 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
             return None;
         }
         let key = (depth, command);
-        let mut counts = self.shell_command_counts.lock().unwrap();
+        let mut counts = self
+            .shell_command_counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let count = counts.entry(key).or_insert(0);
         *count += 1;
-        if *count <= MAX_SHELL_REPEATS {
-            None
-        } else {
+        let over_limit = *count > MAX_SHELL_REPEATS;
+        drop(counts);
+        if over_limit {
             Some(
                 "Blocked by runtime policy: identical run_shell command repeated more than twice \
                  at the same depth. Change strategy instead of retrying the same command."
                     .to_owned(),
             )
+        } else {
+            None
         }
     }
 }
 
-/// Truncate an observation to `max_chars`.
+/// Truncate an observation to at most `max_chars` bytes.
+///
+/// Uses [`str::floor_char_boundary`] to avoid splitting multi-byte
+/// UTF-8 codepoints.
 fn clip_observation(text: &str, max_chars: usize) -> String {
     if text.len() <= max_chars {
         text.to_owned()
     } else {
+        let safe_end = text.floor_char_boundary(max_chars);
         format!(
             "{}\n...[truncated {} chars]...",
-            &text[..max_chars],
-            text.len() - max_chars
+            &text[..safe_end],
+            text.len() - safe_end
         )
     }
 }
@@ -363,6 +383,7 @@ fn clip_observation(text: &str, max_chars: usize) -> String {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::domain::auth::AuthContext;
@@ -409,7 +430,7 @@ mod tests {
             self.context_window
         }
 
-        fn model_name(&self) -> &str {
+        fn model_name(&self) -> &'static str {
             "scripted-test"
         }
     }
@@ -466,12 +487,7 @@ mod tests {
         model: ScriptedModel,
         dispatcher: ScriptedDispatcher,
     ) -> RLMEngine<ScriptedModel, ScriptedDispatcher, NoopReplayLog> {
-        RLMEngine::new(
-            AgentConfig::default(),
-            model,
-            dispatcher,
-            NoopReplayLog,
-        )
+        RLMEngine::new(AgentConfig::default(), model, dispatcher, NoopReplayLog)
     }
 
     // ── Tests ───────────────────────────────────────────────────────────────
@@ -691,10 +707,7 @@ mod tests {
 
     #[test]
     fn runtime_policy_allows_first_two() {
-        let engine = make_engine(
-            ScriptedModel::new(vec![]),
-            ScriptedDispatcher::new(vec![]),
-        );
+        let engine = make_engine(ScriptedModel::new(vec![]), ScriptedDispatcher::new(vec![]));
         let args = serde_json::json!({"command": "ls -la"});
 
         assert!(engine.runtime_policy_check("run_shell", &args, 0).is_none());
@@ -704,10 +717,7 @@ mod tests {
 
     #[test]
     fn runtime_policy_different_depth_resets() {
-        let engine = make_engine(
-            ScriptedModel::new(vec![]),
-            ScriptedDispatcher::new(vec![]),
-        );
+        let engine = make_engine(ScriptedModel::new(vec![]), ScriptedDispatcher::new(vec![]));
         let args = serde_json::json!({"command": "ls -la"});
 
         assert!(engine.runtime_policy_check("run_shell", &args, 0).is_none());
@@ -720,16 +730,11 @@ mod tests {
 
     #[test]
     fn runtime_policy_ignores_non_shell() {
-        let engine = make_engine(
-            ScriptedModel::new(vec![]),
-            ScriptedDispatcher::new(vec![]),
-        );
+        let engine = make_engine(ScriptedModel::new(vec![]), ScriptedDispatcher::new(vec![]));
         let args = serde_json::json!({"path": "/tmp"});
 
         for _ in 0..10 {
-            assert!(engine
-                .runtime_policy_check("read_file", &args, 0)
-                .is_none());
+            assert!(engine.runtime_policy_check("read_file", &args, 0).is_none());
         }
     }
 }

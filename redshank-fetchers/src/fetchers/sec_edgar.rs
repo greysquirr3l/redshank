@@ -11,12 +11,13 @@ use std::path::Path;
 const SUBMISSIONS_BASE: &str = "https://data.sec.gov/submissions";
 
 /// Resolve a ticker symbol to a 10-digit CIK string.
+#[must_use]
 pub fn resolve_ticker(tickers_json: &serde_json::Value, ticker: &str) -> Option<String> {
     let upper = ticker.to_uppercase();
     if let Some(obj) = tickers_json.as_object() {
         for entry in obj.values() {
-            if entry.get("ticker").and_then(|t| t.as_str()) == Some(&upper)
-                && let Some(cik) = entry.get("cik_str").and_then(|c| c.as_u64())
+            if entry.get("ticker").and_then(serde_json::Value::as_str) == Some(&upper)
+                && let Some(cik) = entry.get("cik_str").and_then(serde_json::Value::as_u64)
             {
                 return Some(format!("CIK{cik:010}"));
             }
@@ -26,10 +27,12 @@ pub fn resolve_ticker(tickers_json: &serde_json::Value, ticker: &str) -> Option<
 }
 
 /// Fetch SEC EDGAR submissions for a CIK.
-pub async fn fetch_submissions(
-    cik: &str,
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_submissions(cik: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let url = format!("{SUBMISSIONS_BASE}/{cik}.json");
 
@@ -57,14 +60,15 @@ pub async fn fetch_submissions(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn sec_edgar_ticker_resolution_parses_company_tickers_json() {
         let fixture = serde_json::json!({
-            "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
-            "1": {"cik_str": 789019, "ticker": "MSFT", "title": "MICROSOFT CORP"},
+            "0": {"cik_str": 320_193, "ticker": "AAPL", "title": "Apple Inc."},
+            "1": {"cik_str": 789_019, "ticker": "MSFT", "title": "MICROSOFT CORP"},
         });
         let cik = resolve_ticker(&fixture, "AAPL").unwrap();
         assert_eq!(cik, "CIK0000320193");

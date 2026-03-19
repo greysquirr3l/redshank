@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://banks.data.fdic.gov/api";
 
 /// Fetch FDIC institution data.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_institutions(
     query: &str,
     output_dir: &Path,
@@ -23,7 +28,7 @@ pub async fn fetch_institutions(
 
     for page in 0..max {
         let offset = page * limit;
-        let filter = format!("INSTNAME:\"{}\"", query);
+        let filter = format!("INSTNAME:\"{query}\"");
         let resp = client
             .get(format!("{API_BASE}/financials"))
             .query(&[
@@ -57,11 +62,13 @@ pub async fn fetch_institutions(
         }
         all_records.extend(data);
 
-        let total = json
-            .get("totals")
-            .and_then(|t| t.get("count"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let total = usize::try_from(
+            json.get("totals")
+                .and_then(|t| t.get("count"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+        )
+        .unwrap_or(usize::MAX);
 
         if all_records.len() >= total {
             break;
@@ -81,6 +88,7 @@ pub async fn fetch_institutions(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn fdic_parses_institution_response() {

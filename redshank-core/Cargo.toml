@@ -7,6 +7,9 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Core domain, ports, application, and adapters for the Redshank investigation agent"
+readme = "../README.md"
+keywords = ["osint", "investigation", "agent", "llm", "knowledge-graph"]
+categories = ["command-line-utilities", "science"]
 
 [dependencies]
 serde = { workspace = true }
@@ -41,3 +44,6 @@ coraline = ["runtime"]
 [dev-dependencies]
 tokio = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

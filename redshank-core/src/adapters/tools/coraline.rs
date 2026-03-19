@@ -102,10 +102,7 @@ fn parse_mcp_response(raw: &str) -> String {
 
 /// Read a file via Coraline's code-aware reader.
 pub(super) async fn coraline_read_file(tools: &WorkspaceTools, arguments: &Value) -> String {
-    let path = arguments
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
     if path.is_empty() {
         return "Missing required parameter: path".to_string();
     }
@@ -128,7 +125,7 @@ pub(super) async fn coraline_search(tools: &WorkspaceTools, arguments: &Value) -
     }
     let max_results = arguments
         .get("max_results")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(10);
     mcp_call(
         &tools.root,
@@ -142,7 +139,7 @@ pub(super) async fn coraline_search(tools: &WorkspaceTools, arguments: &Value) -
 pub(super) async fn coraline_repo_map(tools: &WorkspaceTools, arguments: &Value) -> String {
     let max_depth = arguments
         .get("max_depth")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(3);
     mcp_call(
         &tools.root,
@@ -154,10 +151,7 @@ pub(super) async fn coraline_repo_map(tools: &WorkspaceTools, arguments: &Value)
 
 /// Edit a file via Coraline's code-aware editor.
 pub(super) async fn coraline_edit_file(tools: &WorkspaceTools, arguments: &Value) -> String {
-    let path = arguments
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let path = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
     let old_str = arguments
         .get("old_str")
         .and_then(|v| v.as_str())

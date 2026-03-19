@@ -1,0 +1,285 @@
+/* ============================================================
+ * Redshank mdBook Theme
+ * Based on the 2026 UI design system in docs/dev/
+ * ============================================================ */
+
+/* ── Core palette (matches 2026_pattern_lab.html) ── */
+:root {
+  --bg-base: #0a0e27;
+  --bg-surface: #131836;
+  --bg-surface-highlight: #1c2345;
+
+  --text-primary: #fafbfc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  --neon-cyan: #00f5ff;
+  --neon-coral: #ff006e;
+  --electric-purple: #764ba2;
+  --electric-blue: #667eea;
+
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-mid: rgba(255, 255, 255, 0.14);
+
+  /* 8-point spacing grid */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-6: 48px;
+}
+
+/* ── Base overrides ── */
+body,
+.sidebar,
+.content main {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-light);
+}
+
+.sidebar .sidebar-scrollbox {
+  padding: var(--space-3) var(--space-2);
+}
+
+.sidebar a {
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+  color: var(--neon-cyan);
+}
+
+.sidebar .chapter li.chapter-item > a.active {
+  color: var(--neon-cyan);
+  font-weight: 600;
+}
+
+/* ── Top nav bar ── */
+#menu-bar {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
+  backdrop-filter: blur(12px);
+}
+
+#menu-bar .menu-title {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ── Content area ── */
+.content main {
+  max-width: 860px;
+  padding: var(--space-6) var(--space-4);
+}
+
+/* ── Headings ── */
+h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: var(--space-3);
+  background: linear-gradient(
+    135deg,
+    var(--neon-cyan) 0%,
+    var(--electric-blue) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: var(--space-1);
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+}
+
+h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+h4,
+h5,
+h6 {
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Body text ── */
+p {
+  color: var(--text-secondary);
+  line-height: 1.75;
+  margin-bottom: var(--space-2);
+}
+
+/* ── Links ── */
+a {
+  color: var(--neon-cyan);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* ── Code blocks ── */
+pre {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
+  padding: var(--space-3) !important;
+  overflow-x: auto;
+}
+
+code {
+  background: var(--bg-surface-highlight);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.88em;
+  color: var(--neon-cyan);
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+/* ── Tables ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-3) 0;
+  font-size: 0.95rem;
+}
+
+thead tr {
+  background: var(--bg-surface-highlight);
+  border-bottom: 1px solid var(--border-mid);
+}
+
+th {
+  color: var(--neon-cyan);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+td {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Blockquotes ── */
+blockquote {
+  border-left: 3px solid var(--neon-cyan);
+  background: var(--bg-surface);
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 0 8px 8px 0;
+}
+
+blockquote p {
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* ── Lists ── */
+ul,
+ol {
+  color: var(--text-secondary);
+  padding-left: var(--space-3);
+  line-height: 1.75;
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+/* ── Horizontal rule ── */
+hr {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: var(--space-6) 0;
+}
+
+/* ── Search ── */
+#searchresults a {
+  color: var(--text-primary);
+}
+
+#searchresults .searchresults-outer {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-mid);
+  border-radius: 12px;
+}
+
+/* ── Page navigation arrows ── */
+.nav-chapters {
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+.nav-chapters:hover {
+  color: var(--neon-cyan);
+}
+
+/* ── Warning/note callout boxes ── */
+.warning {
+  background: rgba(255, 0, 110, 0.08);
+  border-left: 3px solid var(--neon-coral);
+  border-radius: 0 8px 8px 0;
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0;
+}
+
+.note {
+  background: rgba(0, 245, 255, 0.06);
+  border-left: 3px solid var(--neon-cyan);
+  border-radius: 0 8px 8px 0;
+  padding: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0;
+}

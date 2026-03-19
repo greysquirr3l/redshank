@@ -1,5 +1,7 @@
-//! Filesystem tools: list_files, search_files, repo_map, read_file, write_file,
-//! edit_file, hashline_edit, read_image, apply_patch.
+//! Filesystem tools: `list_files`, `search_files`, `repo_map`, `read_file`, `write_file`,
+//! `edit_file`, `hashline_edit`, `read_image`, `apply_patch`.
+
+use std::fmt::Write as _;
 
 use super::workspace_tools::WorkspaceTools;
 use serde_json::Value;
@@ -17,20 +19,23 @@ pub async fn list_files(ws: &WorkspaceTools, args: &Value) -> String {
     let glob = args.get("glob").and_then(|v| v.as_str());
 
     // Try ripgrep first, fall back to walkdir
-    let files = match list_files_rg(&ws.root, glob, ws.command_timeout_secs).await {
-        Some(files) => files,
-        None => list_files_walk(&ws.root, glob, 50_000),
-    };
+    let files = list_files_rg(&ws.root, glob, ws.command_timeout_secs)
+        .await
+        .unwrap_or_else(|| list_files_walk(&ws.root, glob, 50_000));
 
     if files.is_empty() {
         return "(no files)".to_string();
     }
 
-    let clipped: Vec<&str> = files.iter().map(|s| s.as_str()).take(ws.max_files_listed).collect();
+    let clipped: Vec<&str> = files
+        .iter()
+        .map(String::as_str)
+        .take(ws.max_files_listed)
+        .collect();
     let mut output = clipped.join("\n");
     if files.len() > clipped.len() {
         let omitted = files.len() - clipped.len();
-        output.push_str(&format!("\n...[omitted {omitted} files]..."));
+        let _ = write!(output, "\n...[omitted {omitted} files]...");
     }
     output
 }
@@ -55,24 +60,21 @@ async fn list_files_rg(root: &Path, glob: Option<&str>, timeout_secs: u64) -> Op
         cmd.args(["-g", g]);
     }
 
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        cmd.output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let output = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), cmd.output())
+        .await
+        .ok()?
+        .ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let lines: Vec<String> = stdout
         .lines()
         .filter(|l| !l.trim().is_empty())
-        .map(|l| l.to_string())
+        .map(ToString::to_string)
         .collect();
     Some(lines)
 }
 
-/// List files using std::fs walk (fallback).
+/// List files using `std::fs` walk (fallback).
 fn list_files_walk(root: &Path, glob: Option<&str>, max_entries: usize) -> Vec<String> {
     let mut results = Vec::new();
     let mut count = 0;
@@ -89,14 +91,12 @@ fn walk_dir(
     count: &mut usize,
     results: &mut Vec<String>,
 ) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
     for entry in entries {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(_) => continue,
+        let Ok(entry) = entry else {
+            continue;
         };
         let path = entry.path();
         let name = entry.file_name();
@@ -147,7 +147,14 @@ pub async fn search_files(ws: &WorkspaceTools, args: &Value) -> String {
     let glob = args.get("glob").and_then(|v| v.as_str());
 
     // Try ripgrep first
-    if let Some(result) = search_rg(&ws.root, query, glob, ws.max_search_hits, ws.command_timeout_secs).await
+    if let Some(result) = search_rg(
+        &ws.root,
+        query,
+        glob,
+        ws.max_search_hits,
+        ws.command_timeout_secs,
+    )
+    .await
     {
         return result;
     }
@@ -181,13 +188,10 @@ async fn search_rg(
         cmd.args(["-g", g]);
     }
 
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        cmd.output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let output = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), cmd.output())
+        .await
+        .ok()?
+        .ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -199,9 +203,6 @@ async fn search_rg(
 }
 
 fn search_walk(root: &Path, query: &str, _glob: Option<&str>, max_hits: usize) -> String {
-    let lower_query = query.to_lowercase();
-    let mut matches = Vec::new();
-
     fn walk_search(
         dir: &Path,
         root: &Path,
@@ -209,17 +210,15 @@ fn search_walk(root: &Path, query: &str, _glob: Option<&str>, max_hits: usize) -
         max_hits: usize,
         matches: &mut Vec<String>,
     ) {
-        let entries = match std::fs::read_dir(dir) {
-            Ok(e) => e,
-            Err(_) => return,
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
         };
         for entry in entries {
             if matches.len() >= max_hits {
                 return;
             }
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
+            let Ok(entry) = entry else {
+                continue;
             };
             let path = entry.path();
             if path.file_name().is_some_and(|n| n == ".git") {
@@ -235,18 +234,15 @@ fn search_walk(root: &Path, query: &str, _glob: Option<&str>, max_hits: usize) -
                     if line.to_lowercase().contains(lower_query)
                         && let Ok(rel) = path.strip_prefix(root)
                     {
-                        matches.push(format!(
-                            "{}:{}:{}",
-                            rel.display(),
-                            idx + 1,
-                            line,
-                        ));
+                        matches.push(format!("{}:{}:{}", rel.display(), idx + 1, line,));
                     }
                 }
             }
         }
     }
 
+    let lower_query = query.to_lowercase();
+    let mut matches = Vec::new();
     walk_search(root, root, &lower_query, max_hits, &mut matches);
     if matches.is_empty() {
         "(no matches)".to_string()
@@ -260,24 +256,22 @@ pub async fn repo_map(ws: &WorkspaceTools, args: &Value) -> String {
     let glob = args.get("glob").and_then(|v| v.as_str());
     let max_files = args
         .get("max_files")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(200)
         .clamp(1, 500) as usize;
 
     // Get file list
-    let files = match list_files_rg(&ws.root, glob, ws.command_timeout_secs).await {
-        Some(f) => f,
-        None => list_files_walk(&ws.root, glob, 50_000),
-    };
-    let candidates: Vec<&str> = files.iter().map(|s| s.as_str()).take(max_files).collect();
+    let files = list_files_rg(&ws.root, glob, ws.command_timeout_secs)
+        .await
+        .unwrap_or_else(|| list_files_walk(&ws.root, glob, 50_000));
+    let candidates: Vec<&str> = files.iter().map(String::as_str).take(max_files).collect();
     if candidates.is_empty() {
         return "(no files)".to_string();
     }
 
     let source_extensions = [
-        ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java",
-        ".c", ".h", ".cpp", ".hpp", ".cs", ".rb", ".php", ".swift",
-        ".kt", ".scala", ".sh",
+        ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java", ".c", ".h", ".cpp", ".hpp",
+        ".cs", ".rb", ".php", ".swift", ".kt", ".scala", ".sh",
     ];
 
     let mut file_entries = Vec::new();
@@ -294,9 +288,8 @@ pub async fn repo_map(ws: &WorkspaceTools, args: &Value) -> String {
         if !full_path.exists() || full_path.is_dir() {
             continue;
         }
-        let text = match std::fs::read_to_string(&full_path) {
-            Ok(t) => t,
-            Err(_) => continue,
+        let Ok(text) = std::fs::read_to_string(&full_path) else {
+            continue;
         };
         let symbols = extract_symbols(&text);
         let lines = text.lines().count();
@@ -321,52 +314,71 @@ fn extract_symbols(text: &str) -> Vec<serde_json::Value> {
     use regex::Regex;
     use std::sync::LazyLock;
 
-    static FUNC_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?m)^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*[(<]").unwrap());
-    static CLASS_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?m)^\s*(?:pub\s+)?(?:struct|enum|trait|class|interface)\s+(\w+)").unwrap());
-    static JS_FUNC_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(").unwrap());
-    static PY_FUNC_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?m)^(?:async\s+)?def\s+(\w+)\s*\(").unwrap());
-    static PY_CLASS_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?m)^class\s+(\w+)").unwrap());
+    static FUNC_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*[(<]")
+            .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+    });
+    static CLASS_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^\s*(?:pub\s+)?(?:struct|enum|trait|class|interface)\s+(\w+)")
+            .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+    });
+    static JS_FUNC_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(")
+            .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+    });
+    static PY_FUNC_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^(?:async\s+)?def\s+(\w+)\s*\(")
+            .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+    });
+    static PY_CLASS_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^class\s+(\w+)")
+            .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"))
+    });
+
+    let cap_line = |cap: &regex::Captures<'_>| {
+        text.get(..cap.get(0).map_or(0, |m| m.start()))
+            .map_or(0, |s| s.lines().count())
+            + 1
+    };
 
     let mut symbols = Vec::new();
     for cap in FUNC_RE.captures_iter(text) {
-        let line = text[..cap.get(0).unwrap().start()].lines().count() + 1;
+        let line = cap_line(&cap);
         symbols.push(serde_json::json!({"kind": "function", "name": &cap[1], "line": line}));
     }
     for cap in CLASS_RE.captures_iter(text) {
-        let line = text[..cap.get(0).unwrap().start()].lines().count() + 1;
+        let line = cap_line(&cap);
         symbols.push(serde_json::json!({"kind": "class", "name": &cap[1], "line": line}));
     }
     for cap in JS_FUNC_RE.captures_iter(text) {
-        let line = text[..cap.get(0).unwrap().start()].lines().count() + 1;
+        let line = cap_line(&cap);
         symbols.push(serde_json::json!({"kind": "function", "name": &cap[1], "line": line}));
     }
     for cap in PY_FUNC_RE.captures_iter(text) {
-        let line = text[..cap.get(0).unwrap().start()].lines().count() + 1;
+        let line = cap_line(&cap);
         symbols.push(serde_json::json!({"kind": "function", "name": &cap[1], "line": line}));
     }
     for cap in PY_CLASS_RE.captures_iter(text) {
-        let line = text[..cap.get(0).unwrap().start()].lines().count() + 1;
+        let line = cap_line(&cap);
         symbols.push(serde_json::json!({"kind": "class", "name": &cap[1], "line": line}));
     }
-    symbols.sort_by_key(|s| s["line"].as_u64().unwrap_or(0));
+    symbols.sort_by_key(|s| {
+        s.get("line")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0)
+    });
     symbols.truncate(200);
     symbols
 }
 
 /// Read a file with hashline numbering.
 pub async fn read_file(ws: &WorkspaceTools, args: &Value) -> String {
-    let path = match args.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
-        None => return "read_file requires 'path' parameter".to_string(),
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return "read_file requires 'path' parameter".to_string();
     };
     let hashline = args
         .get("hashline")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(true);
 
     let resolved = match ws.resolve_path(path) {
@@ -391,8 +403,7 @@ pub async fn read_file(ws: &WorkspaceTools, args: &Value) -> String {
     let clipped = WorkspaceTools::clip(&text, ws.max_file_chars);
     let rel = resolved
         .strip_prefix(&ws.root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.to_string());
+        .map_or_else(|_| path.to_string(), |p| p.to_string_lossy().to_string());
 
     let numbered = if hashline {
         clipped
@@ -414,10 +425,12 @@ pub async fn read_file(ws: &WorkspaceTools, args: &Value) -> String {
 }
 
 /// Read an image file, returning base64-encoded data.
+#[allow(clippy::unused_async)]
 pub async fn read_image(ws: &WorkspaceTools, args: &Value) -> String {
-    let path = match args.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
-        None => return "read_image requires 'path' parameter".to_string(),
+    use base64::Engine;
+    const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return "read_image requires 'path' parameter".to_string();
     };
 
     let resolved = match ws.resolve_path(path) {
@@ -435,7 +448,7 @@ pub async fn read_image(ws: &WorkspaceTools, args: &Value) -> String {
     let ext = resolved
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
+        .map(str::to_lowercase)
         .unwrap_or_default();
 
     let mime = match ext.as_str() {
@@ -450,7 +463,6 @@ pub async fn read_image(ws: &WorkspaceTools, args: &Value) -> String {
         }
     };
 
-    const MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
     match std::fs::metadata(&resolved) {
         Ok(meta) if meta.len() > MAX_IMAGE_BYTES => {
             return format!(
@@ -468,12 +480,10 @@ pub async fn read_image(ws: &WorkspaceTools, args: &Value) -> String {
         Err(e) => return format!("Failed to read image {path}: {e}"),
     };
 
-    use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&raw);
     let rel = resolved
         .strip_prefix(&ws.root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.to_string());
+        .map_or_else(|_| path.to_string(), |p| p.to_string_lossy().to_string());
 
     // Return JSON with base64 data so the caller can build the image content block
     serde_json::json!({
@@ -486,13 +496,11 @@ pub async fn read_image(ws: &WorkspaceTools, args: &Value) -> String {
 
 /// Write (create or overwrite) a file.
 pub async fn write_file(ws: &WorkspaceTools, args: &Value) -> String {
-    let path = match args.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
-        None => return "write_file requires 'path' parameter".to_string(),
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return "write_file requires 'path' parameter".to_string();
     };
-    let content = match args.get("content").and_then(|v| v.as_str()) {
-        Some(c) => c,
-        None => return "write_file requires 'content' parameter".to_string(),
+    let Some(content) = args.get("content").and_then(|v| v.as_str()) else {
+        return "write_file requires 'content' parameter".to_string();
     };
 
     let resolved = match ws.resolve_path(path) {
@@ -527,24 +535,20 @@ pub async fn write_file(ws: &WorkspaceTools, args: &Value) -> String {
     ws.mark_read(&resolved).await;
     let rel = resolved
         .strip_prefix(&ws.root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.to_string());
+        .map_or_else(|_| path.to_string(), |p| p.to_string_lossy().to_string());
     format!("Wrote {} chars to {rel}", content.len())
 }
 
 /// Edit a file by replacing exact text (search-and-replace).
 pub async fn edit_file(ws: &WorkspaceTools, args: &Value) -> String {
-    let path = match args.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
-        None => return "edit_file requires 'path' parameter".to_string(),
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return "edit_file requires 'path' parameter".to_string();
     };
-    let old_text = match args.get("old_text").and_then(|v| v.as_str()) {
-        Some(t) => t,
-        None => return "edit_file requires 'old_text' parameter".to_string(),
+    let Some(old_text) = args.get("old_text").and_then(|v| v.as_str()) else {
+        return "edit_file requires 'old_text' parameter".to_string();
     };
-    let new_text = match args.get("new_text").and_then(|v| v.as_str()) {
-        Some(t) => t,
-        None => return "edit_file requires 'new_text' parameter".to_string(),
+    let Some(new_text) = args.get("new_text").and_then(|v| v.as_str()) else {
+        return "edit_file requires 'new_text' parameter".to_string();
     };
 
     let resolved = match ws.resolve_path(path) {
@@ -586,11 +590,17 @@ pub async fn edit_file(ws: &WorkspaceTools, args: &Value) -> String {
         let mut new_content = String::new();
 
         for i in 0..=lines.len().saturating_sub(old_lines.len()) {
-            let candidate: String = lines[i..i + old_lines.len()].join("\n");
+            let candidate: String = lines
+                .get(i..i + old_lines.len())
+                .unwrap_or_default()
+                .join("\n");
             let norm_candidate: Vec<&str> = candidate.split_whitespace().collect();
             if norm_candidate == norm_old {
-                let before: String = lines[..i].join("\n");
-                let after: String = lines[i + old_lines.len()..].join("\n");
+                let before: String = lines.get(..i).unwrap_or_default().join("\n");
+                let after: String = lines
+                    .get(i + old_lines.len()..)
+                    .unwrap_or_default()
+                    .join("\n");
                 new_content = if before.is_empty() && after.is_empty() {
                     new_text.to_string()
                 } else if before.is_empty() {
@@ -622,20 +632,24 @@ pub async fn edit_file(ws: &WorkspaceTools, args: &Value) -> String {
 
     let rel = resolved
         .strip_prefix(&ws.root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.to_string());
+        .map_or_else(|_| path.to_string(), |p| p.to_string_lossy().to_string());
     format!("Edited {rel}")
 }
 
 /// Edit a file using hash-anchored line references.
+#[allow(clippy::too_many_lines)]
 pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
-    let path = match args.get("path").and_then(|v| v.as_str()) {
-        Some(p) => p,
-        None => return "hashline_edit requires 'path' parameter".to_string(),
+    struct ParsedEdit {
+        op: &'static str,
+        start: usize,
+        end: usize,
+        new_lines: Vec<String>,
+    }
+    let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+        return "hashline_edit requires 'path' parameter".to_string();
     };
-    let edits = match args.get("edits").and_then(|v| v.as_array()) {
-        Some(e) => e,
-        None => return "hashline_edit requires 'edits' array parameter".to_string(),
+    let Some(edits) = args.get("edits").and_then(|v| v.as_array()) else {
+        return "hashline_edit requires 'edits' array parameter".to_string();
     };
 
     let resolved = match ws.resolve_path(path) {
@@ -657,19 +671,13 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
 
     ws.mark_read(&resolved).await;
 
-    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    let mut lines: Vec<String> = content.lines().map(ToString::to_string).collect();
     let line_hashes: Vec<String> = lines.iter().map(|l| line_hash(l)).collect();
     let trailing_newline = content.ends_with('\n');
 
     // Parse and validate all edits
-    struct ParsedEdit {
-        op: &'static str,
-        start: usize,
-        end: usize,
-        new_lines: Vec<String>,
-    }
-
-    let hashline_prefix = regex::Regex::new(r"^\d+:[0-9a-f]{2}\|").unwrap();
+    let hashline_prefix = regex::Regex::new(r"^\d+:[0-9a-f]{2}\|")
+        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
 
     let mut parsed: Vec<ParsedEdit> = Vec::new();
     for edit in edits {
@@ -678,10 +686,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
             if let Some(e) = err {
                 return e;
             }
-            let raw = edit
-                .get("content")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let raw = edit.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let clean = hashline_prefix.replace(raw, "").to_string();
             parsed.push(ParsedEdit {
                 op: "set",
@@ -690,10 +695,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
                 new_lines: vec![clean],
             });
         } else if let Some(range) = edit.get("replace_lines") {
-            let start_anchor = range
-                .get("start")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let start_anchor = range.get("start").and_then(|v| v.as_str()).unwrap_or("");
             let end_anchor = range.get("end").and_then(|v| v.as_str()).unwrap_or("");
             let (start, err) = validate_anchor(start_anchor, &line_hashes, &lines);
             if let Some(e) = err {
@@ -706,10 +708,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
             if end < start {
                 return format!("End line {end} is before start line {start}");
             }
-            let raw = edit
-                .get("content")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let raw = edit.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let new_lines: Vec<String> = raw
                 .lines()
                 .map(|l| hashline_prefix.replace(l, "").to_string())
@@ -725,10 +724,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
             if let Some(e) = err {
                 return e;
             }
-            let raw = edit
-                .get("content")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let raw = edit.get("content").and_then(|v| v.as_str()).unwrap_or("");
             let new_lines: Vec<String> = raw
                 .lines()
                 .map(|l| hashline_prefix.replace(l, "").to_string())
@@ -740,7 +736,9 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
                 new_lines,
             });
         } else {
-            return format!("Unknown edit operation: {edit}. Use set_line, replace_lines, or insert_after.");
+            return format!(
+                "Unknown edit operation: {edit}. Use set_line, replace_lines, or insert_after."
+            );
         }
     }
 
@@ -751,17 +749,21 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
     for edit in &parsed {
         match edit.op {
             "set" => {
-                if lines[edit.start - 1] != edit.new_lines[0] {
-                    lines[edit.start - 1] = edit.new_lines[0].clone();
+                if let Some(line) = lines.get_mut(edit.start - 1)
+                    && *line != edit.new_lines.first().map_or("", String::as_str)
+                {
+                    line.clone_from(edit.new_lines.first().unwrap_or(&String::new()));
                     changed += 1;
                 }
             }
             "replace" => {
-                let old: Vec<&str> = lines[edit.start - 1..edit.end]
+                let old: Vec<&str> = lines
+                    .get(edit.start - 1..edit.end)
+                    .unwrap_or_default()
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(String::as_str)
                     .collect();
-                let new: Vec<&str> = edit.new_lines.iter().map(|s| s.as_str()).collect();
+                let new: Vec<&str> = edit.new_lines.iter().map(String::as_str).collect();
                 if old != new {
                     lines.splice(edit.start - 1..edit.end, edit.new_lines.clone());
                     changed += 1;
@@ -798,8 +800,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
 
     let rel = resolved
         .strip_prefix(&ws.root)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| path.to_string());
+        .map_or_else(|_| path.to_string(), |p| p.to_string_lossy().to_string());
     format!("Edited {rel} ({changed} edit(s) applied)")
 }
 
@@ -810,12 +811,20 @@ fn validate_anchor(
     lines: &[String],
 ) -> (usize, Option<String>) {
     let parts: Vec<&str> = anchor.splitn(2, ':').collect();
-    if parts.len() != 2 || parts[1].len() != 2 {
-        return (0, Some(format!("Invalid anchor format: '{anchor}' (expected N:HH)")));
+    if parts.len() != 2 || parts.get(1).is_none_or(|s| s.len() != 2) {
+        return (
+            0,
+            Some(format!("Invalid anchor format: '{anchor}' (expected N:HH)")),
+        );
     }
-    let lineno: usize = match parts[0].parse() {
-        Ok(n) if n >= 1 => n,
-        _ => return (0, Some(format!("Invalid line number in anchor: '{anchor}'"))),
+    let lineno: usize = match parts.first().and_then(|s| s.parse().ok()) {
+        Some(n) if n >= 1 => n,
+        _ => {
+            return (
+                0,
+                Some(format!("Invalid line number in anchor: '{anchor}'")),
+            );
+        }
     };
     if lineno > lines.len() {
         return (
@@ -826,18 +835,25 @@ fn validate_anchor(
             )),
         );
     }
-    let expected_hash = parts[1];
-    let actual_hash = &line_hashes[lineno - 1];
-    if actual_hash != expected_hash {
+    let expected_hash = line_hashes.get(lineno - 1).map_or("", String::as_str);
+    let anchor_hash = parts.get(1).copied().unwrap_or("");
+    if expected_hash != anchor_hash {
         let ctx_start = lineno.saturating_sub(2).max(1);
         let ctx_end = (lineno + 2).min(lines.len());
         let ctx: Vec<String> = (ctx_start..=ctx_end)
-            .map(|i| format!("  {}:{}|{}", i, &line_hashes[i - 1], &lines[i - 1]))
+            .map(|i| {
+                format!(
+                    "  {}:{}|{}",
+                    i,
+                    line_hashes.get(i - 1).map_or("", String::as_str),
+                    lines.get(i - 1).map_or("", String::as_str),
+                )
+            })
             .collect();
         return (
             0,
             Some(format!(
-                "Hash mismatch at line {lineno}: expected {expected_hash}, got {actual_hash}. \
+                "Hash mismatch at line {lineno}: expected {anchor_hash}, got {expected_hash}. \
                  Current context:\n{}",
                 ctx.join("\n")
             )),

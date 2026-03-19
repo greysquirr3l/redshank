@@ -18,6 +18,7 @@
 //! Two-pass hunk matching: first exact, then whitespace-normalised.
 
 use std::fmt;
+use std::fmt::Write as _;
 use std::path::PathBuf;
 
 // ── Error ────────────────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ impl ApplyReport {
         if !self.errors.is_empty() {
             let mut out = String::from("Patch partially applied.\nErrors:\n");
             for e in &self.errors {
-                out.push_str(&format!("- {e}\n"));
+                let _ = writeln!(out, "- {e}");
             }
             if !self.added.is_empty() || !self.updated.is_empty() || !self.deleted.is_empty() {
                 out.push_str("Succeeded:\n");
@@ -111,25 +112,25 @@ impl ApplyReport {
         if !self.added.is_empty() {
             out.push_str("Added:\n");
             for p in &self.added {
-                out.push_str(&format!("- {}\n", p.display()));
+                let _ = writeln!(out, "- {}", p.display());
             }
         }
         if !self.updated.is_empty() {
             out.push_str("Updated:\n");
             for p in &self.updated {
-                out.push_str(&format!("- {}\n", p.display()));
+                let _ = writeln!(out, "- {}", p.display());
             }
         }
         if !self.deleted.is_empty() {
             out.push_str("Deleted:\n");
             for p in &self.deleted {
-                out.push_str(&format!("- {}\n", p.display()));
+                let _ = writeln!(out, "- {}", p.display());
             }
         }
         if !self.moved.is_empty() {
             out.push_str("Moved:\n");
             for (from, to) in &self.moved {
-                out.push_str(&format!("- {} -> {}\n", from.display(), to.display()));
+                let _ = writeln!(out, "- {} -> {}", from.display(), to.display());
             }
         }
     }
@@ -143,10 +144,10 @@ fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, PatchError> {
     if lines.is_empty() {
         return Err(PatchError::new("patch is empty"));
     }
-    if lines[0].trim() != "*** Begin Patch" {
+    if lines.first().map(|l| l.trim()) != Some("*** Begin Patch") {
         return Err(PatchError::new("patch must start with '*** Begin Patch'"));
     }
-    if lines[lines.len() - 1].trim() != "*** End Patch" {
+    if lines.last().map(|l| l.trim()) != Some("*** End Patch") {
         return Err(PatchError::new("patch must end with '*** End Patch'"));
     }
 
@@ -155,14 +156,14 @@ fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, PatchError> {
     let last = lines.len() - 1;
 
     while i < last {
-        let line = lines[i];
+        let line = lines.get(i).copied().unwrap_or("");
 
         if let Some(path) = line.strip_prefix("*** Add File: ") {
             let path = path.trim().to_string();
             i += 1;
             let mut plus_lines = Vec::new();
-            while i < last && !lines[i].starts_with("*** ") {
-                let row = lines[i];
+            while i < last && !lines.get(i).copied().unwrap_or("").starts_with("*** ") {
+                let row = lines.get(i).copied().unwrap_or("");
                 if let Some(content) = row.strip_prefix('+') {
                     plus_lines.push(content.to_string());
                 } else {
@@ -189,14 +190,18 @@ fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, PatchError> {
             i += 1;
             let mut move_to = None;
             if i < last
-                && let Some(dest) = lines[i].strip_prefix("*** Move to: ")
+                && let Some(dest) = lines
+                    .get(i)
+                    .copied()
+                    .unwrap_or("")
+                    .strip_prefix("*** Move to: ")
             {
                 move_to = Some(dest.trim().to_string());
                 i += 1;
             }
             let mut raw_lines = Vec::new();
-            while i < last && !lines[i].starts_with("*** ") {
-                raw_lines.push(lines[i].to_string());
+            while i < last && !lines.get(i).copied().unwrap_or("").starts_with("*** ") {
+                raw_lines.push(lines.get(i).copied().unwrap_or("").to_string());
                 i += 1;
             }
             ops.push(PatchOp::Update(UpdateFileOp {
@@ -212,9 +217,7 @@ fn parse_patch(patch_text: &str) -> Result<Vec<PatchOp>, PatchError> {
             continue;
         }
 
-        return Err(PatchError::new(format!(
-            "unexpected patch line: {line:?}"
-        )));
+        return Err(PatchError::new(format!("unexpected patch line: {line:?}")));
     }
 
     if ops.is_empty() {
@@ -253,14 +256,13 @@ fn parse_chunks(raw_lines: &[String]) -> Result<Vec<Chunk>, PatchError> {
         chunks.push(Chunk { lines: current });
     }
     if chunks.is_empty() {
-        return Err(PatchError::new(
-            "update operation contains no hunks",
-        ));
+        return Err(PatchError::new("update operation contains no hunks"));
     }
     Ok(chunks)
 }
 
 /// Split a chunk into old (context + removed) and new (context + added) line sequences.
+#[allow(clippy::indexing_slicing)] // slice at byte 1 after checking first byte exists and is ASCII
 fn chunk_to_old_new(chunk: &Chunk) -> Result<(Vec<String>, Vec<String>), PatchError> {
     let mut old_seq = Vec::new();
     let mut new_seq = Vec::new();
@@ -308,7 +310,7 @@ fn find_subsequence(haystack: &[String], needle: &[String], start_idx: usize) ->
 
     // Pass 1: exact
     for i in start..=max_start {
-        if haystack[i..i + needle.len()] == *needle {
+        if haystack.get(i..i + needle.len()).unwrap_or_default() == needle {
             return Some(i);
         }
     }
@@ -316,7 +318,9 @@ fn find_subsequence(haystack: &[String], needle: &[String], start_idx: usize) ->
     // Pass 2: whitespace-normalised
     let norm_needle: Vec<String> = needle.iter().map(|l| normalize_ws(l)).collect();
     for i in start..=max_start {
-        let norm_hay: Vec<String> = haystack[i..i + needle.len()]
+        let norm_hay: Vec<String> = haystack
+            .get(i..i + needle.len())
+            .unwrap_or_default()
             .iter()
             .map(|l| normalize_ws(l))
             .collect();
@@ -342,7 +346,7 @@ fn render_lines(lines: &[String], trailing_newline: bool) -> String {
     text
 }
 
-/// A path-resolution function: raw path → absolute PathBuf.
+/// A path-resolution function: raw path → absolute [`PathBuf`].
 /// Returns Err if the path escapes the workspace.
 type ResolveFn<'a> = &'a dyn Fn(&str) -> Result<PathBuf, String>;
 
@@ -395,14 +399,12 @@ fn apply_add(op: &AddFileOp, resolve: ResolveFn<'_>) -> Result<PathBuf, PatchErr
         )));
     }
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            PatchError::new(format!("failed to create directory: {e}"))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| PatchError::new(format!("failed to create directory: {e}")))?;
     }
     let content = render_lines(&op.plus_lines, true);
-    std::fs::write(&target, &content).map_err(|e| {
-        PatchError::new(format!("failed to write {}: {e}", op.path))
-    })?;
+    std::fs::write(&target, &content)
+        .map_err(|e| PatchError::new(format!("failed to write {}: {e}", op.path)))?;
     Ok(target)
 }
 
@@ -420,9 +422,8 @@ fn apply_delete(op: &DeleteFileOp, resolve: ResolveFn<'_>) -> Result<PathBuf, Pa
             op.path
         )));
     }
-    std::fs::remove_file(&target).map_err(|e| {
-        PatchError::new(format!("failed to delete {}: {e}", op.path))
-    })?;
+    std::fs::remove_file(&target)
+        .map_err(|e| PatchError::new(format!("failed to delete {}: {e}", op.path)))?;
     Ok(target)
 }
 
@@ -444,10 +445,9 @@ fn apply_update(
         )));
     }
 
-    let original = std::fs::read_to_string(&source).map_err(|e| {
-        PatchError::new(format!("failed to read {}: {e}", op.path))
-    })?;
-    let old_lines: Vec<String> = original.lines().map(|l| l.to_string()).collect();
+    let original = std::fs::read_to_string(&source)
+        .map_err(|e| PatchError::new(format!("failed to read {}: {e}", op.path)))?;
+    let old_lines: Vec<String> = original.lines().map(ToString::to_string).collect();
     let had_trailing_nl = original.ends_with('\n');
 
     let mut working = old_lines;
@@ -456,22 +456,19 @@ fn apply_update(
     let chunks = parse_chunks(&op.raw_lines)?;
     for chunk in &chunks {
         let (old_seq, new_seq) = chunk_to_old_new(chunk)?;
-        let idx = find_subsequence(&working, &old_seq, cursor)
-            .or_else(|| find_subsequence(&working, &old_seq, 0));
-        let idx = match idx {
-            Some(i) => i,
-            None => {
-                let preview: String = old_seq
-                    .iter()
-                    .take(8)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                return Err(PatchError::new(format!(
-                    "failed applying chunk to {}; could not locate:\n{preview}",
-                    op.path
-                )));
-            }
+        let Some(idx) = find_subsequence(&working, &old_seq, cursor)
+            .or_else(|| find_subsequence(&working, &old_seq, 0))
+        else {
+            let preview: String = old_seq
+                .iter()
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("\n");
+            return Err(PatchError::new(format!(
+                "failed applying chunk to {}; could not locate:\n{preview}",
+                op.path
+            )));
         };
         let after: Vec<String> = working.split_off(idx + old_seq.len());
         working.truncate(idx);
@@ -486,9 +483,8 @@ fn apply_update(
     let destination = if let Some(new_path) = &op.move_to {
         let dest = resolve(new_path).map_err(PatchError::new)?;
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                PatchError::new(format!("failed to create directory: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| PatchError::new(format!("failed to create directory: {e}")))?;
         }
         std::fs::remove_file(&source).map_err(|e| {
             PatchError::new(format!("failed to remove source file during move: {e}"))
@@ -499,9 +495,8 @@ fn apply_update(
         source
     };
 
-    std::fs::write(&destination, &output).map_err(|e| {
-        PatchError::new(format!("failed to write {}: {e}", destination.display()))
-    })?;
+    std::fs::write(&destination, &output)
+        .map_err(|e| PatchError::new(format!("failed to write {}: {e}", destination.display())))?;
 
     Ok((destination, moved_pair))
 }
@@ -509,6 +504,12 @@ fn apply_update(
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::redundant_clone
+)]
 mod tests {
     use super::*;
     use std::fs;

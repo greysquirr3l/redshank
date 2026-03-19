@@ -10,6 +10,11 @@ use std::path::Path;
 const API_BASE: &str = "https://echodata.epa.gov/echo/echo_rest_services";
 
 /// Fetch EPA ECHO facility enforcement data.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_facilities(
     query: &str,
     state: Option<&str>,
@@ -20,10 +25,7 @@ pub async fn fetch_facilities(
     let client = build_client()?;
 
     // Step 1: Initial query to obtain QID.
-    let mut params = vec![
-        ("p_fn", query.to_string()),
-        ("output", "JSON".to_string()),
-    ];
+    let mut params = vec![("p_fn", query.to_string()), ("output", "JSON".to_string())];
     if let Some(st) = state {
         params.push(("p_st", st.to_string()));
     }
@@ -96,6 +98,7 @@ pub async fn fetch_facilities(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     #[test]
     fn epa_echo_parses_qid_response() {
@@ -105,7 +108,10 @@ mod tests {
                 "NumResults": "5"
             }
         });
-        let qid = mock.pointer("/Results/QueryID").and_then(|v| v.as_str()).unwrap();
+        let qid = mock
+            .pointer("/Results/QueryID")
+            .and_then(|v| v.as_str())
+            .unwrap();
         assert_eq!(qid, "ABC123");
     }
 }

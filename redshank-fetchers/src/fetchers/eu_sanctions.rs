@@ -11,9 +11,12 @@ const SANCTIONS_URL: &str =
     "https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
 
 /// Fetch and parse the EU consolidated sanctions list.
-pub async fn fetch_eu_sanctions(
-    output_dir: &Path,
-) -> Result<FetchOutput, FetchError> {
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
+pub async fn fetch_eu_sanctions(output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let resp = client.get(SANCTIONS_URL).send().await?;
 
@@ -42,6 +45,7 @@ pub async fn fetch_eu_sanctions(
 /// Parse the EU sanctions XML, extracting subject records.
 ///
 /// Handles both `<subjectType>person</subjectType>` and `<subjectType>enterprise</subjectType>`.
+#[must_use]
 pub fn parse_eu_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
     let mut records = Vec::new();
 
@@ -58,7 +62,10 @@ pub fn parse_eu_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
             .split("<nameAlias")
             .skip(1)
             .map(|a| {
-                let end = a.find("/>").or_else(|| a.find("</nameAlias>")).unwrap_or(a.len());
+                let end = a
+                    .find("/>")
+                    .or_else(|| a.find("</nameAlias>"))
+                    .unwrap_or(a.len());
                 let alias_block = &a[..end];
                 let whole_name = extract_attr(alias_block, "wholeName");
                 let last_name = extract_attr(alias_block, "lastName");
@@ -76,7 +83,10 @@ pub fn parse_eu_sanctions_xml(xml: &str) -> Vec<serde_json::Value> {
             .split("<identification")
             .skip(1)
             .map(|i| {
-                let end = i.find("/>").or_else(|| i.find("</identification>")).unwrap_or(i.len());
+                let end = i
+                    .find("/>")
+                    .or_else(|| i.find("</identification>"))
+                    .unwrap_or(i.len());
                 let id_block = &i[..end];
                 let number = extract_attr(id_block, "number");
                 let diplomatic_info = extract_attr(id_block, "diplomaticInformation");
@@ -128,6 +138,7 @@ fn extract_attr(xml: &str, attr: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

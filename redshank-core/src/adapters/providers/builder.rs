@@ -27,7 +27,7 @@ use super::openai_compat::OpenAICompatibleModel;
 pub enum ProviderBox {
     /// Anthropic native Messages API provider.
     Anthropic(AnthropicModel),
-    /// OpenAI-compatible provider (OpenAI, OpenRouter, Cerebras, Ollama).
+    /// OpenAI-compatible provider (`OpenAI`, `OpenRouter`, Cerebras, Ollama).
     OpenAICompat(OpenAICompatibleModel),
 }
 
@@ -90,6 +90,10 @@ pub enum BuildError {
 ///
 /// Delegates to [`ProviderKind::from_model_name`] and converts `None`
 /// to a [`BuildError::UnknownModel`].
+///
+/// # Errors
+///
+/// Returns `Err(BuildError::UnknownModel)` if the model name is unrecognised.
 pub fn infer_provider(model: &str) -> Result<ProviderKind, BuildError> {
     ProviderKind::from_model_name(model).ok_or_else(|| BuildError::UnknownModel {
         model: model.to_string(),
@@ -99,8 +103,11 @@ pub fn infer_provider(model: &str) -> Result<ProviderKind, BuildError> {
 /// Build a [`ProviderBox`] from an [`AgentConfig`] and [`CredentialBundle`].
 ///
 /// The provider kind is taken from `config.provider`, and the required API key
-/// is extracted from the credential bundle. Returns [`BuildError::MissingApiKey`]
-/// if the key is absent.
+/// is extracted from the credential bundle.
+///
+/// # Errors
+///
+/// Returns `Err(BuildError::MissingApiKey)` if the required API key is absent.
 pub fn build_provider(
     config: &AgentConfig,
     creds: &CredentialBundle,
@@ -111,7 +118,9 @@ pub fn build_provider(
             let key = creds
                 .anthropic_api_key
                 .clone()
-                .ok_or(BuildError::MissingApiKey { provider: ProviderKind::Anthropic })?;
+                .ok_or(BuildError::MissingApiKey {
+                    provider: ProviderKind::Anthropic,
+                })?;
             Ok(ProviderBox::Anthropic(AnthropicModel::new(
                 key,
                 config.model.clone(),
@@ -124,12 +133,7 @@ pub fn build_provider(
         | ProviderKind::Ollama) => {
             let key = api_key_for(kind, creds)?;
             Ok(ProviderBox::OpenAICompat(
-                OpenAICompatibleModel::for_provider(
-                    kind,
-                    key,
-                    config.model.clone(),
-                    effort,
-                ),
+                OpenAICompatibleModel::for_provider(kind, key, config.model.clone(), effort),
             ))
         }
     }
@@ -138,8 +142,12 @@ pub fn build_provider(
 /// Build a cheap "judge" model for acceptance-criteria evaluation.
 ///
 /// Tries to build `claude-haiku-4-5` (Anthropic) first,
-/// then falls back to `gpt-4o-mini` (OpenAI). Returns [`BuildError::MissingApiKey`]
+/// then falls back to `gpt-4o-mini` (`OpenAI`). Returns [`BuildError::MissingApiKey`]
 /// if neither key is available.
+///
+/// # Errors
+///
+/// Returns `Err(BuildError::MissingApiKey)` if neither Anthropic nor `OpenAI` keys are present.
 pub fn build_judge_model(creds: &CredentialBundle) -> Result<ProviderBox, BuildError> {
     // Prefer Anthropic haiku for judge
     if let Some(key) = creds.anthropic_api_key.clone() {
@@ -169,6 +177,13 @@ pub fn build_judge_model(creds: &CredentialBundle) -> Result<ProviderBox, BuildE
 ///
 /// Makes a GET request to the provider's `/models` endpoint and
 /// returns a list of model identifier strings.
+///
+/// # Errors
+///
+/// Returns `Err` if the API key is missing, the HTTP request fails, or the
+/// response cannot be parsed.
+// Each provider arm has distinct URL, auth-header, and pagination logic; extraction would reduce clarity.
+#[allow(clippy::too_many_lines)]
 #[cfg(feature = "runtime")]
 pub async fn list_models(
     kind: ProviderKind,
@@ -224,11 +239,7 @@ pub async fn list_models(
                 .ollama_base_url
                 .as_deref()
                 .unwrap_or("http://localhost:11434");
-            (
-                format!("{base}/api/tags"),
-                String::new(),
-                String::new(),
-            )
+            (format!("{base}/api/tags"), String::new(), String::new())
         }
     };
 
@@ -262,20 +273,28 @@ pub async fn list_models(
     // Ollama uses { "models": [...] } with "name" field
     // OpenAI/Anthropic use { "data": [...] } with "id" field
     let models = if kind == ProviderKind::Ollama {
-        json["models"]
-            .as_array()
+        json.get("models")
+            .and_then(serde_json::Value::as_array)
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|m| m["name"].as_str().map(String::from))
+                    .filter_map(|m| {
+                        m.get("name")
+                            .and_then(serde_json::Value::as_str)
+                            .map(String::from)
+                    })
                     .collect()
             })
             .unwrap_or_default()
     } else {
-        json["data"]
-            .as_array()
+        json.get("data")
+            .and_then(serde_json::Value::as_array)
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|m| m["id"].as_str().map(String::from))
+                    .filter_map(|m| {
+                        m.get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .map(String::from)
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -297,7 +316,9 @@ fn api_key_for(
         ProviderKind::Cerebras => creds.cerebras_api_key.clone(),
         ProviderKind::Ollama => {
             // Ollama doesn't require an API key; use a placeholder.
-            Some(crate::domain::credentials::CredentialGuard::new(String::new()))
+            Some(crate::domain::credentials::CredentialGuard::new(
+                String::new(),
+            ))
         }
         ProviderKind::Anthropic => creds.anthropic_api_key.clone(),
     };
@@ -307,6 +328,7 @@ fn api_key_for(
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::domain::credentials::CredentialGuard;
@@ -315,20 +337,16 @@ mod tests {
         let mut creds = CredentialBundle::default();
         match provider {
             ProviderKind::Anthropic => {
-                creds.anthropic_api_key =
-                    Some(CredentialGuard::new("sk-ant-test".to_string()));
+                creds.anthropic_api_key = Some(CredentialGuard::new("sk-ant-test".to_string()));
             }
             ProviderKind::OpenAI => {
-                creds.openai_api_key =
-                    Some(CredentialGuard::new("sk-openai-test".to_string()));
+                creds.openai_api_key = Some(CredentialGuard::new("sk-openai-test".to_string()));
             }
             ProviderKind::OpenRouter => {
-                creds.openrouter_api_key =
-                    Some(CredentialGuard::new("sk-or-test".to_string()));
+                creds.openrouter_api_key = Some(CredentialGuard::new("sk-or-test".to_string()));
             }
             ProviderKind::Cerebras => {
-                creds.cerebras_api_key =
-                    Some(CredentialGuard::new("csk-test".to_string()));
+                creds.cerebras_api_key = Some(CredentialGuard::new("csk-test".to_string()));
             }
             ProviderKind::Ollama => {
                 // no key required
@@ -341,7 +359,10 @@ mod tests {
 
     #[test]
     fn infer_claude_is_anthropic() {
-        assert_eq!(infer_provider("claude-opus-4-6").unwrap(), ProviderKind::Anthropic);
+        assert_eq!(
+            infer_provider("claude-opus-4-6").unwrap(),
+            ProviderKind::Anthropic
+        );
     }
 
     #[test]
@@ -374,17 +395,26 @@ mod tests {
 
     #[test]
     fn infer_ollama_prefix() {
-        assert_eq!(infer_provider("ollama/llama3").unwrap(), ProviderKind::Ollama);
+        assert_eq!(
+            infer_provider("ollama/llama3").unwrap(),
+            ProviderKind::Ollama
+        );
     }
 
     #[test]
     fn infer_cerebras_prefix() {
-        assert_eq!(infer_provider("cerebras/llama3.3-70b").unwrap(), ProviderKind::Cerebras);
+        assert_eq!(
+            infer_provider("cerebras/llama3.3-70b").unwrap(),
+            ProviderKind::Cerebras
+        );
     }
 
     #[test]
     fn infer_llama_is_cerebras() {
-        assert_eq!(infer_provider("llama3.3-70b").unwrap(), ProviderKind::Cerebras);
+        assert_eq!(
+            infer_provider("llama3.3-70b").unwrap(),
+            ProviderKind::Cerebras
+        );
     }
 
     #[test]
@@ -474,7 +504,12 @@ mod tests {
             ..AgentConfig::default()
         };
         let err = build_provider(&config, &creds).unwrap_err();
-        assert!(matches!(err, BuildError::MissingApiKey { provider: ProviderKind::Anthropic }));
+        assert!(matches!(
+            err,
+            BuildError::MissingApiKey {
+                provider: ProviderKind::Anthropic
+            }
+        ));
     }
 
     #[test]
@@ -486,7 +521,12 @@ mod tests {
             ..AgentConfig::default()
         };
         let err = build_provider(&config, &creds).unwrap_err();
-        assert!(matches!(err, BuildError::MissingApiKey { provider: ProviderKind::OpenAI }));
+        assert!(matches!(
+            err,
+            BuildError::MissingApiKey {
+                provider: ProviderKind::OpenAI
+            }
+        ));
     }
 
     // ── build_judge_model ───────────────────────────────────

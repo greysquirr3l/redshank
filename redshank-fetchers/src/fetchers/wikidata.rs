@@ -41,6 +41,11 @@ SELECT ?subsidiary ?subsidiaryLabel ?parentLabel WHERE {
 "#;
 
 /// Execute a SPARQL query against Wikidata and write results as NDJSON.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_wikidata_sparql(
     sparql_query: &str,
     output_dir: &Path,
@@ -52,7 +57,7 @@ pub async fn fetch_wikidata_sparql(
         .post(SPARQL_ENDPOINT)
         .header("Accept", "application/sparql-results+json")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(format!("query={}", sparql_query))
+        .body(format!("query={sparql_query}"))
         .send()
         .await?;
 
@@ -86,16 +91,19 @@ pub async fn fetch_wikidata_sparql(
 }
 
 /// Build an entity search query for the given name.
+#[must_use]
 pub fn build_entity_query(name: &str) -> String {
     ENTITY_SEARCH_QUERY.replace("{NAME}", &name.replace('"', "\\\""))
 }
 
 /// Build a board membership query for the given Wikidata QID.
+#[must_use]
 pub fn build_board_query(qid: &str) -> String {
     BOARD_MEMBERSHIP_QUERY.replace("{QID}", qid)
 }
 
 /// Build a subsidiary tree query for the given Wikidata QID.
+#[must_use]
 pub fn build_subsidiary_query(qid: &str) -> String {
     SUBSIDIARY_TREE_QUERY.replace("{QID}", qid)
 }
@@ -104,8 +112,8 @@ pub fn build_subsidiary_query(qid: &str) -> String {
 fn parse_sparql_bindings(bindings: &[serde_json::Value]) -> Vec<serde_json::Value> {
     bindings
         .iter()
-        .map(|binding| {
-            let obj = binding.as_object().unwrap();
+        .filter_map(|binding| {
+            let obj = binding.as_object()?;
             let mut record = serde_json::Map::new();
             for (key, val) in obj {
                 let value = val
@@ -115,12 +123,13 @@ fn parse_sparql_bindings(bindings: &[serde_json::Value]) -> Vec<serde_json::Valu
                     .to_owned();
                 record.insert(key.clone(), serde_json::Value::String(value));
             }
-            serde_json::Value::Object(record)
+            Some(serde_json::Value::Object(record))
         })
         .collect()
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -148,10 +157,7 @@ mod tests {
         let records = parse_sparql_bindings(bindings);
         assert_eq!(records.len(), 2);
         assert_eq!(records[0]["itemLabel"], "Apple Inc.");
-        assert!(records[0]["item"]
-            .as_str()
-            .unwrap()
-            .contains("Q312"));
+        assert!(records[0]["item"].as_str().unwrap().contains("Q312"));
         assert_eq!(records[1]["instanceOfLabel"], "subsidiary");
     }
 

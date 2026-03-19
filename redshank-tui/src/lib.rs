@@ -1,3 +1,5 @@
+// Transitive dependency version conflicts are outside our control.
+#![allow(clippy::multiple_crate_versions)]
 //! # redshank-tui
 //!
 //! Ratatui-based terminal user interface for the Redshank investigation agent.

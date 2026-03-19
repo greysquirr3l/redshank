@@ -1,7 +1,7 @@
-//! Web tools: web_search (Exa API) and fetch_url.
+//! Web tools: `web_search` (Exa API) and `fetch_url`.
 
 use super::workspace_tools::WorkspaceTools;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Search the web via Exa API.
 pub async fn web_search(ws: &WorkspaceTools, args: &Value) -> String {
@@ -11,12 +11,12 @@ pub async fn web_search(ws: &WorkspaceTools, args: &Value) -> String {
     };
     let num_results = args
         .get("num_results")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(10)
         .clamp(1, 20) as usize;
     let include_text = args
         .get("include_text")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false);
 
     let exa_key = match &ws.creds.exa_api_key {
@@ -28,8 +28,11 @@ pub async fn web_search(ws: &WorkspaceTools, args: &Value) -> String {
         "query": query,
         "numResults": num_results,
     });
-    if include_text {
-        payload["contents"] = json!({"text": {"maxCharacters": 4000}});
+    if include_text && let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "contents".to_owned(),
+            json!({"text": {"maxCharacters": 4000}}),
+        );
     }
 
     let client = reqwest::Client::new();
@@ -81,8 +84,12 @@ pub async fn web_search(ws: &WorkspaceTools, args: &Value) -> String {
             });
             if include_text
                 && let Some(text) = row.get("text").and_then(|v| v.as_str())
+                && let Some(obj) = item.as_object_mut()
             {
-                item["text"] = Value::String(WorkspaceTools::clip(text, 4000));
+                obj.insert(
+                    "text".to_owned(),
+                    serde_json::Value::String(WorkspaceTools::clip(text, 4000)),
+                );
             }
             Some(item)
         })
@@ -103,10 +110,10 @@ pub async fn fetch_url(ws: &WorkspaceTools, args: &Value) -> String {
     let urls = match args.get("urls").and_then(|v| v.as_array()) {
         Some(arr) => arr
             .iter()
-            .filter_map(|v| v.as_str())
+            .filter_map(Value::as_str)
             .filter(|s| !s.trim().is_empty())
             .take(10)
-            .map(|s| s.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>(),
         None => return "fetch_url requires 'urls' array parameter".to_string(),
     };

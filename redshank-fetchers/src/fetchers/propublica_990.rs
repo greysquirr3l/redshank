@@ -1,4 +1,4 @@
-//! ProPublica 990 — Nonprofit tax return data.
+//! `ProPublica` 990 — Nonprofit tax return data.
 //!
 //! API: <https://projects.propublica.org/nonprofits/api/v2/>
 //! Pagination: page-based (0-indexed), 25 results per page.
@@ -9,7 +9,12 @@ use std::path::Path;
 
 const API_BASE: &str = "https://projects.propublica.org/nonprofits/api/v2";
 
-/// Fetch ProPublica nonprofit 990 data.
+/// Fetch `ProPublica` nonprofit 990 data.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_nonprofits(
     query: &str,
     output_dir: &Path,
@@ -48,10 +53,12 @@ pub async fn fetch_nonprofits(
         }
         all_records.extend(orgs);
 
-        let total = json
-            .get("total_results")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as usize;
+        let total = usize::try_from(
+            json.get("total_results")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+        )
+        .unwrap_or(usize::MAX);
 
         if all_records.len() >= total {
             break;
@@ -71,6 +78,7 @@ pub async fn fetch_nonprofits(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn propublica_parses_search_response() {

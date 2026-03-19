@@ -2,6 +2,7 @@
 .coraline/
 .serena/
 docs/dev/
+docs/book/
 docs/PROGRESS.md
 docs/IMPLEMENTATION_PLAN.md
 docs/plan.toml
@@ -10,7 +11,7 @@ reference_projects/
 
 # ─── VS Code ──────────────────────────────────────────────────────────────────
 .vscode/*
-!.vscode/orchestrator.prompt.md
+# !.vscode/orchestrator.prompt.md
 
 # ─── Rust / Cargo ─────────────────────────────────────────────────────────────
 /target/
@@ -58,3 +59,12 @@ credentials/
 *.swp
 *.swo
 .idea/
+
+tasks/
+docs/dev
+docs/src
+
+plan.toml
+IMPLEMENTATION_PLAN.md
+PROGRESS.md
+rust-catchup-1.78-1.94.md

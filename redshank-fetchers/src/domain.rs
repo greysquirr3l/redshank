@@ -27,16 +27,20 @@ pub struct FetchConfig {
     pub output_path: PathBuf,
 }
 
-fn default_rate_limit_ms() -> u64 {
+const fn default_rate_limit_ms() -> u64 {
     500
 }
 
-fn default_max_pages() -> u32 {
+const fn default_max_pages() -> u32 {
     100
 }
 
 impl FetchConfig {
     /// Validate that the output directory's parent exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the parent directory of `output_path` does not exist.
     pub fn validate(&self) -> Result<(), FetchError> {
         if let Some(parent) = self.output_path.parent()
             && !parent.as_os_str().is_empty()
@@ -44,10 +48,7 @@ impl FetchConfig {
         {
             return Err(FetchError::InvalidOutputPath {
                 path: self.output_path.clone(),
-                reason: format!(
-                    "parent directory does not exist: {}",
-                    parent.display()
-                ),
+                reason: format!("parent directory does not exist: {}", parent.display()),
             });
         }
         Ok(())
@@ -94,6 +95,7 @@ pub enum FetchError {
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

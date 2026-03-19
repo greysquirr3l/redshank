@@ -15,12 +15,12 @@ pub struct CredentialGuard<T>(T);
 
 impl<T> CredentialGuard<T> {
     /// Wrap a value in a credential guard.
-    pub fn new(value: T) -> Self {
+    pub const fn new(value: T) -> Self {
         Self(value)
     }
 
     /// Access the inner value. Only use where the credential is actually needed.
-    pub fn expose(&self) -> &T {
+    pub const fn expose(&self) -> &T {
         &self.0
     }
 }
@@ -56,11 +56,11 @@ impl<T: Eq + PartialEq> Eq for CredentialGuard<T> {}
 /// Bundle of API keys and credentials resolved from multiple sources.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CredentialBundle {
-    /// OpenAI API key.
+    /// `OpenAI` API key.
     pub openai_api_key: Option<CredentialGuard<String>>,
     /// Anthropic API key.
     pub anthropic_api_key: Option<CredentialGuard<String>>,
-    /// OpenRouter API key.
+    /// `OpenRouter` API key.
     pub openrouter_api_key: Option<CredentialGuard<String>>,
     /// Cerebras API key.
     pub cerebras_api_key: Option<CredentialGuard<String>>,
@@ -78,10 +78,10 @@ pub struct CredentialBundle {
 
 impl CredentialBundle {
     /// Returns `true` if at least one credential key is set (non-empty).
+    #[must_use]
     pub fn has_any(&self) -> bool {
         let has = |opt: &Option<CredentialGuard<String>>| -> bool {
-            opt.as_ref()
-                .is_some_and(|g| !g.expose().trim().is_empty())
+            opt.as_ref().is_some_and(|g| !g.expose().trim().is_empty())
         };
         has(&self.openai_api_key)
             || has(&self.anthropic_api_key)
@@ -91,11 +91,14 @@ impl CredentialBundle {
             || has(&self.voyage_api_key)
             || has(&self.hibp_api_key)
             || has(&self.github_token)
-            || self.ollama_base_url.as_ref().is_some_and(|u| !u.trim().is_empty())
+            || self
+                .ollama_base_url
+                .as_ref()
+                .is_some_and(|u| !u.trim().is_empty())
     }
 
     /// Fill in empty fields from a lower-priority bundle.
-    pub fn merge_missing(&mut self, other: &CredentialBundle) {
+    pub fn merge_missing(&mut self, other: &Self) {
         macro_rules! fill {
             ($field:ident) => {
                 if self.$field.is_none() {
@@ -116,6 +119,7 @@ impl CredentialBundle {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -171,8 +175,14 @@ mod tests {
         assert!(json.contains("sk-ant-test"));
 
         let restored: CredentialBundle = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.anthropic_api_key.as_ref().unwrap().expose(), "sk-ant-test");
-        assert_eq!(restored.ollama_base_url.as_ref().unwrap(), "http://localhost:11434");
+        assert_eq!(
+            restored.anthropic_api_key.as_ref().unwrap().expose(),
+            "sk-ant-test"
+        );
+        assert_eq!(
+            restored.ollama_base_url.as_ref().unwrap(),
+            "http://localhost:11434"
+        );
     }
 
     #[test]
@@ -216,9 +226,15 @@ mod tests {
         high.merge_missing(&low);
 
         // High-priority key preserved
-        assert_eq!(high.anthropic_api_key.as_ref().unwrap().expose(), "high-key");
+        assert_eq!(
+            high.anthropic_api_key.as_ref().unwrap().expose(),
+            "high-key"
+        );
         // Low-priority key fills in missing
         assert_eq!(high.openai_api_key.as_ref().unwrap().expose(), "low-openai");
-        assert_eq!(high.ollama_base_url.as_deref(), Some("http://localhost:11434"));
+        assert_eq!(
+            high.ollama_base_url.as_deref(),
+            Some("http://localhost:11434")
+        );
     }
 }

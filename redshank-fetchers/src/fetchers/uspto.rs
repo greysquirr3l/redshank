@@ -1,8 +1,8 @@
 //! USPTO — Patent and Trademark search.
 //!
-//! PatentsView API: `https://search.patentsview.org/api/v1/inventor/`
+//! `PatentsView` API: `https://search.patentsview.org/api/v1/inventor/`
 //! TMAPI: `https://developer.uspto.gov/api-catalog/trademark-search`
-//! PatentsView: 1000 req/day free, no auth.
+//! `PatentsView`: 1000 req/day free, no auth.
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, rate_limit_delay, write_ndjson};
@@ -11,6 +11,11 @@ use std::path::Path;
 const PATENTS_API: &str = "https://search.patentsview.org/api/v1";
 
 /// Fetch patent inventor records matching the given last name.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_patent_inventors(
     last_name: &str,
     first_name: Option<&str>,
@@ -26,8 +31,13 @@ pub async fn fetch_patent_inventors(
         let mut query = serde_json::json!({
             "inventor_last_name": last_name
         });
-        if let Some(fname) = first_name {
-            query["inventor_first_name"] = serde_json::Value::String(fname.to_string());
+        if let Some(fname) = first_name
+            && let Some(obj) = query.as_object_mut()
+        {
+            obj.insert(
+                "inventor_first_name".to_string(),
+                serde_json::Value::String(fname.to_string()),
+            );
         }
 
         let resp = client
@@ -61,11 +71,12 @@ pub async fn fetch_patent_inventors(
         }
         all_records.extend(inventors);
 
-        let total_pages = json
-            .get("total_patent_count")
-            .and_then(|v| v.as_u64())
-            .map(|total| total.div_ceil(25))
-            .unwrap_or(1) as u32;
+        let total_pages = u32::try_from(
+            json.get("total_patent_count")
+                .and_then(serde_json::Value::as_u64)
+                .map_or(1, |total| total.div_ceil(25)),
+        )
+        .unwrap_or(u32::MAX);
 
         if page >= total_pages {
             break;
@@ -84,6 +95,7 @@ pub async fn fetch_patent_inventors(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     #[test]
     fn uspto_parses_patent_inventor_list_fixture() {
@@ -106,6 +118,9 @@ mod tests {
         let inventors = mock.get("inventors").and_then(|v| v.as_array()).unwrap();
         assert_eq!(inventors.len(), 1);
         assert_eq!(inventors[0]["inventor_last_name"], "Doe");
-        assert_eq!(inventors[0]["patent_title"], "Method for Improved Widget Assembly");
+        assert_eq!(
+            inventors[0]["patent_title"],
+            "Method for Improved Widget Assembly"
+        );
     }
 }

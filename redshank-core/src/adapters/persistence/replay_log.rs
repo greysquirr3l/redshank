@@ -1,6 +1,6 @@
 //! File-based JSONL replay logger with delta encoding.
 //!
-//! Mirrors `agent/replay_log.py` from the OpenPlanter Python implementation.
+//! Mirrors `agent/replay_log.py` from the `OpenPlanter` Python implementation.
 //! Each LLM API call is logged as a JSONL record so it can be replayed exactly.
 //!
 //! **Delta encoding**: seq 0 stores the full messages snapshot; seq N stores
@@ -58,6 +58,7 @@ pub struct FileReplayLogger {
 
 impl FileReplayLogger {
     /// Create a root logger that writes to `path`.
+    #[must_use]
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -68,7 +69,8 @@ impl FileReplayLogger {
     }
 
     /// Create a logger with a custom conversation ID.
-    pub fn with_conversation_id(path: PathBuf, conversation_id: String) -> Self {
+    #[must_use]
+    pub const fn with_conversation_id(path: PathBuf, conversation_id: String) -> Self {
         Self {
             path,
             conversation_id,
@@ -80,6 +82,7 @@ impl FileReplayLogger {
     /// Create a child logger for a subtask.
     ///
     /// The child appends to the same file with ID `{parent}/d{depth}s{step}`.
+    #[must_use]
     pub fn child(&self, depth: u32, step: u32) -> Self {
         let child_id = format!("{}/d{}s{}", self.conversation_id, depth, step);
         Self::with_conversation_id(self.path.clone(), child_id)
@@ -99,6 +102,10 @@ impl FileReplayLogger {
     ///
     /// Typically called once at the start of a conversation to record
     /// provider, model, system prompt, tool definitions, etc.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the log file cannot be written.
     pub fn write_header(&self, params: &HeaderParams<'_>) -> Result<(), DomainError> {
         let mut record = serde_json::json!({
             "type": "header",
@@ -109,11 +116,15 @@ impl FileReplayLogger {
             "system_prompt": params.system_prompt,
             "tool_defs": params.tool_defs,
         });
-        if let Some(re) = params.reasoning_effort {
-            record["reasoning_effort"] = Value::String(re.to_owned());
+        if let Some(re) = params.reasoning_effort
+            && let Some(obj) = record.as_object_mut()
+        {
+            obj.insert("reasoning_effort".to_owned(), Value::String(re.to_owned()));
         }
-        if let Some(temp) = params.temperature {
-            record["temperature"] = serde_json::json!(temp);
+        if let Some(temp) = params.temperature
+            && let Some(obj) = record.as_object_mut()
+        {
+            obj.insert("temperature".to_owned(), serde_json::json!(temp));
         }
         self.append_sync(&record)
     }
@@ -123,6 +134,10 @@ impl FileReplayLogger {
     /// - `seq 0`: full `messages_snapshot` is stored.
     /// - `seq N` (N > 0): only `messages_delta` (new messages since the
     ///   previous call) is stored.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the log file cannot be written.
     pub fn log_call(&self, params: &CallParams<'_>) -> Result<(), DomainError> {
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
         let prev = self.prev_len.swap(params.messages.len(), Ordering::Relaxed);
@@ -136,16 +151,30 @@ impl FileReplayLogger {
             "ts": chrono::Utc::now().to_rfc3339(),
         });
 
-        if seq == 0 {
-            record["messages_snapshot"] = Value::Array(params.messages.to_vec());
-        } else {
-            record["messages_delta"] = Value::Array(params.messages[prev..].to_vec());
+        if let Some(obj) = record.as_object_mut() {
+            if seq == 0 {
+                obj.insert(
+                    "messages_snapshot".to_owned(),
+                    Value::Array(params.messages.to_vec()),
+                );
+            } else {
+                let delta = params.messages.get(prev..).unwrap_or_default().to_vec();
+                obj.insert("messages_delta".to_owned(), Value::Array(delta));
+            }
+            obj.insert("response".to_owned(), params.response.clone());
+            obj.insert(
+                "input_tokens".to_owned(),
+                serde_json::json!(params.input_tokens),
+            );
+            obj.insert(
+                "output_tokens".to_owned(),
+                serde_json::json!(params.output_tokens),
+            );
+            obj.insert(
+                "elapsed_sec".to_owned(),
+                serde_json::json!((params.elapsed_sec * 1000.0).round() / 1000.0),
+            );
         }
-        record["response"] = params.response.clone();
-        record["input_tokens"] = serde_json::json!(params.input_tokens);
-        record["output_tokens"] = serde_json::json!(params.output_tokens);
-        record["elapsed_sec"] =
-            serde_json::json!((params.elapsed_sec * 1000.0).round() / 1000.0);
 
         self.append_sync(&record)
     }
@@ -180,6 +209,7 @@ impl ReplayLog for FileReplayLogger {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -404,7 +434,7 @@ mod tests {
                 response: &resp,
                 input_tokens: 0,
                 output_tokens: 0,
-                elapsed_sec: 1.23456789,
+                elapsed_sec: 1.234_567_89,
             })
             .unwrap();
 

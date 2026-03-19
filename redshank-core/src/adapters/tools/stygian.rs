@@ -4,7 +4,7 @@
 //! falls back to plain `reqwest GET` and `run_scrape_pipeline` is unavailable.
 
 use super::workspace_tools::WorkspaceTools;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
 use stygian_browser::{BrowserConfig, BrowserPool, WaitUntil};
@@ -28,7 +28,7 @@ static SPA_DOMAINS: &[&str] = &[
     "nytimes.com",
 ];
 
-/// Lazy-initialised browser pool shared across all fetch_url calls.
+/// Lazy-initialised browser pool shared across all `fetch_url` calls.
 ///
 /// The pool is only created when the first browser-assisted fetch is requested.
 #[allow(dead_code)] // API used by engine layer (T15)
@@ -120,7 +120,7 @@ pub async fn fetch_url_smart(
             .filter_map(|v| v.as_str())
             .filter(|s| !s.trim().is_empty())
             .take(10)
-            .map(|s| s.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>(),
         None => return "fetch_url requires 'urls' array parameter".to_string(),
     };
@@ -131,7 +131,7 @@ pub async fn fetch_url_smart(
     // Check if force_browser is requested by the caller
     let force_browser = args
         .get("force_browser")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false);
 
     let mut pages = Vec::new();
@@ -164,6 +164,7 @@ pub async fn fetch_url_smart(
 }
 
 /// Execute a stygian-graph scraping pipeline from JSON config.
+#[allow(clippy::unused_async)]
 pub async fn run_scrape_pipeline(_ws: &WorkspaceTools, args: &Value) -> String {
     let config = match args.get("pipeline") {
         Some(c) => c.clone(),

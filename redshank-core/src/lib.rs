@@ -1,3 +1,5 @@
+// Transitive dependency version conflicts are outside our control.
+#![allow(clippy::multiple_crate_versions)]
 //! # redshank-core
 //!
 //! Core library for the Redshank investigation agent. Follows hexagonal

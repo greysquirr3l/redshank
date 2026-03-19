@@ -40,10 +40,11 @@ pub trait ModelProvider: Send + Sync {
     ) -> impl std::future::Future<Output = Result<ModelTurn, DomainError>> + Send;
 
     /// Count tokens in the given messages without making an API call.
-    fn count_tokens(
-        &self,
-        messages: &[ChatMessage],
-    ) -> Result<u32, DomainError>;
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the provider encounters an error counting tokens.
+    fn count_tokens(&self, messages: &[ChatMessage]) -> Result<u32, DomainError>;
 
     /// The model's context window size in tokens.
     fn context_window(&self) -> u64;

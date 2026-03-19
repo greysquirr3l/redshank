@@ -8,6 +8,11 @@ use crate::{build_client, write_ndjson};
 use std::path::Path;
 
 /// Fetch Census ACS data for a given variable set and geography.
+///
+/// # Errors
+///
+/// Returns `Err` if the HTTP request fails, the server returns a non-success
+/// status, or the response cannot be parsed.
 pub async fn fetch_acs(
     year: u32,
     variables: &str,
@@ -26,11 +31,7 @@ pub async fn fetch_acs(
         params.push(("key", key.to_string()));
     }
 
-    let resp = client
-        .get(&base)
-        .query(&params)
-        .send()
-        .await?;
+    let resp = client.get(&base).query(&params).send().await?;
 
     let status = resp.status();
     if !status.is_success() {
@@ -56,18 +57,21 @@ pub async fn fetch_acs(
 }
 
 /// Convert Census array-of-arrays response into record objects.
+#[must_use]
 pub fn parse_census_response(json: &serde_json::Value) -> Vec<serde_json::Value> {
     let rows = match json.as_array() {
         Some(r) if r.len() >= 2 => r,
         _ => return Vec::new(),
     };
 
-    let headers: Vec<&str> = rows[0]
-        .as_array()
+    let headers: Vec<&str> = rows
+        .first()
+        .and_then(|r| r.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
         .unwrap_or_default();
 
-    rows[1..]
+    rows.get(1..)
+        .unwrap_or_default()
         .iter()
         .filter_map(|row| {
             let values = row.as_array()?;
@@ -83,6 +87,7 @@ pub fn parse_census_response(json: &serde_json::Value) -> Vec<serde_json::Value>
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

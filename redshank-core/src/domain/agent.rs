@@ -13,9 +13,9 @@ use super::session::{SessionId, TurnSummary};
 pub enum ProviderKind {
     /// Anthropic Claude models.
     Anthropic,
-    /// OpenAI GPT models.
+    /// `OpenAI` GPT models.
     OpenAI,
-    /// OpenRouter multi-provider gateway.
+    /// `OpenRouter` multi-provider gateway.
     OpenRouter,
     /// Cerebras fast inference.
     Cerebras,
@@ -25,11 +25,16 @@ pub enum ProviderKind {
 
 impl ProviderKind {
     /// Infer provider kind from a model name string.
+    #[must_use]
     pub fn from_model_name(name: &str) -> Option<Self> {
         let lower = name.to_lowercase();
         if lower.starts_with("claude") {
             Some(Self::Anthropic)
-        } else if lower.starts_with("gpt") || lower.starts_with("o1") || lower.starts_with("o3") || lower.starts_with("o4") {
+        } else if lower.starts_with("gpt")
+            || lower.starts_with("o1")
+            || lower.starts_with("o3")
+            || lower.starts_with("o4")
+        {
             Some(Self::OpenAI)
         } else if lower.starts_with("ollama/") {
             Some(Self::Ollama)
@@ -152,6 +157,7 @@ pub struct AgentSession {
 
 impl AgentSession {
     /// Create a new session, emitting a `SessionCreated` event.
+    #[must_use]
     pub fn create(config: AgentConfig) -> Self {
         let session_id = SessionId::new();
         let mut session = Self {
@@ -219,6 +225,7 @@ impl AgentSession {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -237,13 +244,34 @@ mod tests {
 
     #[test]
     fn provider_kind_from_model_name() {
-        assert_eq!(ProviderKind::from_model_name("claude-sonnet-4-20250514"), Some(ProviderKind::Anthropic));
-        assert_eq!(ProviderKind::from_model_name("claude-opus-4-20250514"), Some(ProviderKind::Anthropic));
-        assert_eq!(ProviderKind::from_model_name("gpt-4o"), Some(ProviderKind::OpenAI));
-        assert_eq!(ProviderKind::from_model_name("o1-preview"), Some(ProviderKind::OpenAI));
-        assert_eq!(ProviderKind::from_model_name("o3-mini"), Some(ProviderKind::OpenAI));
-        assert_eq!(ProviderKind::from_model_name("openrouter/anthropic/claude"), Some(ProviderKind::OpenRouter));
-        assert_eq!(ProviderKind::from_model_name("ollama/mistral"), Some(ProviderKind::Ollama));
+        assert_eq!(
+            ProviderKind::from_model_name("claude-sonnet-4-20250514"),
+            Some(ProviderKind::Anthropic)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("claude-opus-4-20250514"),
+            Some(ProviderKind::Anthropic)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("gpt-4o"),
+            Some(ProviderKind::OpenAI)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("o1-preview"),
+            Some(ProviderKind::OpenAI)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("o3-mini"),
+            Some(ProviderKind::OpenAI)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("openrouter/anthropic/claude"),
+            Some(ProviderKind::OpenRouter)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("ollama/mistral"),
+            Some(ProviderKind::Ollama)
+        );
         assert_eq!(ProviderKind::from_model_name("unknown-model"), None);
     }
 
@@ -262,7 +290,10 @@ mod tests {
         let session = AgentSession::create(AgentConfig::default());
         assert_eq!(session.status, SessionStatus::Idle);
         assert_eq!(session.pending_events.len(), 1);
-        assert!(matches!(&session.pending_events[0], DomainEvent::SessionCreated { .. }));
+        assert!(matches!(
+            &session.pending_events[0],
+            DomainEvent::SessionCreated { .. }
+        ));
     }
 
     #[test]
@@ -279,7 +310,10 @@ mod tests {
         let mut session = AgentSession::create(AgentConfig::default());
         session.start("Investigate entity X".to_string());
         assert_eq!(session.status, SessionStatus::Running);
-        assert!(matches!(&session.pending_events[1], DomainEvent::AgentStarted { .. }));
+        assert!(matches!(
+            &session.pending_events[1],
+            DomainEvent::AgentStarted { .. }
+        ));
     }
 
     #[test]
@@ -288,7 +322,10 @@ mod tests {
         session.start("test".to_string());
         session.complete("found connections".to_string());
         assert_eq!(session.status, SessionStatus::Completed);
-        assert!(matches!(&session.pending_events[2], DomainEvent::AgentCompleted { .. }));
+        assert!(matches!(
+            &session.pending_events[2],
+            DomainEvent::AgentCompleted { .. }
+        ));
     }
 
     #[test]
@@ -300,10 +337,17 @@ mod tests {
             tool_names: vec!["web_search".to_string(), "fetch_url".to_string()],
             timestamp: Utc::now(),
         };
-        session.add_turn(summary, &["web_search".to_string(), "fetch_url".to_string()]);
+        session.add_turn(
+            summary,
+            &["web_search".to_string(), "fetch_url".to_string()],
+        );
         // 1 SessionCreated + 2 ToolCalled
         assert_eq!(session.pending_events.len(), 3);
-        assert!(matches!(&session.pending_events[1], DomainEvent::ToolCalled { tool_name, .. } if tool_name == "web_search"));
-        assert!(matches!(&session.pending_events[2], DomainEvent::ToolCalled { tool_name, .. } if tool_name == "fetch_url"));
+        assert!(
+            matches!(&session.pending_events[1], DomainEvent::ToolCalled { tool_name, .. } if tool_name == "web_search")
+        );
+        assert!(
+            matches!(&session.pending_events[2], DomainEvent::ToolCalled { tool_name, .. } if tool_name == "fetch_url")
+        );
     }
 }
