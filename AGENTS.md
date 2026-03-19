@@ -25,6 +25,8 @@ single executable with no Python or Node.js runtime dependency.
 - Build: `cargo build --workspace`
 - Test: `cargo test --workspace`
 - Lint: `cargo clippy --workspace -- -D warnings`
+- Wire pre-commit hooks (one-time per clone): `git config core.hooksPath .githooks`
+- Install gitleaks (macOS): `brew install gitleaks`
 
 ## Code style
 

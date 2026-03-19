@@ -1,0 +1,7 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "redshank gitleaks config"
+
+[extend]
+useDefault = true

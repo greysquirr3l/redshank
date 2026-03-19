@@ -3,23 +3,33 @@ name: Security Audit
 on:
   push:
     branches: [main]
-    paths:
-      - "**/Cargo.toml"
-      - "**/Cargo.lock"
-      - ".github/workflows/security.yml"
   pull_request:
     branches: [main]
-    paths:
-      - "**/Cargo.toml"
-      - "**/Cargo.lock"
   schedule:
     # Run every Monday at 08:00 UTC to catch newly-published advisories
     - cron: "0 8 * * 1"
   workflow_dispatch:
 
 jobs:
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   audit:
     name: Cargo Audit
+    needs: gitleaks
     runs-on: ubuntu-latest
     permissions:
       contents: read

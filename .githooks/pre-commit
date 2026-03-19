@@ -1,0 +1,20 @@
+#!/bin/sh
+# Pre-commit secret scan via gitleaks.
+# Scans only staged changes so it's fast even on large repos.
+#
+# Setup (one-time, per-clone):
+#   git config core.hooksPath .githooks
+#
+# Install gitleaks:
+#   brew install gitleaks   (macOS)
+#   https://github.com/gitleaks/gitleaks/releases  (other platforms)
+
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "warning: gitleaks not found — skipping secret scan"
+  echo "         install: brew install gitleaks"
+  exit 0
+fi
+
+gitleaks protect --staged --redact --exit-code 1
