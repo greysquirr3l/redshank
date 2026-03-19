@@ -76,7 +76,7 @@ pub struct CredentialBundle {
     pub github_token: Option<CredentialGuard<String>>,
     /// FEC (Federal Election Commission) API key.
     pub fec_api_key: Option<CredentialGuard<String>>,
-    /// OpenCorporates API token (optional — free tier works without one).
+    /// `OpenCorporates` API token (optional — free tier works without one).
     pub opencorporates_api_key: Option<CredentialGuard<String>>,
 }
 

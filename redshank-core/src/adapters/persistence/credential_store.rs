@@ -53,35 +53,89 @@ pub fn parse_env_file(path: &Path) -> HashMap<String, String> {
 }
 
 /// Build a `CredentialBundle` from a parsed env map.
+///
+/// Resolution order (highest priority first):
+/// 1. `REDSHANK_<KEY>` — app-namespaced (use when running multiple agents)
+/// 2. `OPENPLANTER_<KEY>` — legacy `OpenPlanter` backward compatibility
+/// 3. `<KEY>` — bare/global env var
 fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
-    let get = |openplanter_key: &str, bare_key: &str| -> Option<CredentialGuard<String>> {
+    let get = |redshank_key: &str,
+               openplanter_key: &str,
+               bare_key: &str|
+     -> Option<CredentialGuard<String>> {
         let val = env
-            .get(openplanter_key)
+            .get(redshank_key)
+            .or_else(|| env.get(openplanter_key))
             .or_else(|| env.get(bare_key))
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
         val.map(CredentialGuard::new)
     };
 
-    let get_plain = |openplanter_key: &str, bare_key: &str| -> Option<String> {
-        env.get(openplanter_key)
+    let get_plain = |redshank_key: &str, openplanter_key: &str, bare_key: &str| -> Option<String> {
+        env.get(redshank_key)
+            .or_else(|| env.get(openplanter_key))
             .or_else(|| env.get(bare_key))
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     };
 
     CredentialBundle {
-        openai_api_key: get("OPENPLANTER_OPENAI_API_KEY", "OPENAI_API_KEY"),
-        anthropic_api_key: get("OPENPLANTER_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
-        openrouter_api_key: get("OPENPLANTER_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"),
-        cerebras_api_key: get("OPENPLANTER_CEREBRAS_API_KEY", "CEREBRAS_API_KEY"),
-        exa_api_key: get("OPENPLANTER_EXA_API_KEY", "EXA_API_KEY"),
-        voyage_api_key: get("OPENPLANTER_VOYAGE_API_KEY", "VOYAGE_API_KEY"),
-        hibp_api_key: get("OPENPLANTER_HIBP_API_KEY", "HIBP_API_KEY"),
-        github_token: get("OPENPLANTER_GITHUB_TOKEN", "GITHUB_TOKEN"),
-        fec_api_key: get("OPENPLANTER_FEC_API_KEY", "FEC_API_KEY"),
-        opencorporates_api_key: get("OPENPLANTER_OPENCORPORATES_API_KEY", "OPENCORPORATES_API_KEY"),
-        ollama_base_url: get_plain("OPENPLANTER_OLLAMA_BASE_URL", "OLLAMA_BASE_URL"),
+        openai_api_key: get(
+            "REDSHANK_OPENAI_API_KEY",
+            "OPENPLANTER_OPENAI_API_KEY",
+            "OPENAI_API_KEY",
+        ),
+        anthropic_api_key: get(
+            "REDSHANK_ANTHROPIC_API_KEY",
+            "OPENPLANTER_ANTHROPIC_API_KEY",
+            "ANTHROPIC_API_KEY",
+        ),
+        openrouter_api_key: get(
+            "REDSHANK_OPENROUTER_API_KEY",
+            "OPENPLANTER_OPENROUTER_API_KEY",
+            "OPENROUTER_API_KEY",
+        ),
+        cerebras_api_key: get(
+            "REDSHANK_CEREBRAS_API_KEY",
+            "OPENPLANTER_CEREBRAS_API_KEY",
+            "CEREBRAS_API_KEY",
+        ),
+        exa_api_key: get(
+            "REDSHANK_EXA_API_KEY",
+            "OPENPLANTER_EXA_API_KEY",
+            "EXA_API_KEY",
+        ),
+        voyage_api_key: get(
+            "REDSHANK_VOYAGE_API_KEY",
+            "OPENPLANTER_VOYAGE_API_KEY",
+            "VOYAGE_API_KEY",
+        ),
+        hibp_api_key: get(
+            "REDSHANK_HIBP_API_KEY",
+            "OPENPLANTER_HIBP_API_KEY",
+            "HIBP_API_KEY",
+        ),
+        github_token: get(
+            "REDSHANK_GITHUB_TOKEN",
+            "OPENPLANTER_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+        ),
+        fec_api_key: get(
+            "REDSHANK_FEC_API_KEY",
+            "OPENPLANTER_FEC_API_KEY",
+            "FEC_API_KEY",
+        ),
+        opencorporates_api_key: get(
+            "REDSHANK_OPENCORPORATES_API_KEY",
+            "OPENPLANTER_OPENCORPORATES_API_KEY",
+            "OPENCORPORATES_API_KEY",
+        ),
+        ollama_base_url: get_plain(
+            "REDSHANK_OLLAMA_BASE_URL",
+            "OPENPLANTER_OLLAMA_BASE_URL",
+            "OLLAMA_BASE_URL",
+        ),
     }
 }
 
@@ -95,37 +149,91 @@ pub fn credentials_from_env_file(path: &Path) -> CredentialBundle {
 // ── Environment variable source ─────────────────────────────
 
 /// Build a `CredentialBundle` from process environment variables.
+///
+/// Resolution order (highest priority first):
+/// 1. `REDSHANK_<KEY>` — app-namespaced (use when running multiple agents)
+/// 2. `OPENPLANTER_<KEY>` — legacy `OpenPlanter` backward compatibility
+/// 3. `<KEY>` — bare/global env var
 #[must_use]
 pub fn credentials_from_env() -> CredentialBundle {
-    let get = |openplanter_key: &str, bare_key: &str| -> Option<CredentialGuard<String>> {
-        let val = std::env::var(openplanter_key)
+    let get = |redshank_key: &str,
+               openplanter_key: &str,
+               bare_key: &str|
+     -> Option<CredentialGuard<String>> {
+        let val = std::env::var(redshank_key)
             .ok()
+            .or_else(|| std::env::var(openplanter_key).ok())
             .or_else(|| std::env::var(bare_key).ok())
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
         val.map(CredentialGuard::new)
     };
 
-    let get_plain = |openplanter_key: &str, bare_key: &str| -> Option<String> {
-        std::env::var(openplanter_key)
+    let get_plain = |redshank_key: &str, openplanter_key: &str, bare_key: &str| -> Option<String> {
+        std::env::var(redshank_key)
             .ok()
+            .or_else(|| std::env::var(openplanter_key).ok())
             .or_else(|| std::env::var(bare_key).ok())
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
     };
 
     CredentialBundle {
-        openai_api_key: get("OPENPLANTER_OPENAI_API_KEY", "OPENAI_API_KEY"),
-        anthropic_api_key: get("OPENPLANTER_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
-        openrouter_api_key: get("OPENPLANTER_OPENROUTER_API_KEY", "OPENROUTER_API_KEY"),
-        cerebras_api_key: get("OPENPLANTER_CEREBRAS_API_KEY", "CEREBRAS_API_KEY"),
-        exa_api_key: get("OPENPLANTER_EXA_API_KEY", "EXA_API_KEY"),
-        voyage_api_key: get("OPENPLANTER_VOYAGE_API_KEY", "VOYAGE_API_KEY"),
-        hibp_api_key: get("OPENPLANTER_HIBP_API_KEY", "HIBP_API_KEY"),
-        github_token: get("OPENPLANTER_GITHUB_TOKEN", "GITHUB_TOKEN"),
-        fec_api_key: get("OPENPLANTER_FEC_API_KEY", "FEC_API_KEY"),
-        opencorporates_api_key: get("OPENPLANTER_OPENCORPORATES_API_KEY", "OPENCORPORATES_API_KEY"),
-        ollama_base_url: get_plain("OPENPLANTER_OLLAMA_BASE_URL", "OLLAMA_BASE_URL"),
+        openai_api_key: get(
+            "REDSHANK_OPENAI_API_KEY",
+            "OPENPLANTER_OPENAI_API_KEY",
+            "OPENAI_API_KEY",
+        ),
+        anthropic_api_key: get(
+            "REDSHANK_ANTHROPIC_API_KEY",
+            "OPENPLANTER_ANTHROPIC_API_KEY",
+            "ANTHROPIC_API_KEY",
+        ),
+        openrouter_api_key: get(
+            "REDSHANK_OPENROUTER_API_KEY",
+            "OPENPLANTER_OPENROUTER_API_KEY",
+            "OPENROUTER_API_KEY",
+        ),
+        cerebras_api_key: get(
+            "REDSHANK_CEREBRAS_API_KEY",
+            "OPENPLANTER_CEREBRAS_API_KEY",
+            "CEREBRAS_API_KEY",
+        ),
+        exa_api_key: get(
+            "REDSHANK_EXA_API_KEY",
+            "OPENPLANTER_EXA_API_KEY",
+            "EXA_API_KEY",
+        ),
+        voyage_api_key: get(
+            "REDSHANK_VOYAGE_API_KEY",
+            "OPENPLANTER_VOYAGE_API_KEY",
+            "VOYAGE_API_KEY",
+        ),
+        hibp_api_key: get(
+            "REDSHANK_HIBP_API_KEY",
+            "OPENPLANTER_HIBP_API_KEY",
+            "HIBP_API_KEY",
+        ),
+        github_token: get(
+            "REDSHANK_GITHUB_TOKEN",
+            "OPENPLANTER_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+        ),
+        fec_api_key: get(
+            "REDSHANK_FEC_API_KEY",
+            "OPENPLANTER_FEC_API_KEY",
+            "FEC_API_KEY",
+        ),
+        opencorporates_api_key: get(
+            "REDSHANK_OPENCORPORATES_API_KEY",
+            "OPENPLANTER_OPENCORPORATES_API_KEY",
+            "OPENCORPORATES_API_KEY",
+        ),
+        ollama_base_url: get_plain(
+            "REDSHANK_OLLAMA_BASE_URL",
+            "OPENPLANTER_OLLAMA_BASE_URL",
+            "OLLAMA_BASE_URL",
+        ),
     }
 }
 
