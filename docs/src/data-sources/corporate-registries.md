@@ -19,6 +19,36 @@ Company search and officer/subsidiary data via [OpenCorporates](https://api.open
 redshank fetch opencorporates --name "Acme Corp" --jurisdiction us_de
 ```
 
+### Licence — ODbL 1.0 (attribution required)
+
+OpenCorporates data is published under the [Open Database Licence (ODbL 1.0)](https://opendatacommons.org/licenses/odbl/1-0/).
+Every report, wiki entry, or UI element that surfaces OpenCorporates data **must** include a visible hyperlink:
+
+> **[from OpenCorporates](https://opencorporates.com)** — or the canonical entity URL returned in the API response
+
+Attribution rules from [opencorporates.com/terms-of-use-2](https://opencorporates.com/terms-of-use-2/):
+
+- The link text must read **"from OpenCorporates"** and must resolve to the OpenCorporates homepage *or* the specific entity page (prefer the entity URL when available — it is returned in every API response).
+- The link must be **at least 70 % the size of the largest font** used for the related information, and **never smaller than 7 px**, whichever of the two is larger.
+- If OpenCorporates data forms the **substantial part** of a web page, add `<link rel="canonical" href="{entity_url}">` so search engines treat the OpenCorporates page as the authoritative source.
+- If you expose this data through your own API, your downstream consumers inherit the same obligations.
+
+#### How attribution propagates in redshank
+
+`FetchOutput` for the `opencorporates` fetcher carries a populated `attribution` field:
+
+```rust
+pub struct Attribution {
+    pub source: String,         // "OpenCorporates"
+    pub text: String,           // "from OpenCorporates"
+    pub url: String,            // "https://opencorporates.com"
+    pub min_font_size_px: u8,   // 7
+    pub licence: String,        // "ODbL-1.0"
+}
+```
+
+The report and wiki-graph layers read `FetchOutput::attribution` and must render the hyperlink before writing any entity page that includes OpenCorporates fields. If the `url` field in a specific company record differs (i.e. the canonical entity URL was returned by the API), use that URL instead of the homepage.
+
 ## FinCEN BOI
 
 Beneficial Ownership Information filings from [FinCEN](https://boiefiling.fincen.gov).
