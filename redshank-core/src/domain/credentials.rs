@@ -74,6 +74,10 @@ pub struct CredentialBundle {
     pub hibp_api_key: Option<CredentialGuard<String>>,
     /// GitHub personal access token.
     pub github_token: Option<CredentialGuard<String>>,
+    /// FEC (Federal Election Commission) API key.
+    pub fec_api_key: Option<CredentialGuard<String>>,
+    /// OpenCorporates API token (optional — free tier works without one).
+    pub opencorporates_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -115,6 +119,8 @@ impl CredentialBundle {
         fill!(ollama_base_url);
         fill!(hibp_api_key);
         fill!(github_token);
+        fill!(fec_api_key);
+        fill!(opencorporates_api_key);
     }
 }
 

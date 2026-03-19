@@ -79,6 +79,8 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
         voyage_api_key: get("OPENPLANTER_VOYAGE_API_KEY", "VOYAGE_API_KEY"),
         hibp_api_key: get("OPENPLANTER_HIBP_API_KEY", "HIBP_API_KEY"),
         github_token: get("OPENPLANTER_GITHUB_TOKEN", "GITHUB_TOKEN"),
+        fec_api_key: get("OPENPLANTER_FEC_API_KEY", "FEC_API_KEY"),
+        opencorporates_api_key: get("OPENPLANTER_OPENCORPORATES_API_KEY", "OPENCORPORATES_API_KEY"),
         ollama_base_url: get_plain("OPENPLANTER_OLLAMA_BASE_URL", "OLLAMA_BASE_URL"),
     }
 }
@@ -121,6 +123,8 @@ pub fn credentials_from_env() -> CredentialBundle {
         voyage_api_key: get("OPENPLANTER_VOYAGE_API_KEY", "VOYAGE_API_KEY"),
         hibp_api_key: get("OPENPLANTER_HIBP_API_KEY", "HIBP_API_KEY"),
         github_token: get("OPENPLANTER_GITHUB_TOKEN", "GITHUB_TOKEN"),
+        fec_api_key: get("OPENPLANTER_FEC_API_KEY", "FEC_API_KEY"),
+        opencorporates_api_key: get("OPENPLANTER_OPENCORPORATES_API_KEY", "OPENCORPORATES_API_KEY"),
         ollama_base_url: get_plain("OPENPLANTER_OLLAMA_BASE_URL", "OLLAMA_BASE_URL"),
     }
 }

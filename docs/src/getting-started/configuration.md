@@ -26,6 +26,8 @@ Both bare keys and the legacy `OPENPLANTER_` prefix are accepted.
 | `VOYAGE_API_KEY` | Voyage AI embeddings |
 | `HIBP_API_KEY` | Have I Been Pwned breach data |
 | `GITHUB_TOKEN` | GitHub API (profile fetcher) |
+| `FEC_API_KEY` | FEC campaign finance API |
+| `OPENCORPORATES_API_KEY` | OpenCorporates (optional — free tier without) |
 
 Copy `.env.example` from the repo root and fill in the keys you need:
 
@@ -56,7 +58,9 @@ The file format maps directly to the environment variable names (snake_case):
   "exa_api_key": "...",
   "voyage_api_key": "...",
   "hibp_api_key": "...",
-  "github_token": "ghp_..."
+  "github_token": "ghp_...",
+  "fec_api_key": "...",
+  "opencorporates_api_key": "..."
 }
 ```
 
