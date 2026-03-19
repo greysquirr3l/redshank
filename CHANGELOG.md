@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-19
+
+### Added
+
+- **ODbL attribution enforcement for OpenCorporates** — New `Attribution` value type in `FetchOutput` carries licence metadata (text, URL, `min_font_size_px`, SPDX identifier) alongside every fetch result. Report and wiki layers must render the hyperlink before surfacing OpenCorporates data. All other fetchers carry `attribution: None`.
+- **`opencorporates::attribution()` helper** — Public function returning the fully populated ODbL-1.0 `Attribution` for use at call sites and in tests.
+- **OpenCorporates licence documentation** — `docs/src/data-sources/corporate-registries.md` has a dedicated Licence section covering attribution rules, `rel-canonical` requirement, downstream API obligations, and how `FetchOutput::attribution` propagates through redshank.
+
 ## [0.1.0] - 2026-03-19
 
 ### Added
@@ -38,5 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Credential storage permissions** — All `.json` files written `chmod 600`; keys never logged at any level.
 - **Role-based access control** — Typed `AuthContext` and `SecurityPolicy` enforced at every data-access path.
 
-[Unreleased]: https://github.com/greysquirr3l/redshank/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/greysquirr3l/redshank/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/greysquirr3l/redshank/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/greysquirr3l/redshank/releases/tag/v0.1.0
