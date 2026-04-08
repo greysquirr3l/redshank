@@ -6,5 +6,33 @@
   "default_model_openai": "gpt-4o",
   "default_model_openrouter": "anthropic/claude-sonnet-4",
   "default_model_cerebras": "llama-3.3-70b",
-  "default_model_ollama": "llama3.2"
+  "default_model_ollama": "llama3.2",
+
+  "_fetchers_comment": "Per-source data fetcher configuration. Sources not listed are enabled by default.",
+  "fetchers": {
+    "_example_disabled": {
+      "_comment": "Disable a source: set enabled=false",
+      "enabled": false
+    },
+    "_example_rate_limited": {
+      "_comment": "Custom rate limit: set rate_limit_ms (ms between requests)",
+      "enabled": true,
+      "rate_limit_ms": 2000,
+      "max_pages": 50
+    },
+    "hibp": {
+      "_comment": "HIBP requires paid API key — disable if you don't have one",
+      "enabled": true,
+      "api_key": ""
+    },
+    "opencorporates": {
+      "_comment": "OpenCorporates free tier: 500 req/day. Set api_key for higher volume.",
+      "enabled": true,
+      "rate_limit_ms": 1000
+    },
+    "voter_reg": {
+      "_comment": "Voter registration lookups — disable if not needed for your use case",
+      "enabled": true
+    }
+  }
 }
