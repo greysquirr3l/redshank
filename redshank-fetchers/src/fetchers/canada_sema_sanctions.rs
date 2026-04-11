@@ -9,8 +9,7 @@ use crate::{build_client, write_ndjson};
 use std::path::Path;
 
 /// Canada SEMA consolidated sanctions — direct XML download URL.
-const SEMA_XML_URL: &str =
-    "https://www.international.gc.ca/world-monde/assets/office_docs/international_relations-relations_internationales/sanctions/sema-lmes.xml";
+const SEMA_XML_URL: &str = "https://www.international.gc.ca/world-monde/assets/office_docs/international_relations-relations_internationales/sanctions/sema-lmes.xml";
 
 /// A Canada SEMA sanctions entry.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -103,8 +102,8 @@ fn parse_sema_persons(xml: &str) -> Vec<SemaEntry> {
             let regime = extract_tag(block, "schedule")
                 .or_else(|| extract_tag(block, "regime"))
                 .unwrap_or_default();
-            let listed_on = extract_tag(block, "dateOfListing")
-                .or_else(|| extract_tag(block, "listedOn"));
+            let listed_on =
+                extract_tag(block, "dateOfListing").or_else(|| extract_tag(block, "listedOn"));
 
             let aliases = collect_tags(block, "alias");
 
@@ -135,8 +134,8 @@ fn parse_sema_entities(xml: &str) -> Vec<SemaEntry> {
             let regime = extract_tag(block, "schedule")
                 .or_else(|| extract_tag(block, "regime"))
                 .unwrap_or_default();
-            let listed_on = extract_tag(block, "dateOfListing")
-                .or_else(|| extract_tag(block, "listedOn"));
+            let listed_on =
+                extract_tag(block, "dateOfListing").or_else(|| extract_tag(block, "listedOn"));
 
             let aliases = collect_tags(block, "alias");
 
@@ -220,7 +219,10 @@ mod tests {
     #[test]
     fn sema_parses_individuals_extracts_names_regime_listing_date() {
         let entries = parse_sema_xml(XML_FIXTURE);
-        let individuals: Vec<_> = entries.iter().filter(|e| e.entity_type == "Individual").collect();
+        let individuals: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entity_type == "Individual")
+            .collect();
 
         assert_eq!(individuals.len(), 2);
         assert_eq!(individuals[0].first_name, "Vladimir");
@@ -228,19 +230,30 @@ mod tests {
         assert_eq!(individuals[0].full_name, "Vladimir PUTIN");
         assert_eq!(individuals[0].regime, "Russia");
         assert_eq!(individuals[0].listed_on.as_deref(), Some("2022-02-28"));
-        assert!(individuals[0].aliases.contains(&"Vladimir Vladimirovich PUTIN".to_string()));
+        assert!(
+            individuals[0]
+                .aliases
+                .contains(&"Vladimir Vladimirovich PUTIN".to_string())
+        );
     }
 
     #[test]
     fn sema_parses_entity_with_multiple_aliases() {
         let entries = parse_sema_xml(XML_FIXTURE);
-        let entities: Vec<_> = entries.iter().filter(|e| e.entity_type == "Entity").collect();
+        let entities: Vec<_> = entries
+            .iter()
+            .filter(|e| e.entity_type == "Entity")
+            .collect();
 
         assert_eq!(entities.len(), 1);
         assert_eq!(entities[0].full_name, "SBERBANK");
         assert_eq!(entities[0].country, "Russia");
         assert_eq!(entities[0].aliases.len(), 2);
-        assert!(entities[0].aliases.contains(&"Savings Bank of Russia".to_string()));
+        assert!(
+            entities[0]
+                .aliases
+                .contains(&"Savings Bank of Russia".to_string())
+        );
     }
 
     #[test]

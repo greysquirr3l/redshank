@@ -21,11 +21,7 @@ pub async fn fetch_by_npi(npi: &str, output_dir: &Path) -> Result<FetchOutput, F
 
     let resp = client
         .get(API_BASE)
-        .query(&[
-            ("version", "2.1"),
-            ("search_type", "NPI"),
-            ("number", npi),
-        ])
+        .query(&[("version", "2.1"), ("search_type", "NPI"), ("number", npi)])
         .send()
         .await?;
 
@@ -71,8 +67,10 @@ pub async fn fetch_by_name(
     let max = if max_pages == 0 { u32::MAX } else { max_pages };
 
     for skip in (0..).step_by(DEFAULT_LIMIT as usize).take(max as usize) {
-        let mut query: Vec<(&str, String)> =
-            vec![("version", "2.1".to_string()), ("limit", DEFAULT_LIMIT.to_string())];
+        let mut query: Vec<(&str, String)> = vec![
+            ("version", "2.1".to_string()),
+            ("limit", DEFAULT_LIMIT.to_string()),
+        ];
 
         if skip > 0 {
             query.push(("skip", skip.to_string()));
@@ -179,13 +177,13 @@ pub fn extract_provider_details(record: &serde_json::Value) -> Option<ProviderDe
         .and_then(serde_json::Value::as_str)
         .map(String::from);
 
-    let addresses = record.get("addresses").and_then(serde_json::Value::as_array);
+    let addresses = record
+        .get("addresses")
+        .and_then(serde_json::Value::as_array);
     let primary_address = addresses.and_then(|arr| {
         arr.iter()
             .find(|a| {
-                a.get("address_purpose")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("LOCATION")
+                a.get("address_purpose").and_then(serde_json::Value::as_str) == Some("LOCATION")
             })
             .or_else(|| arr.first())
     });

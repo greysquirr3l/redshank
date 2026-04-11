@@ -15,11 +15,17 @@ use std::path::Path;
 
 const COMPANY_FACTS_BASE: &str = "https://data.sec.gov/api/xbrl/companyfacts";
 
-const REVENUE_TAGS: &[&str] = &["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax"];
+const REVENUE_TAGS: &[&str] = &[
+    "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+];
 const NET_INCOME_TAGS: &[&str] = &["NetIncomeLoss"];
 const TOTAL_ASSETS_TAGS: &[&str] = &["Assets"];
 const TOTAL_LIABILITIES_TAGS: &[&str] = &["Liabilities"];
-const EQUITY_TAGS: &[&str] = &["StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"];
+const EQUITY_TAGS: &[&str] = &[
+    "StockholdersEquity",
+    "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+];
 const CURRENT_ASSETS_TAGS: &[&str] = &["AssetsCurrent"];
 const CURRENT_LIABILITIES_TAGS: &[&str] = &["LiabilitiesCurrent"];
 const RELATED_PARTY_TAGS: &[&str] = &[
@@ -27,10 +33,7 @@ const RELATED_PARTY_TAGS: &[&str] = &[
     "RelatedPartyTransactionsByRelatedParty",
     "RelatedPartyTransactionDescriptionAndTermsOfTransactionTextBlock",
 ];
-const EXEC_COMP_NAME_TAGS: &[&str] = &[
-    "ExecutiveOfficerName",
-    "NamedExecutiveOfficerName",
-];
+const EXEC_COMP_NAME_TAGS: &[&str] = &["ExecutiveOfficerName", "NamedExecutiveOfficerName"];
 const EXEC_COMP_TOTAL_TAGS: &[&str] = &[
     "ExecutiveOfficerTotalCompensation",
     "NamedExecutiveOfficerTotalCompensation",
@@ -164,7 +167,7 @@ fn select_ticker(json: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn metric_definitions() -> &'static [(&'static [ & 'static str], MetricField)] {
+fn metric_definitions() -> &'static [(&'static [&'static str], MetricField)] {
     &[
         (REVENUE_TAGS, MetricField::Revenue),
         (NET_INCOME_TAGS, MetricField::NetIncome),
@@ -280,7 +283,11 @@ pub fn parse_company_facts(json: &serde_json::Value) -> Vec<SecXbrlRecord> {
     let cik = json
         .get("cik")
         .and_then(serde_json::Value::as_str)
-        .or_else(|| json.get("cik").and_then(serde_json::Value::as_u64).map(|n| Box::leak(format!("{n:010}").into_boxed_str()) as &str))
+        .or_else(|| {
+            json.get("cik")
+                .and_then(serde_json::Value::as_u64)
+                .map(|n| Box::leak(format!("{n:010}").into_boxed_str()) as &str)
+        })
         .unwrap_or_default()
         .to_string();
     let ticker = select_ticker(json);
@@ -438,7 +445,10 @@ pub fn parse_inline_executive_compensation(
         .map(|entry| {
             (
                 entry.get("val").and_then(as_f64),
-                entry.get("accn").and_then(serde_json::Value::as_str).map(str::to_string),
+                entry
+                    .get("accn")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
             )
         })
         .collect();
@@ -447,10 +457,8 @@ pub fn parse_inline_executive_compensation(
         .iter()
         .enumerate()
         .map(|(index, name)| {
-            let (total_compensation, source_filing) = totals
-                .get(index)
-                .cloned()
-                .unwrap_or((None, None));
+            let (total_compensation, source_filing) =
+                totals.get(index).cloned().unwrap_or((None, None));
             ExecutiveCompensationRecord {
                 officer_name: name.clone(),
                 title: None,
@@ -645,7 +653,10 @@ mod tests {
     #[test]
     fn sec_xbrl_parses_company_facts_and_extracts_revenue_across_periods() {
         let records = parse_company_facts(&company_facts_fixture());
-        let annual = records.iter().find(|record| record.period_type == "annual").unwrap();
+        let annual = records
+            .iter()
+            .find(|record| record.period_type == "annual")
+            .unwrap();
         let quarterly = records
             .iter()
             .find(|record| record.period_type == "quarterly")
@@ -661,7 +672,10 @@ mod tests {
     #[test]
     fn sec_xbrl_extracts_core_balance_sheet_and_income_statement_metrics() {
         let records = parse_company_facts(&company_facts_fixture());
-        let annual = records.iter().find(|record| record.period_type == "annual").unwrap();
+        let annual = records
+            .iter()
+            .find(|record| record.period_type == "annual")
+            .unwrap();
 
         assert_eq!(annual.financials.net_income, Some(96995000000.0));
         assert_eq!(annual.financials.total_assets, Some(352583000000.0));
@@ -674,8 +688,16 @@ mod tests {
         let records = parse_company_facts(&company_facts_fixture());
 
         assert!(records.iter().any(|record| record.period_type == "annual"));
-        assert!(records.iter().any(|record| record.period_type == "quarterly"));
-        assert!(records.iter().any(|record| record.source_filing == "0000320193-24-000081"));
+        assert!(
+            records
+                .iter()
+                .any(|record| record.period_type == "quarterly")
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.source_filing == "0000320193-24-000081")
+        );
     }
 
     #[test]
@@ -694,21 +716,52 @@ mod tests {
     #[test]
     fn sec_xbrl_calculates_current_ratio_debt_to_equity_and_profit_margin() {
         let records = parse_company_facts(&company_facts_fixture());
-        let annual = records.iter().find(|record| record.period_type == "annual").unwrap();
+        let annual = records
+            .iter()
+            .find(|record| record.period_type == "annual")
+            .unwrap();
 
-        assert_eq!(annual.ratios.current_ratio.map(|v| v * 100.0).map(f64::round), Some(99.0));
-        assert_eq!(annual.ratios.debt_to_equity.map(|v| (v * 100.0).round() / 100.0), Some(4.67));
-        assert_eq!(annual.ratios.profit_margin.map(|v| (v * 1000.0).round() / 1000.0), Some(0.246));
+        assert_eq!(
+            annual
+                .ratios
+                .current_ratio
+                .map(|v| v * 100.0)
+                .map(f64::round),
+            Some(99.0)
+        );
+        assert_eq!(
+            annual
+                .ratios
+                .debt_to_equity
+                .map(|v| (v * 100.0).round() / 100.0),
+            Some(4.67)
+        );
+        assert_eq!(
+            annual
+                .ratios
+                .profit_margin
+                .map(|v| (v * 1000.0).round() / 1000.0),
+            Some(0.246)
+        );
     }
 
     #[test]
     fn sec_xbrl_handles_missing_metrics_gracefully() {
         let mut fixture = company_facts_fixture();
-        fixture["facts"]["us-gaap"].as_object_mut().unwrap().remove("AssetsCurrent");
-        fixture["facts"]["us-gaap"].as_object_mut().unwrap().remove("LiabilitiesCurrent");
+        fixture["facts"]["us-gaap"]
+            .as_object_mut()
+            .unwrap()
+            .remove("AssetsCurrent");
+        fixture["facts"]["us-gaap"]
+            .as_object_mut()
+            .unwrap()
+            .remove("LiabilitiesCurrent");
 
         let records = parse_company_facts(&fixture);
-        let annual = records.iter().find(|record| record.period_type == "annual").unwrap();
+        let annual = records
+            .iter()
+            .find(|record| record.period_type == "annual")
+            .unwrap();
 
         assert_eq!(annual.financials.current_assets, None);
         assert_eq!(annual.financials.current_liabilities, None);
@@ -718,13 +771,20 @@ mod tests {
     #[test]
     fn sec_xbrl_extracts_related_party_transactions() {
         let records = parse_company_facts(&company_facts_fixture());
-        let annual = records.iter().find(|record| record.period_type == "annual").unwrap();
+        let annual = records
+            .iter()
+            .find(|record| record.period_type == "annual")
+            .unwrap();
 
         assert_eq!(annual.related_party_transactions.len(), 1);
         assert_eq!(
             annual.related_party_transactions[0].concept,
             "RelatedPartyTransactionsByRelatedParty"
         );
-        assert!(annual.related_party_transactions[0].value.contains("note 12"));
+        assert!(
+            annual.related_party_transactions[0]
+                .value
+                .contains("note 12")
+        );
     }
 }

@@ -191,7 +191,8 @@ pub async fn save_public_profile(
         FetchError::Parse("could not parse LinkedIn public profile HTML".to_string())
     })?;
 
-    let records = vec![serde_json::to_value(profile).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(profile).map_err(|err| FetchError::Parse(err.to_string()))?];
     let output_path = output_dir.join("linkedin_public.ndjson");
     let count = write_ndjson(&output_path, &records)?;
 
@@ -254,8 +255,14 @@ mod tests {
         let profile = parse_public_profile_html("jane-investigator", profile_fixture()).unwrap();
 
         assert_eq!(profile.name, "Jane Investigator");
-        assert_eq!(profile.headline.as_deref(), Some("Open Source Intelligence Lead"));
-        assert_eq!(profile.current_company.as_deref(), Some("Grey Heron Analytics"));
+        assert_eq!(
+            profile.headline.as_deref(),
+            Some("Open Source Intelligence Lead")
+        );
+        assert_eq!(
+            profile.current_company.as_deref(),
+            Some("Grey Heron Analytics")
+        );
         assert_eq!(profile.location.as_deref(), Some("London, United Kingdom"));
     }
 
@@ -268,6 +275,9 @@ mod tests {
         assert_eq!(profile.work_history[1].company, "Civic Data Lab");
         assert_eq!(profile.education_history.len(), 1);
         assert_eq!(profile.education_history[0].school, "King's College London");
-        assert_eq!(profile.education_history[0].field.as_deref(), Some("Digital Humanities"));
+        assert_eq!(
+            profile.education_history[0].field.as_deref(),
+            Some("Digital Humanities")
+        );
     }
 }

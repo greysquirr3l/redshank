@@ -72,9 +72,12 @@ fn extract_name(record: &serde_json::Value) -> Option<String> {
 /// Parse an extended NPI record.
 #[must_use]
 pub fn parse_extended_record(record: &serde_json::Value) -> Option<ExtendedNpiRecord> {
-    let npi = record
-        .get("number")
-        .and_then(|value| value.as_u64().map(|number| number.to_string()).or_else(|| value.as_str().map(str::to_string)))?;
+    let npi = record.get("number").and_then(|value| {
+        value
+            .as_u64()
+            .map(|number| number.to_string())
+            .or_else(|| value.as_str().map(str::to_string))
+    })?;
     let name = extract_name(record)?;
     let basic = record.get("basic").unwrap_or(&serde_json::Value::Null);
 
@@ -128,7 +131,8 @@ pub fn parse_extended_record(record: &serde_json::Value) -> Option<ExtendedNpiRe
         npi,
         name,
         parent_organization_npi: optional_string(basic, "parent_organization_lbn"),
-        authorized_official_name: (!authorized_official_name.is_empty()).then_some(authorized_official_name),
+        authorized_official_name: (!authorized_official_name.is_empty())
+            .then_some(authorized_official_name),
         authorized_official_title: optional_string(basic, "authorized_official_title_or_position"),
         authorized_official_credential: optional_string(basic, "authorized_official_credential"),
         enumeration_date: optional_string(basic, "enumeration_date"),
@@ -168,7 +172,9 @@ pub async fn fetch_by_npi(npi: &str, output_dir: &Path) -> Result<FetchOutput, F
             items
                 .iter()
                 .filter_map(parse_extended_record)
-                .map(|record| serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string())))
+                .map(|record| {
+                    serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string()))
+                })
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?
@@ -219,15 +225,24 @@ mod tests {
         let record = parse_extended_record(&organization_fixture()).unwrap();
 
         assert_eq!(record.name, "North Valley Cardiology Group");
-        assert_eq!(record.parent_organization_npi.as_deref(), Some("9988776655"));
+        assert_eq!(
+            record.parent_organization_npi.as_deref(),
+            Some("9988776655")
+        );
     }
 
     #[test]
     fn npi_extended_extracts_authorized_official_and_taxonomies() {
         let record = parse_extended_record(&organization_fixture()).unwrap();
 
-        assert_eq!(record.authorized_official_name.as_deref(), Some("Amira Rahman"));
-        assert_eq!(record.authorized_official_title.as_deref(), Some("Chief Compliance Officer"));
+        assert_eq!(
+            record.authorized_official_name.as_deref(),
+            Some("Amira Rahman")
+        );
+        assert_eq!(
+            record.authorized_official_title.as_deref(),
+            Some("Chief Compliance Officer")
+        );
         assert_eq!(record.taxonomies.len(), 2);
         assert_eq!(record.taxonomies[0].code, "207RC0000X");
         assert!(record.taxonomies[0].primary);

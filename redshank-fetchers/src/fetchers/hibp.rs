@@ -82,7 +82,7 @@ pub async fn fetch_breaches_for_email(
             records_written: 0,
             output_path,
             source_name: "hibp".into(),
-        attribution: None,
+            attribution: None,
         });
     }
 

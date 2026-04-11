@@ -50,7 +50,8 @@ fn optional_f64(record: &serde_json::Value, keys: &[&str]) -> Option<f64> {
 }
 
 fn extract_year(record: &serde_json::Value) -> Option<u32> {
-    optional_string(record, &["program_year", "payment_year", "year"]).and_then(|year| year.parse().ok())
+    optional_string(record, &["program_year", "payment_year", "year"])
+        .and_then(|year| year.parse().ok())
 }
 
 fn parse_payment_record(record: &serde_json::Value) -> Option<OpenPaymentRecord> {
@@ -71,7 +72,10 @@ fn parse_payment_record(record: &serde_json::Value) -> Option<OpenPaymentRecord>
             "payer_name",
         ],
     )?;
-    let payment_amount = optional_f64(record, &["total_amount_of_payment_usdollars", "payment_amount"])?;
+    let payment_amount = optional_f64(
+        record,
+        &["total_amount_of_payment_usdollars", "payment_amount"],
+    )?;
 
     Some(OpenPaymentRecord {
         physician_name,
@@ -80,8 +84,17 @@ fn parse_payment_record(record: &serde_json::Value) -> Option<OpenPaymentRecord>
         payer,
         payment_amount,
         payment_date: optional_string(record, &["date_of_payment", "payment_date"]),
-        nature_of_payment: optional_string(record, &["nature_of_payment_or_transfer_of_value", "nature_of_payment"]),
-        payment_category: optional_string(record, &["dispute_status_for_publication", "payment_category"]),
+        nature_of_payment: optional_string(
+            record,
+            &[
+                "nature_of_payment_or_transfer_of_value",
+                "nature_of_payment",
+            ],
+        ),
+        payment_category: optional_string(
+            record,
+            &["dispute_status_for_publication", "payment_category"],
+        ),
         associated_product: optional_string(
             record,
             &[
@@ -116,12 +129,14 @@ pub fn aggregate_payments(records: &[OpenPaymentRecord]) -> Vec<PaymentAggregate
 
     grouped
         .into_iter()
-        .map(|((year, payer), (total_amount, record_count))| PaymentAggregate {
-            year,
-            payer,
-            total_amount,
-            record_count,
-        })
+        .map(
+            |((year, payer), (total_amount, record_count))| PaymentAggregate {
+                year,
+                payer,
+                total_amount,
+                record_count,
+            },
+        )
         .collect()
 }
 
@@ -174,7 +189,10 @@ pub async fn fetch_by_npi(
             );
         }
 
-        if json.as_array().is_none_or(|records| records.len() < DEFAULT_LIMIT as usize) {
+        if json
+            .as_array()
+            .is_none_or(|records| records.len() < DEFAULT_LIMIT as usize)
+        {
             break;
         }
 
@@ -264,7 +282,10 @@ mod tests {
 
         assert_eq!(records[0].payer, "PharmaCo");
         assert_eq!(records[0].payment_amount, 2500.50);
-        assert_eq!(records[0].nature_of_payment.as_deref(), Some("Consulting Fee"));
+        assert_eq!(
+            records[0].nature_of_payment.as_deref(),
+            Some("Consulting Fee")
+        );
     }
 
     #[test]

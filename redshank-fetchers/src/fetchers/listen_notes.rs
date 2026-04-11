@@ -89,8 +89,14 @@ pub fn parse_search_results(json: &serde_json::Value) -> (Vec<Podcast>, Vec<Podc
 }
 
 fn parse_podcast_item(item: &serde_json::Value) -> Option<Podcast> {
-    let id = item.get("id").and_then(serde_json::Value::as_str)?.to_string();
-    let title = item.get("title").and_then(serde_json::Value::as_str)?.to_string();
+    let id = item
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
+    let title = item
+        .get("title")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
 
     Some(Podcast {
         id,
@@ -108,9 +114,7 @@ fn parse_podcast_item(item: &serde_json::Value) -> Option<Podcast> {
             .get("rss")
             .and_then(serde_json::Value::as_str)
             .map(String::from),
-        itunes_id: item
-            .get("itunes_id")
-            .and_then(serde_json::Value::as_i64),
+        itunes_id: item.get("itunes_id").and_then(serde_json::Value::as_i64),
         total_episodes: item
             .get("total_episodes")
             .and_then(serde_json::Value::as_u64)
@@ -126,8 +130,14 @@ fn parse_podcast_item(item: &serde_json::Value) -> Option<Podcast> {
 }
 
 fn parse_episode_item(item: &serde_json::Value) -> Option<PodcastEpisode> {
-    let id = item.get("id").and_then(serde_json::Value::as_str)?.to_string();
-    let title = item.get("title").and_then(serde_json::Value::as_str)?.to_string();
+    let id = item
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
+    let title = item
+        .get("title")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
 
     // Podcast details may be nested under "podcast" sub-object
     let podcast_obj = item.get("podcast");
@@ -148,9 +158,7 @@ fn parse_episode_item(item: &serde_json::Value) -> Option<PodcastEpisode> {
             .and_then(serde_json::Value::as_str)
             .filter(|s| !s.is_empty())
             .map(String::from),
-        pub_date_ms: item
-            .get("pub_date_ms")
-            .and_then(serde_json::Value::as_i64),
+        pub_date_ms: item.get("pub_date_ms").and_then(serde_json::Value::as_i64),
         audio: item
             .get("audio")
             .and_then(serde_json::Value::as_str)
@@ -186,11 +194,7 @@ pub async fn fetch_listen_notes(
     let search_type = if episode_type { "episode" } else { "podcast" };
     let resp = client
         .get(format!("{API_BASE}/search"))
-        .query(&[
-            ("q", query),
-            ("type", search_type),
-            ("page_size", "10"),
-        ])
+        .query(&[("q", query), ("type", search_type), ("page_size", "10")])
         .send()
         .await?;
 
@@ -287,9 +291,18 @@ mod tests {
         assert!(episodes.is_empty());
         assert_eq!(podcasts[0].id, "abc123podcast");
         assert_eq!(podcasts[0].title, "The OSINT Hour");
-        assert_eq!(podcasts[0].publisher.as_deref(), Some("Investigative Media LLC"));
+        assert_eq!(
+            podcasts[0].publisher.as_deref(),
+            Some("Investigative Media LLC")
+        );
         assert_eq!(podcasts[0].total_episodes, Some(87));
-        assert!(podcasts[0].rss_feed.as_deref().unwrap().contains("buzzsprout"));
+        assert!(
+            podcasts[0]
+                .rss_feed
+                .as_deref()
+                .unwrap()
+                .contains("buzzsprout")
+        );
     }
 
     #[test]
@@ -300,7 +313,13 @@ mod tests {
         assert_eq!(episodes.len(), 1);
         assert!(podcasts.is_empty());
         assert_eq!(episodes[0].title, "Tracking Shell Companies with John Doe");
-        assert!(episodes[0].description.as_deref().unwrap().contains("John Doe"));
+        assert!(
+            episodes[0]
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("John Doe")
+        );
         assert_eq!(episodes[0].audio_length_sec, Some(3245));
         assert_eq!(episodes[0].podcast_title.as_deref(), Some("The OSINT Hour"));
     }

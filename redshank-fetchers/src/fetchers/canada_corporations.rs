@@ -7,8 +7,7 @@ use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, write_ndjson};
 use std::path::Path;
 
-const CKAN_API: &str =
-    "https://open.canada.ca/data/api/3/action/datastore_search";
+const CKAN_API: &str = "https://open.canada.ca/data/api/3/action/datastore_search";
 
 /// Federal corporation search resource ID for active/historical records.
 const CORPS_RESOURCE_ID: &str = "0005dc42-c26c-4e5e-9eca-7a7d91a22406";
@@ -186,8 +185,14 @@ mod tests {
         assert_eq!(records[0].corporation_number, "6789012");
         assert_eq!(records[0].corporation_name, "Maple Holdings Inc.");
         assert_eq!(records[0].status.as_deref(), Some("Active"));
-        assert_eq!(records[0].date_of_incorporation.as_deref(), Some("1998-04-15"));
-        assert_eq!(records[0].registered_office_province.as_deref(), Some("Ontario"));
+        assert_eq!(
+            records[0].date_of_incorporation.as_deref(),
+            Some("1998-04-15")
+        );
+        assert_eq!(
+            records[0].registered_office_province.as_deref(),
+            Some("Ontario")
+        );
         assert_eq!(records[0].business_number.as_deref(), Some("123456789"));
     }
 
@@ -200,7 +205,10 @@ mod tests {
         assert_eq!(records[1].corporation_number, "9876543");
         assert_eq!(records[1].corporation_name, "Cedar Forest Corp.");
         assert_eq!(records[1].status.as_deref(), Some("Dissolved"));
-        assert_eq!(records[1].registered_office_province.as_deref(), Some("British Columbia"));
+        assert_eq!(
+            records[1].registered_office_province.as_deref(),
+            Some("British Columbia")
+        );
     }
 
     #[test]

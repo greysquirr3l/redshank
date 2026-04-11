@@ -89,9 +89,7 @@ pub fn extract_violation_details(record: &serde_json::Value) -> Option<Violation
             .get("SIG_SUB")
             .and_then(serde_json::Value::as_str)
             .map(String::from),
-        penalty_amount: record
-            .get("AMOUNT_DUE")
-            .and_then(serde_json::Value::as_f64),
+        penalty_amount: record.get("AMOUNT_DUE").and_then(serde_json::Value::as_f64),
         inspection_date: record
             .get("INSPECTION_BEGIN_DT")
             .and_then(serde_json::Value::as_str)

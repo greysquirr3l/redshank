@@ -99,9 +99,7 @@ fn extract_results(json: &serde_json::Value) -> Vec<serde_json::Value> {
 
 /// Extract key enforcement details from a record.
 #[must_use]
-pub fn extract_enforcement_details(
-    record: &serde_json::Value,
-) -> Option<(String, String, String)> {
+pub fn extract_enforcement_details(record: &serde_json::Value) -> Option<(String, String, String)> {
     let company = record
         .get("recalling_firm")
         .and_then(serde_json::Value::as_str)?;

@@ -82,7 +82,10 @@ pub fn resolve_instance(acct: &str, fallback_url: Option<&str>) -> Option<String
 /// Parse a Mastodon account lookup response.
 #[must_use]
 pub fn parse_mastodon_account(json: &serde_json::Value, instance: &str) -> Option<MastodonAccount> {
-    let id = json.get("id").and_then(serde_json::Value::as_str)?.to_string();
+    let id = json
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
     let username = json
         .get("username")
         .and_then(serde_json::Value::as_str)?
@@ -143,7 +146,10 @@ pub fn parse_mastodon_statuses(json: &serde_json::Value) -> Vec<MastodonStatus> 
 }
 
 fn parse_single_status(item: &serde_json::Value) -> Option<MastodonStatus> {
-    let id = item.get("id").and_then(serde_json::Value::as_str)?.to_string();
+    let id = item
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
     let content = item
         .get("content")
         .and_then(serde_json::Value::as_str)
@@ -204,7 +210,9 @@ pub async fn fetch_mastodon_account(
 ) -> Result<FetchOutput, FetchError> {
     // Parse instance from acct
     let instance = resolve_instance(acct, None).ok_or_else(|| {
-        FetchError::Parse(format!("cannot resolve Mastodon instance from acct '{acct}'"))
+        FetchError::Parse(format!(
+            "cannot resolve Mastodon instance from acct '{acct}'"
+        ))
     })?;
 
     let username = acct
@@ -239,7 +247,9 @@ pub async fn fetch_mastodon_account(
     // Fetch recent statuses
     let account_id = account.id.clone();
     let statuses_resp = client
-        .get(format!("https://{instance}/api/v1/accounts/{account_id}/statuses"))
+        .get(format!(
+            "https://{instance}/api/v1/accounts/{account_id}/statuses"
+        ))
         .query(&[("limit", "40"), ("exclude_replies", "false")])
         .send()
         .await?;

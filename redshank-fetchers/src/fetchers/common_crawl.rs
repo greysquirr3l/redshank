@@ -51,35 +51,32 @@ pub fn parse_cc_index_response(text: &str, crawl_id: &str) -> Vec<CcRecord> {
 }
 
 fn parse_cc_record(json: &serde_json::Value, crawl_id: &str) -> Option<CcRecord> {
-    let url = json.get("url").and_then(serde_json::Value::as_str)?.to_string();
+    let url = json
+        .get("url")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
     let timestamp = json
         .get("timestamp")
         .and_then(serde_json::Value::as_str)?
         .to_string();
 
-    let status = json
-        .get("status")
-        .and_then(|v| {
-            v.as_str()
-                .and_then(|s| s.parse().ok())
-                .or_else(|| v.as_u64().map(|n| n as u16))
-        });
+    let status = json.get("status").and_then(|v| {
+        v.as_str()
+            .and_then(|s| s.parse().ok())
+            .or_else(|| v.as_u64().map(|n| n as u16))
+    });
 
-    let offset = json
-        .get("offset")
-        .and_then(|v| {
-            v.as_str()
-                .and_then(|s| s.parse().ok())
-                .or_else(|| v.as_u64())
-        });
+    let offset = json.get("offset").and_then(|v| {
+        v.as_str()
+            .and_then(|s| s.parse().ok())
+            .or_else(|| v.as_u64())
+    });
 
-    let length = json
-        .get("length")
-        .and_then(|v| {
-            v.as_str()
-                .and_then(|s| s.parse().ok())
-                .or_else(|| v.as_u64())
-        });
+    let length = json.get("length").and_then(|v| {
+        v.as_str()
+            .and_then(|s| s.parse().ok())
+            .or_else(|| v.as_u64())
+    });
 
     Some(CcRecord {
         url,
@@ -129,11 +126,7 @@ pub async fn fetch_cc_index(
 
     let resp = client
         .get(&endpoint)
-        .query(&[
-            ("url", url_pattern),
-            ("output", "json"),
-            ("limit", "1000"),
-        ])
+        .query(&[("url", url_pattern), ("output", "json"), ("limit", "1000")])
         .send()
         .await?;
 
@@ -199,10 +192,7 @@ mod tests {
 
         assert_eq!(records[0].offset, Some(12_345_678));
         assert_eq!(records[0].length, Some(4321));
-        assert_eq!(
-            records[0].digest.as_deref(),
-            Some("sha1:AABBCC1122334455")
-        );
+        assert_eq!(records[0].digest.as_deref(), Some("sha1:AABBCC1122334455"));
     }
 
     #[test]

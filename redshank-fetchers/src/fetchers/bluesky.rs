@@ -216,10 +216,7 @@ pub async fn fetch_bsky_actor(
         }
     }
 
-    let output_path = output_dir.join(format!(
-        "bluesky_{}.ndjson",
-        handle.replace('.', "_")
-    ));
+    let output_path = output_dir.join(format!("bluesky_{}.ndjson", handle.replace('.', "_")));
     let count = write_ndjson(&output_path, &records)?;
 
     Ok(FetchOutput {
@@ -278,7 +275,13 @@ mod tests {
         assert_eq!(profile.did.as_deref(), Some("did:plc:abc123xyz456"));
         assert_eq!(profile.followers_count, Some(8200));
         assert_eq!(profile.posts_count, Some(1450));
-        assert!(profile.description.as_deref().unwrap().contains("financial crime"));
+        assert!(
+            profile
+                .description
+                .as_deref()
+                .unwrap()
+                .contains("financial crime")
+        );
     }
 
     #[test]

@@ -113,7 +113,9 @@ pub fn parse_scholar_profile(user_id: &str, html: &str) -> Option<GoogleScholarP
         .map(|(index, title)| ScholarPaper {
             title: title.clone(),
             venue: paper_venues.get(index).cloned(),
-            year: paper_years.get(index).and_then(|value| value.parse::<u16>().ok()),
+            year: paper_years
+                .get(index)
+                .and_then(|value| value.parse::<u16>().ok()),
             citation_count: paper_citations
                 .get(index)
                 .and_then(|value| value.parse::<u32>().ok()),
@@ -159,7 +161,8 @@ pub async fn save_scholar_profile(
 ) -> Result<FetchOutput, FetchError> {
     let profile = parse_scholar_profile(user_id, html)
         .ok_or_else(|| FetchError::Parse("could not parse Google Scholar profile".to_string()))?;
-    let records = vec![serde_json::to_value(profile).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(profile).map_err(|err| FetchError::Parse(err.to_string()))?];
     let output_path = output_dir.join("google_scholar.ndjson");
     let count = write_ndjson(&output_path, &records)?;
 

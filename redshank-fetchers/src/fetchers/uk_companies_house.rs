@@ -121,7 +121,8 @@ pub async fn fetch_companies(
         let pscs = fetch_pscs(&client, api_key, &num).await;
         company.pscs = pscs.unwrap_or_default();
 
-        let record = serde_json::to_value(&company).map_err(|e| FetchError::Parse(e.to_string()))?;
+        let record =
+            serde_json::to_value(&company).map_err(|e| FetchError::Parse(e.to_string()))?;
         all_records.push(record);
     }
 
@@ -191,9 +192,10 @@ fn parse_company_item(item: &serde_json::Value) -> Option<CompanyRecord> {
         .and_then(serde_json::Value::as_str)
         .map(String::from);
 
-    let registered_office_address = parse_address(item.get("address").or_else(|| {
-        item.get("registered_office_address")
-    }));
+    let registered_office_address = parse_address(
+        item.get("address")
+            .or_else(|| item.get("registered_office_address")),
+    );
 
     let sic_codes = item
         .get("sic_codes")
@@ -285,8 +287,14 @@ fn parse_psc_item(item: &serde_json::Value) -> PscRecord {
         .unwrap_or_default();
 
     let dob = item.get("date_of_birth").map(|d| {
-        let month = d.get("month").and_then(serde_json::Value::as_u64).unwrap_or(0);
-        let year = d.get("year").and_then(serde_json::Value::as_u64).unwrap_or(0);
+        let month = d
+            .get("month")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let year = d
+            .get("year")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
         format!("{month:02}/{year}")
     });
 
@@ -466,9 +474,11 @@ mod tests {
 
         assert_eq!(pscs.len(), 1);
         assert_eq!(pscs[0].name, "Smith, John William");
-        assert!(pscs[0]
-            .natures_of_control
-            .contains(&"ownership-of-shares-75-to-100-percent".to_string()));
+        assert!(
+            pscs[0]
+                .natures_of_control
+                .contains(&"ownership-of-shares-75-to-100-percent".to_string())
+        );
         assert_eq!(pscs[0].notified_on.as_deref(), Some("2016-07-06"));
         assert_eq!(pscs[0].date_of_birth.as_deref(), Some("03/1975"));
     }

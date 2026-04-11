@@ -69,7 +69,10 @@ pub fn parse_channel_list(json: &serde_json::Value) -> Vec<YoutubeChannel> {
 }
 
 fn parse_single_channel(item: &serde_json::Value) -> Option<YoutubeChannel> {
-    let channel_id = item.get("id").and_then(serde_json::Value::as_str)?.to_string();
+    let channel_id = item
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
     let snippet = item.get("snippet")?;
     let title = snippet
         .get("title")
@@ -78,14 +81,12 @@ fn parse_single_channel(item: &serde_json::Value) -> Option<YoutubeChannel> {
 
     let stats = item.get("statistics");
     let stat_u64 = |key: &str| -> Option<u64> {
-        stats
-            .and_then(|s| s.get(key))
-            .and_then(|v| {
-                // YouTube returns counts as strings
-                v.as_str()
-                    .and_then(|s| s.parse().ok())
-                    .or_else(|| v.as_u64())
-            })
+        stats.and_then(|s| s.get(key)).and_then(|v| {
+            // YouTube returns counts as strings
+            v.as_str()
+                .and_then(|s| s.parse().ok())
+                .or_else(|| v.as_u64())
+        })
     };
 
     Some(YoutubeChannel {
@@ -124,7 +125,10 @@ pub fn parse_video_list(json: &serde_json::Value) -> Vec<YoutubeVideo> {
 }
 
 fn parse_single_video(item: &serde_json::Value) -> Option<YoutubeVideo> {
-    let video_id = item.get("id").and_then(serde_json::Value::as_str)?.to_string();
+    let video_id = item
+        .get("id")
+        .and_then(serde_json::Value::as_str)?
+        .to_string();
     let snippet = item.get("snippet")?;
     let title = snippet
         .get("title")
@@ -133,13 +137,11 @@ fn parse_single_video(item: &serde_json::Value) -> Option<YoutubeVideo> {
 
     let stats = item.get("statistics");
     let stat_u64 = |key: &str| -> Option<u64> {
-        stats
-            .and_then(|s| s.get(key))
-            .and_then(|v| {
-                v.as_str()
-                    .and_then(|s| s.parse().ok())
-                    .or_else(|| v.as_u64())
-            })
+        stats.and_then(|s| s.get(key)).and_then(|v| {
+            v.as_str()
+                .and_then(|s| s.parse().ok())
+                .or_else(|| v.as_u64())
+        })
     };
 
     let tags = snippet
@@ -345,7 +347,10 @@ mod tests {
         assert_eq!(channels[0].title, "Investigative Tech");
         assert_eq!(channels[0].subscriber_count, Some(45_000));
         assert_eq!(channels[0].video_count, Some(312));
-        assert_eq!(channels[0].custom_url.as_deref(), Some("@investigativetech"));
+        assert_eq!(
+            channels[0].custom_url.as_deref(),
+            Some("@investigativetech")
+        );
     }
 
     #[test]

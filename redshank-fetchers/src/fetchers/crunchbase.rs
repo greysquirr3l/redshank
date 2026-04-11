@@ -242,7 +242,8 @@ pub async fn fetch_organization(
     let json: serde_json::Value = resp.json().await?;
     let record = parse_organization(&json)
         .ok_or_else(|| FetchError::Parse("could not parse Crunchbase organization".to_string()))?;
-    let records = vec![serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string()))?];
     let output_path = output_dir.join("crunchbase.ndjson");
     let count = write_ndjson(&output_path, &records)?;
 
@@ -355,6 +356,10 @@ mod tests {
 
         assert!(org.board_members.contains(&"Jane Founder".to_string()));
         assert!(org.investors.contains(&"North Sea Ventures".to_string()));
-        assert!(org.funding_rounds[0].lead_investors.contains(&"Signal Capital".to_string()));
+        assert!(
+            org.funding_rounds[0]
+                .lead_investors
+                .contains(&"Signal Capital".to_string())
+        );
     }
 }

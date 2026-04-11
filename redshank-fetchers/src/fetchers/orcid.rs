@@ -94,24 +94,22 @@ pub fn parse_orcid_record(json: &serde_json::Value) -> Option<OrcidProfile> {
         .map(String::from)?;
 
     // Name
-    let name = person
-        .get("name")
-        .and_then(|n| {
-            let given = n
-                .get("given-names")
-                .and_then(|v| v.get("value"))
-                .and_then(serde_json::Value::as_str);
-            let family = n
-                .get("family-name")
-                .and_then(|v| v.get("value"))
-                .and_then(serde_json::Value::as_str);
-            match (given, family) {
-                (Some(g), Some(f)) => Some(format!("{g} {f}")),
-                (Some(g), None) => Some(g.to_string()),
-                (None, Some(f)) => Some(f.to_string()),
-                (None, None) => None,
-            }
-        });
+    let name = person.get("name").and_then(|n| {
+        let given = n
+            .get("given-names")
+            .and_then(|v| v.get("value"))
+            .and_then(serde_json::Value::as_str);
+        let family = n
+            .get("family-name")
+            .and_then(|v| v.get("value"))
+            .and_then(serde_json::Value::as_str);
+        match (given, family) {
+            (Some(g), Some(f)) => Some(format!("{g} {f}")),
+            (Some(g), None) => Some(g.to_string()),
+            (None, Some(f)) => Some(f.to_string()),
+            (None, None) => None,
+        }
+    });
 
     // Biography
     let biography = person
@@ -352,10 +350,7 @@ pub async fn fetch_orcid_profile(
     let serialized =
         serde_json::to_value(&profile).map_err(|e| FetchError::Parse(e.to_string()))?;
 
-    let output_path = output_dir.join(format!(
-        "orcid_{}.ndjson",
-        orcid_id.replace('-', "_")
-    ));
+    let output_path = output_dir.join(format!("orcid_{}.ndjson", orcid_id.replace('-', "_")));
     let count = write_ndjson(&output_path, &[serialized])?;
 
     Ok(FetchOutput {
