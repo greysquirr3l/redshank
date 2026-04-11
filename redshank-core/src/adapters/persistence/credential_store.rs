@@ -176,6 +176,21 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             "OPENPLANTER_CRUNCHBASE_API_KEY",
             "CRUNCHBASE_API_KEY",
         ),
+        bls_api_key: get(
+            "REDSHANK_BLS_API_KEY",
+            "OPENPLANTER_BLS_API_KEY",
+            "BLS_API_KEY",
+        ),
+        pacer_username: get(
+            "REDSHANK_PACER_USERNAME",
+            "OPENPLANTER_PACER_USERNAME",
+            "PACER_USERNAME",
+        ),
+        pacer_password: get(
+            "REDSHANK_PACER_PASSWORD",
+            "OPENPLANTER_PACER_PASSWORD",
+            "PACER_PASSWORD",
+        ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
             "OPENPLANTER_OLLAMA_BASE_URL",
@@ -318,6 +333,21 @@ pub fn credentials_from_env() -> CredentialBundle {
             "REDSHANK_CRUNCHBASE_API_KEY",
             "OPENPLANTER_CRUNCHBASE_API_KEY",
             "CRUNCHBASE_API_KEY",
+        ),
+        bls_api_key: get(
+            "REDSHANK_BLS_API_KEY",
+            "OPENPLANTER_BLS_API_KEY",
+            "BLS_API_KEY",
+        ),
+        pacer_username: get(
+            "REDSHANK_PACER_USERNAME",
+            "OPENPLANTER_PACER_USERNAME",
+            "PACER_USERNAME",
+        ),
+        pacer_password: get(
+            "REDSHANK_PACER_PASSWORD",
+            "OPENPLANTER_PACER_PASSWORD",
+            "PACER_PASSWORD",
         ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",

@@ -96,6 +96,12 @@ pub struct CredentialBundle {
     pub listennotes_api_key: Option<CredentialGuard<String>>,
     /// `Crunchbase` API key (limited free tier, cache aggressively).
     pub crunchbase_api_key: Option<CredentialGuard<String>>,
+    /// `BLS` API key (free registration, higher daily limit).
+    pub bls_api_key: Option<CredentialGuard<String>>,
+    /// `PACER` username for federal court access.
+    pub pacer_username: Option<CredentialGuard<String>>,
+    /// `PACER` password for federal court access.
+    pub pacer_password: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -145,6 +151,9 @@ impl CredentialBundle {
         fill!(youtube_api_key);
         fill!(listennotes_api_key);
         fill!(crunchbase_api_key);
+        fill!(bls_api_key);
+        fill!(pacer_username);
+        fill!(pacer_password);
     }
 }
 

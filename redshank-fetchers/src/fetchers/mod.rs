@@ -4,6 +4,7 @@
 //! with a corresponding binary in `src/bin/` for CLI invocation.
 
 // ── T19: 12 ported fetchers ──────────────────────────────────────────────────
+pub mod bls_qcew;
 pub mod census_acs;
 pub mod clinical_trials;
 pub mod cms_open_payments;
@@ -32,6 +33,7 @@ pub mod gleif;
 pub mod google_scholar;
 pub mod house_lobbying;
 pub mod opencorporates;
+pub mod pacer;
 pub mod state_sos;
 pub mod un_sanctions;
 pub mod wikidata;
@@ -80,6 +82,7 @@ pub mod maritime_ais;
 pub mod assessor_portals;
 pub mod delaware_franchise_tax;
 pub mod property_valuation;
+pub mod sec_13d_13g;
 pub mod ucc_filings;
 
 // ── T32: Academic and media intelligence fetchers ─────────────────────────────
