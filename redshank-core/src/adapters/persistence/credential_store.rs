@@ -141,6 +141,11 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             "OPENPLANTER_OPENSANCTIONS_API_KEY",
             "OPENSANCTIONS_API_KEY",
         ),
+        marinetraffic_api_key: get(
+            "REDSHANK_MARINETRAFFIC_API_KEY",
+            "OPENPLANTER_MARINETRAFFIC_API_KEY",
+            "MARINETRAFFIC_API_KEY",
+        ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
             "OPENPLANTER_OLLAMA_BASE_URL",
@@ -248,6 +253,11 @@ pub fn credentials_from_env() -> CredentialBundle {
             "REDSHANK_OPENSANCTIONS_API_KEY",
             "OPENPLANTER_OPENSANCTIONS_API_KEY",
             "OPENSANCTIONS_API_KEY",
+        ),
+        marinetraffic_api_key: get(
+            "REDSHANK_MARINETRAFFIC_API_KEY",
+            "OPENPLANTER_MARINETRAFFIC_API_KEY",
+            "MARINETRAFFIC_API_KEY",
         ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",

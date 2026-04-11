@@ -82,6 +82,8 @@ pub struct CredentialBundle {
     pub uk_companies_house_api_key: Option<CredentialGuard<String>>,
     /// OpenSanctions API key for entity matching and PEP screening.
     pub opensanctions_api_key: Option<CredentialGuard<String>>,
+    /// MarineTraffic API key for vessel AIS lookups (marinetraffic.com).
+    pub marinetraffic_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
