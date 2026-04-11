@@ -69,3 +69,9 @@ pub mod uk_hmt_sanctions;
 // ── T30: Aviation and maritime asset intelligence fetchers ────────────────────
 pub mod faa_nnumber;
 pub mod maritime_ais;
+
+// ── T31: UCC filings and property intelligence fetchers ───────────────────────
+pub mod assessor_portals;
+pub mod delaware_franchise_tax;
+pub mod property_valuation;
+pub mod ucc_filings;
