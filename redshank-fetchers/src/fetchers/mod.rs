@@ -75,3 +75,14 @@ pub mod assessor_portals;
 pub mod delaware_franchise_tax;
 pub mod property_valuation;
 pub mod ucc_filings;
+
+// ── T32: Academic and media intelligence fetchers ─────────────────────────────
+pub mod bluesky;
+pub mod common_crawl;
+pub mod hackernews;
+pub mod listen_notes;
+pub mod mastodon;
+pub mod orcid;
+pub mod reddit;
+pub mod semantic_scholar;
+pub mod youtube;

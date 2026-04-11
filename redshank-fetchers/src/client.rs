@@ -23,6 +23,31 @@ pub fn build_client() -> Result<reqwest::Client, FetchError> {
         .map_err(FetchError::Http)
 }
 
+/// Build a `reqwest::Client` that sends a single custom header on every request.
+///
+/// Useful for APIs that require a static API key header (e.g. `X-ListenAPI-Key`).
+///
+/// # Errors
+///
+/// Returns `Err` if the header name or value is invalid, or the client cannot be constructed.
+pub fn build_client_with_key(header_name: &str, header_value: &str) -> Result<reqwest::Client, FetchError> {
+    let mut headers = HeaderMap::new();
+    let name: HeaderName = header_name
+        .parse()
+        .map_err(|e| FetchError::Other(format!("invalid header name '{header_name}': {e}")))?;
+    let value: HeaderValue = header_value
+        .parse()
+        .map_err(|e| FetchError::Other(format!("invalid header value for '{header_name}': {e}")))?;
+    headers.insert(name, value);
+    headers.insert(USER_AGENT, HeaderValue::from_static(REDSHANK_USER_AGENT));
+
+    reqwest::Client::builder()
+        .default_headers(headers)
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .map_err(FetchError::Http)
+}
+
 /// Build a `reqwest::Client` with extra default headers merged from a `FetchConfig`.
 ///
 /// # Errors

@@ -84,6 +84,16 @@ pub struct CredentialBundle {
     pub opensanctions_api_key: Option<CredentialGuard<String>>,
     /// MarineTraffic API key for vessel AIS lookups (marinetraffic.com).
     pub marinetraffic_api_key: Option<CredentialGuard<String>>,
+    /// Semantic Scholar API key (optional — higher rate limits with a key).
+    pub semantic_scholar_api_key: Option<CredentialGuard<String>>,
+    /// Reddit OAuth2 client ID.
+    pub reddit_client_id: Option<CredentialGuard<String>>,
+    /// Reddit OAuth2 client secret.
+    pub reddit_client_secret: Option<CredentialGuard<String>>,
+    /// YouTube Data API v3 key (10k units/day free tier).
+    pub youtube_api_key: Option<CredentialGuard<String>>,
+    /// Listen Notes API key (500 req/month free tier).
+    pub listennotes_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -127,6 +137,11 @@ impl CredentialBundle {
         fill!(github_token);
         fill!(fec_api_key);
         fill!(opencorporates_api_key);
+        fill!(semantic_scholar_api_key);
+        fill!(reddit_client_id);
+        fill!(reddit_client_secret);
+        fill!(youtube_api_key);
+        fill!(listennotes_api_key);
     }
 }
 

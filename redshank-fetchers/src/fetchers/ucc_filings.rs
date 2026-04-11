@@ -149,29 +149,23 @@ fn parse_ny_row(row: &str) -> Option<UccFiling> {
             // Strip nested tags
             let clean: String = text
                 .chars()
-                .scan(0u32, |depth, c| {
-                    match c {
-                        '<' => {
-                            *depth += 1;
-                            Some(None)
-                        }
-                        '>' => {
-                            *depth = depth.saturating_sub(1);
-                            Some(None)
-                        }
-                        _ if *depth == 0 => Some(Some(c)),
-                        _ => Some(None),
+                .scan(0u32, |depth, c| match c {
+                    '<' => {
+                        *depth += 1;
+                        Some(None)
                     }
+                    '>' => {
+                        *depth = depth.saturating_sub(1);
+                        Some(None)
+                    }
+                    _ if *depth == 0 => Some(Some(c)),
+                    _ => Some(None),
                 })
                 .flatten()
                 .collect::<String>()
                 .trim()
                 .to_string();
-            if clean.is_empty() {
-                None
-            } else {
-                Some(clean)
-            }
+            if clean.is_empty() { None } else { Some(clean) }
         })
         .collect();
 
@@ -373,7 +367,10 @@ mod tests {
 
         assert_eq!(filings[0].debtors.len(), 1);
         assert_eq!(filings[0].debtors[0].name, "ACME CORP");
-        assert_eq!(filings[0].secured_parties[0].name, "FIRST BANK OF CALIFORNIA");
+        assert_eq!(
+            filings[0].secured_parties[0].name,
+            "FIRST BANK OF CALIFORNIA"
+        );
         assert_eq!(
             filings[0].collateral.as_deref(),
             Some("All accounts receivable and inventory")
@@ -411,6 +408,9 @@ mod tests {
         assert_eq!(filings[0].filing_number, "201900001234");
         assert_eq!(filings[0].state, "NY");
         assert_eq!(filings[0].debtors[0].name, "SMITH ENTERPRISES INC");
-        assert_eq!(filings[0].secured_parties[0].name, "JP MORGAN CHASE BANK NA");
+        assert_eq!(
+            filings[0].secured_parties[0].name,
+            "JP MORGAN CHASE BANK NA"
+        );
     }
 }

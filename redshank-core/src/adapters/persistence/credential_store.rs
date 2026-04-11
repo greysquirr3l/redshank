@@ -146,6 +146,31 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             "OPENPLANTER_MARINETRAFFIC_API_KEY",
             "MARINETRAFFIC_API_KEY",
         ),
+        semantic_scholar_api_key: get(
+            "REDSHANK_SEMANTIC_SCHOLAR_API_KEY",
+            "OPENPLANTER_SEMANTIC_SCHOLAR_API_KEY",
+            "SEMANTIC_SCHOLAR_API_KEY",
+        ),
+        reddit_client_id: get(
+            "REDSHANK_REDDIT_CLIENT_ID",
+            "OPENPLANTER_REDDIT_CLIENT_ID",
+            "REDDIT_CLIENT_ID",
+        ),
+        reddit_client_secret: get(
+            "REDSHANK_REDDIT_CLIENT_SECRET",
+            "OPENPLANTER_REDDIT_CLIENT_SECRET",
+            "REDDIT_CLIENT_SECRET",
+        ),
+        youtube_api_key: get(
+            "REDSHANK_YOUTUBE_API_KEY",
+            "OPENPLANTER_YOUTUBE_API_KEY",
+            "YOUTUBE_API_KEY",
+        ),
+        listennotes_api_key: get(
+            "REDSHANK_LISTENNOTES_API_KEY",
+            "OPENPLANTER_LISTENNOTES_API_KEY",
+            "LISTENNOTES_API_KEY",
+        ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
             "OPENPLANTER_OLLAMA_BASE_URL",
@@ -258,6 +283,31 @@ pub fn credentials_from_env() -> CredentialBundle {
             "REDSHANK_MARINETRAFFIC_API_KEY",
             "OPENPLANTER_MARINETRAFFIC_API_KEY",
             "MARINETRAFFIC_API_KEY",
+        ),
+        semantic_scholar_api_key: get(
+            "REDSHANK_SEMANTIC_SCHOLAR_API_KEY",
+            "OPENPLANTER_SEMANTIC_SCHOLAR_API_KEY",
+            "SEMANTIC_SCHOLAR_API_KEY",
+        ),
+        reddit_client_id: get(
+            "REDSHANK_REDDIT_CLIENT_ID",
+            "OPENPLANTER_REDDIT_CLIENT_ID",
+            "REDDIT_CLIENT_ID",
+        ),
+        reddit_client_secret: get(
+            "REDSHANK_REDDIT_CLIENT_SECRET",
+            "OPENPLANTER_REDDIT_CLIENT_SECRET",
+            "REDDIT_CLIENT_SECRET",
+        ),
+        youtube_api_key: get(
+            "REDSHANK_YOUTUBE_API_KEY",
+            "OPENPLANTER_YOUTUBE_API_KEY",
+            "YOUTUBE_API_KEY",
+        ),
+        listennotes_api_key: get(
+            "REDSHANK_LISTENNOTES_API_KEY",
+            "OPENPLANTER_LISTENNOTES_API_KEY",
+            "LISTENNOTES_API_KEY",
         ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
