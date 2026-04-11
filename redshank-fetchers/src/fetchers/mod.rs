@@ -18,6 +18,7 @@ pub mod senate_lobbying;
 pub mod usaspending;
 
 // ── T20: 14 extended fetchers ────────────────────────────────────────────────
+pub mod amazon_authors;
 pub mod county_property;
 pub mod courtlistener;
 pub mod eu_sanctions;
@@ -26,6 +27,7 @@ pub mod fincen_boi;
 pub mod fpds;
 pub mod gdelt;
 pub mod gleif;
+pub mod google_scholar;
 pub mod house_lobbying;
 pub mod opencorporates;
 pub mod state_sos;
@@ -46,6 +48,7 @@ pub mod whois_rdap;
 // ── T27: 9 regulatory enforcement fetchers ───────────────────────────────────
 pub mod cfpb;
 pub mod cftc;
+pub mod crunchbase;
 pub mod fda_warnings;
 pub mod ftc;
 pub mod gsa_eoffer;
@@ -80,10 +83,11 @@ pub mod ucc_filings;
 pub mod bluesky;
 pub mod common_crawl;
 pub mod hackernews;
+pub mod linkedin_public;
 pub mod listen_notes;
 pub mod mastodon;
 pub mod orcid;
 pub mod reddit;
-pub mod semantic_scholar;
 pub mod sec_xbrl;
+pub mod semantic_scholar;
 pub mod youtube;

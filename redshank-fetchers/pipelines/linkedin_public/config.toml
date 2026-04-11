@@ -1,0 +1,10 @@
+# LinkedIn public profile scraping pipeline.
+# Public profiles only. No login, no authwall bypass, no private content.
+
+[pipeline]
+name = "linkedin_public"
+rate_limit_seconds = 30
+requires_browser = true
+wait_for = "profile-content"
+stealth_mode = "advanced"
+target_url = "https://www.linkedin.com/in/{slug}"

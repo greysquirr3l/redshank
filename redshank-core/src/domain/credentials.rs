@@ -80,20 +80,22 @@ pub struct CredentialBundle {
     pub opencorporates_api_key: Option<CredentialGuard<String>>,
     /// UK Companies House API key (free registration at developer.company-information.service.gov.uk).
     pub uk_companies_house_api_key: Option<CredentialGuard<String>>,
-    /// OpenSanctions API key for entity matching and PEP screening.
+    /// `OpenSanctions` API key for entity matching and PEP screening.
     pub opensanctions_api_key: Option<CredentialGuard<String>>,
-    /// MarineTraffic API key for vessel AIS lookups (marinetraffic.com).
+    /// `MarineTraffic` API key for vessel AIS lookups (marinetraffic.com).
     pub marinetraffic_api_key: Option<CredentialGuard<String>>,
-    /// Semantic Scholar API key (optional — higher rate limits with a key).
+    /// `Semantic Scholar` API key (optional — higher rate limits with a key).
     pub semantic_scholar_api_key: Option<CredentialGuard<String>>,
-    /// Reddit OAuth2 client ID.
+    /// `Reddit` `OAuth2` client ID.
     pub reddit_client_id: Option<CredentialGuard<String>>,
-    /// Reddit OAuth2 client secret.
+    /// `Reddit` `OAuth2` client secret.
     pub reddit_client_secret: Option<CredentialGuard<String>>,
-    /// YouTube Data API v3 key (10k units/day free tier).
+    /// `YouTube` Data API v3 key (10k units/day free tier).
     pub youtube_api_key: Option<CredentialGuard<String>>,
-    /// Listen Notes API key (500 req/month free tier).
+    /// `Listen Notes` API key (500 req/month free tier).
     pub listennotes_api_key: Option<CredentialGuard<String>>,
+    /// `Crunchbase` API key (limited free tier, cache aggressively).
+    pub crunchbase_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -142,6 +144,7 @@ impl CredentialBundle {
         fill!(reddit_client_secret);
         fill!(youtube_api_key);
         fill!(listennotes_api_key);
+        fill!(crunchbase_api_key);
     }
 }
 

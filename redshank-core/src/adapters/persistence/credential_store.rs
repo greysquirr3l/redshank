@@ -171,6 +171,11 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             "OPENPLANTER_LISTENNOTES_API_KEY",
             "LISTENNOTES_API_KEY",
         ),
+        crunchbase_api_key: get(
+            "REDSHANK_CRUNCHBASE_API_KEY",
+            "OPENPLANTER_CRUNCHBASE_API_KEY",
+            "CRUNCHBASE_API_KEY",
+        ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
             "OPENPLANTER_OLLAMA_BASE_URL",
@@ -308,6 +313,11 @@ pub fn credentials_from_env() -> CredentialBundle {
             "REDSHANK_LISTENNOTES_API_KEY",
             "OPENPLANTER_LISTENNOTES_API_KEY",
             "LISTENNOTES_API_KEY",
+        ),
+        crunchbase_api_key: get(
+            "REDSHANK_CRUNCHBASE_API_KEY",
+            "OPENPLANTER_CRUNCHBASE_API_KEY",
+            "CRUNCHBASE_API_KEY",
         ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
