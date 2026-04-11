@@ -85,4 +85,5 @@ pub mod mastodon;
 pub mod orcid;
 pub mod reddit;
 pub mod semantic_scholar;
+pub mod sec_xbrl;
 pub mod youtube;
