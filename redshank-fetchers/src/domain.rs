@@ -57,12 +57,12 @@ impl FetchConfig {
 
 // ── Attribution ─────────────────────────────────────────────
 
-/// ODbL / licence attribution that **must** appear in any report or
+/// `ODbL` / licence attribution that **must** appear in any report or
 /// user-facing output that surfaces data from the originating source.
 ///
 /// The `text` field is the human-readable attribution line.
 /// The `url` field is the hyperlink target that `text` must link to.
-/// The `min_font_size_px` constraint is derived from the ODbL:
+/// The `min_font_size_px` constraint is derived from the `ODbL`:
 /// attribution must be ≥ 70 % of the largest related font, and never
 /// smaller than 7 px — encode whichever is larger here.
 ///

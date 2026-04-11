@@ -10,6 +10,7 @@ docs/IMPLEMENTATION_PLAN.md
 docs/plan.toml
 tasks/
 reference_projects/
+.redshank/
 
 # ─── VS Code ──────────────────────────────────────────────────────────────────
 .vscode/*

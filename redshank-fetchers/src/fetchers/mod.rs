@@ -42,3 +42,14 @@ pub mod uspto;
 pub mod voter_reg;
 pub mod wayback;
 pub mod whois_rdap;
+
+// ── T27: 9 regulatory enforcement fetchers ───────────────────────────────────
+pub mod cfpb;
+pub mod cftc;
+pub mod fda_warnings;
+pub mod ftc;
+pub mod gsa_eoffer;
+pub mod msha;
+pub mod nhtsa;
+pub mod nlrb;
+pub mod npi;

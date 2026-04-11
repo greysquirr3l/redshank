@@ -3,9 +3,9 @@
 //! API: `https://api.opencorporates.com/v0.4/companies/search`
 //! Free tier: 500 requests/day. API key for higher volume.
 //!
-//! **Licence**: Data is published under the Open Database Licence (ODbL 1.0).
+//! **Licence**: Data is published under the Open Database Licence (`ODbL` 1.0).
 //! Any report or user-facing output that surfaces data from this source **must**
-//! include a hyperlink reading "from OpenCorporates" linking to
+//! include a hyperlink reading "from `OpenCorporates`" linking to
 //! `https://opencorporates.com` (or the canonical entity URL returned in the API
 //! response). The attribution must be at least 70 % of the largest related font
 //! and never smaller than 7 px. See <https://opencorporates.com/terms-of-use-2/>.
@@ -16,8 +16,8 @@ use std::path::Path;
 
 const API_BASE: &str = "https://api.opencorporates.com/v0.4";
 
-/// Returns the ODbL attribution that **must** accompany any output derived from
-/// OpenCorporates data.
+/// Returns the `ODbL` attribution that **must** accompany any output derived from
+/// `OpenCorporates` data.
 ///
 /// Attach the result to every [`FetchOutput`] and render it in all reports / UI.
 /// The attribution text must hyperlink to `url`, be at least `min_font_size_px` pixels,
