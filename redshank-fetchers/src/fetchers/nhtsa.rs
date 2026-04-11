@@ -151,7 +151,12 @@ pub fn extract_complaint_details(record: &serde_json::Value) -> Option<Complaint
         crash: record
             .get("crash")
             .and_then(serde_json::Value::as_bool)
-            .or_else(|| record.get("crash").and_then(|v| v.as_str()).map(|s| s == "Y"))
+            .or_else(|| {
+                record
+                    .get("crash")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s == "Y")
+            })
             .unwrap_or(false),
         injury: record
             .get("injuries")

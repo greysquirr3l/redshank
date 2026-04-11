@@ -53,3 +53,7 @@ pub mod msha;
 pub mod nhtsa;
 pub mod nlrb;
 pub mod npi;
+
+// ── T28: FARA and FINRA fetchers ─────────────────────────────────────────────
+pub mod fara;
+pub mod finra_brokercheck;
