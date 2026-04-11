@@ -131,6 +131,16 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             "OPENPLANTER_OPENCORPORATES_API_KEY",
             "OPENCORPORATES_API_KEY",
         ),
+        uk_companies_house_api_key: get(
+            "REDSHANK_UK_COMPANIES_HOUSE_API_KEY",
+            "OPENPLANTER_UK_COMPANIES_HOUSE_API_KEY",
+            "UK_COMPANIES_HOUSE_API_KEY",
+        ),
+        opensanctions_api_key: get(
+            "REDSHANK_OPENSANCTIONS_API_KEY",
+            "OPENPLANTER_OPENSANCTIONS_API_KEY",
+            "OPENSANCTIONS_API_KEY",
+        ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",
             "OPENPLANTER_OLLAMA_BASE_URL",
@@ -228,6 +238,16 @@ pub fn credentials_from_env() -> CredentialBundle {
             "REDSHANK_OPENCORPORATES_API_KEY",
             "OPENPLANTER_OPENCORPORATES_API_KEY",
             "OPENCORPORATES_API_KEY",
+        ),
+        uk_companies_house_api_key: get(
+            "REDSHANK_UK_COMPANIES_HOUSE_API_KEY",
+            "OPENPLANTER_UK_COMPANIES_HOUSE_API_KEY",
+            "UK_COMPANIES_HOUSE_API_KEY",
+        ),
+        opensanctions_api_key: get(
+            "REDSHANK_OPENSANCTIONS_API_KEY",
+            "OPENPLANTER_OPENSANCTIONS_API_KEY",
+            "OPENSANCTIONS_API_KEY",
         ),
         ollama_base_url: get_plain(
             "REDSHANK_OLLAMA_BASE_URL",

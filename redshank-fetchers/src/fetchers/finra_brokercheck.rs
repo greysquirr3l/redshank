@@ -1,9 +1,9 @@
-//! FINRA BrokerCheck — public disclosure database for registered brokers and firms.
+//! FINRA `BrokerCheck` — public disclosure database for registered brokers and firms.
 //!
 //! Individual search: <https://brokercheck.finra.org/individual/search>
 //! Firm search: <https://brokercheck.finra.org/firm/search>
 //!
-//! BrokerCheck exposes CRD numbers, employment history, exam qualifications,
+//! `BrokerCheck` exposes CRD numbers, employment history, exam qualifications,
 //! and disclosure events (customer disputes, regulatory actions, criminal history,
 //! involuntary terminations, financial events).
 
@@ -12,12 +12,11 @@ use crate::{build_client, rate_limit_delay, write_ndjson};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-const INDIVIDUAL_SEARCH_URL: &str =
-    "https://api.brokercheck.finra.org/search/individual";
+const INDIVIDUAL_SEARCH_URL: &str = "https://api.brokercheck.finra.org/search/individual";
 const FIRM_SEARCH_URL: &str = "https://api.brokercheck.finra.org/search/firm";
 const DEFAULT_SIZE: u32 = 12;
 
-/// A FINRA BrokerCheck individual broker record.
+/// A FINRA `BrokerCheck` individual broker record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BrokerRecord {
     /// Central Registration Depository unique identifier.
@@ -156,7 +155,11 @@ fn parse_current_firms(source: &serde_json::Value) -> Vec<String> {
     source
         .get("currentEmployments")
         .or_else(|| source.get("current_employments"))
-        .or_else(|| source.get("ind_bc_scope").and_then(|s| s.get("ind_emps_list")))
+        .or_else(|| {
+            source
+                .get("ind_bc_scope")
+                .and_then(|s| s.get("ind_emps_list"))
+        })
         .and_then(serde_json::Value::as_array)
         .map(|arr| {
             arr.iter()
@@ -399,9 +402,10 @@ pub async fn fetch_individual(
         }
 
         for broker in &brokers {
-            all_records.push(serde_json::to_value(broker).map_err(|e| {
-                FetchError::Parse(format!("serialize broker: {e}"))
-            })?);
+            all_records.push(
+                serde_json::to_value(broker)
+                    .map_err(|e| FetchError::Parse(format!("serialize broker: {e}")))?,
+            );
         }
 
         let total = json
@@ -475,9 +479,10 @@ pub async fn fetch_firm(
         }
 
         for firm in &firms {
-            all_records.push(serde_json::to_value(firm).map_err(|e| {
-                FetchError::Parse(format!("serialize firm: {e}"))
-            })?);
+            all_records.push(
+                serde_json::to_value(firm)
+                    .map_err(|e| FetchError::Parse(format!("serialize firm: {e}")))?,
+            );
         }
 
         let total = json

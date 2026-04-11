@@ -57,3 +57,11 @@ pub mod npi;
 // ── T28: FARA and FINRA fetchers ─────────────────────────────────────────────
 pub mod fara;
 pub mod finra_brokercheck;
+
+// ── T29: International corporate registry and sanctions fetchers ──────────────
+pub mod australia_dfat_sanctions;
+pub mod canada_corporations;
+pub mod canada_sema_sanctions;
+pub mod opensanctions;
+pub mod uk_companies_house;
+pub mod uk_hmt_sanctions;

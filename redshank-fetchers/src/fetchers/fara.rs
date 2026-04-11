@@ -187,7 +187,11 @@ pub fn parse_supplemental_statements(json: &serde_json::Value) -> Vec<FaraSupple
             let reg_num = item
                 .get("Registration_Number")
                 .or_else(|| item.get("registration_number"))
-                .and_then(|v| v.as_str().map(String::from).or_else(|| v.as_u64().map(|n| n.to_string())))?;
+                .and_then(|v| {
+                    v.as_str()
+                        .map(String::from)
+                        .or_else(|| v.as_u64().map(|n| n.to_string()))
+                })?;
 
             let period_start = item
                 .get("Period_Start")
@@ -263,10 +267,13 @@ pub fn parse_registrants_xml(xml_content: &str) -> Vec<FaraRegistrant> {
 
     while let Some(start) = xml_content.get(pos..).and_then(|s| s.find("<Registrant>")) {
         let abs_start = pos + start;
-        if let Some(end) = xml_content.get(abs_start..).and_then(|s| s.find("</Registrant>")) {
+        if let Some(end) = xml_content
+            .get(abs_start..)
+            .and_then(|s| s.find("</Registrant>"))
+        {
             let block_end = abs_start + end + "</Registrant>".len();
             let block = xml_content.get(abs_start..block_end).unwrap_or("");
-            
+
             let reg_num = extract_xml_tag(block, "Registration_Number");
             if reg_num.is_empty() {
                 pos = block_end;
@@ -325,11 +332,7 @@ fn extract_xml_tag(text: &str, tag: &str) -> String {
 /// Extract optional text content from an XML tag.
 fn extract_xml_tag_option(text: &str, tag: &str) -> Option<String> {
     let val = extract_xml_tag(text, tag);
-    if val.is_empty() {
-        None
-    } else {
-        Some(val)
-    }
+    if val.is_empty() { None } else { Some(val) }
 }
 
 /// Fetch FARA registrations matching the search query.
@@ -351,10 +354,7 @@ pub async fn fetch_registrations(
     for page in 1..=max {
         let resp = client
             .get(SEARCH_API_BASE)
-            .query(&[
-                ("search", query),
-                ("page", &page.to_string()),
-            ])
+            .query(&[("search", query), ("page", &page.to_string())])
             .send()
             .await?;
 
@@ -376,9 +376,10 @@ pub async fn fetch_registrations(
 
         // Convert to JSON values for NDJSON output
         for reg in registrants {
-            all_records.push(serde_json::to_value(&reg).map_err(|e| {
-                FetchError::Parse(format!("serialize registrant: {e}"))
-            })?);
+            all_records.push(
+                serde_json::to_value(&reg)
+                    .map_err(|e| FetchError::Parse(format!("serialize registrant: {e}")))?,
+            );
         }
 
         rate_limit_delay(rate_limit_ms).await;
@@ -421,7 +422,10 @@ mod tests {
         assert_eq!(registrants[0].registration_number, "6789");
         assert_eq!(registrants[0].registrant_name, "Podesta Group Inc");
         assert_eq!(registrants[0].foreign_principal, "Government of Ukraine");
-        assert_eq!(registrants[0].registration_date, Some("2012-06-01".to_string()));
+        assert_eq!(
+            registrants[0].registration_date,
+            Some("2012-06-01".to_string())
+        );
         assert!(registrants[0].is_active);
         assert_eq!(registrants[0].activities.len(), 2);
         assert!(registrants[0].activities.contains(&"Lobbying".to_string()));
@@ -461,10 +465,17 @@ mod tests {
         assert_eq!(statements[0].period_start, Some("2022-01-01".to_string()));
         assert_eq!(statements[0].period_end, Some("2022-06-30".to_string()));
         assert_eq!(statements[0].activities.len(), 2);
-        assert!(statements[0].activities.contains(&"Congressional outreach".to_string()));
+        assert!(
+            statements[0]
+                .activities
+                .contains(&"Congressional outreach".to_string())
+        );
         assert_eq!(statements[0].disbursements.len(), 2);
         assert_eq!(statements[0].disbursements[0].category, "Travel");
-        assert_eq!(statements[0].disbursements[0].amount, Some("$15,000".to_string()));
+        assert_eq!(
+            statements[0].disbursements[0].amount,
+            Some("$15,000".to_string())
+        );
     }
 
     #[test]
@@ -498,7 +509,10 @@ mod tests {
 
         // Terminated registration
         assert!(!registrants[1].is_active);
-        assert_eq!(registrants[1].termination_date, Some("2021-12-31".to_string()));
+        assert_eq!(
+            registrants[1].termination_date,
+            Some("2021-12-31".to_string())
+        );
     }
 
     #[test]
@@ -530,11 +544,18 @@ mod tests {
         assert!(registrants[0].is_active);
         assert_eq!(registrants[0].activities.len(), 2);
         assert!(registrants[0].activities.contains(&"Lobbying".to_string()));
-        assert!(registrants[0].activities.contains(&"Political consulting".to_string()));
+        assert!(
+            registrants[0]
+                .activities
+                .contains(&"Political consulting".to_string())
+        );
 
         // Terminated registration
         assert!(!registrants[1].is_active);
-        assert_eq!(registrants[1].termination_date, Some("2019-06-30".to_string()));
+        assert_eq!(
+            registrants[1].termination_date,
+            Some("2019-06-30".to_string())
+        );
     }
 
     #[test]

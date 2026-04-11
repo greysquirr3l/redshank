@@ -78,6 +78,10 @@ pub struct CredentialBundle {
     pub fec_api_key: Option<CredentialGuard<String>>,
     /// `OpenCorporates` API token (optional — free tier works without one).
     pub opencorporates_api_key: Option<CredentialGuard<String>>,
+    /// UK Companies House API key (free registration at developer.company-information.service.gov.uk).
+    pub uk_companies_house_api_key: Option<CredentialGuard<String>>,
+    /// OpenSanctions API key for entity matching and PEP screening.
+    pub opensanctions_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
