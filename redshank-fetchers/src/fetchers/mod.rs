@@ -5,6 +5,8 @@
 
 // ── T19: 12 ported fetchers ──────────────────────────────────────────────────
 pub mod census_acs;
+pub mod clinical_trials;
+pub mod cms_open_payments;
 pub mod epa_echo;
 pub mod fdic;
 pub mod fec;
@@ -56,6 +58,7 @@ pub mod msha;
 pub mod nhtsa;
 pub mod nlrb;
 pub mod npi;
+pub mod npi_extended;
 
 // ── T28: FARA and FINRA fetchers ─────────────────────────────────────────────
 pub mod fara;
