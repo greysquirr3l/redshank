@@ -65,6 +65,18 @@ Secretary of State business registry searches for Delaware, Florida, Nevada, and
 redshank fetch state_sos --state DE --name "Acme Corp"
 ```
 
+## UK Corporate Intelligence
+
+Merged UK company enrichment combining [Companies House](https://developer.company-information.service.gov.uk/) with [OpenCorporates](https://api.opencorporates.com).
+
+**Credentials:** `UK_COMPANIES_HOUSE_API_KEY`, optional `OPENCORPORATES_API_KEY`
+
+```bash
+redshank fetch uk_corporate_intelligence --query "Acme Holdings"
+```
+
+When OpenCorporates contributes data, the same ODbL attribution rules above apply to downstream reports and UI.
+
 ## SEC EDGAR
 
 Company filings, ownership reports, and insider transactions via [EDGAR](https://efts.sec.gov/LATEST/search-index).

@@ -94,6 +94,7 @@ pub mod canada_corporations;
 pub mod canada_sema_sanctions;
 pub mod opensanctions;
 pub mod uk_companies_house;
+pub mod uk_corporate_intelligence;
 pub mod uk_hmt_sanctions;
 
 // ── T30: Aviation and maritime asset intelligence fetchers ────────────────────
