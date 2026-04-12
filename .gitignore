@@ -70,3 +70,6 @@ plan.toml
 IMPLEMENTATION_PLAN.md
 PROGRESS.md
 rust-catchup-1.78-1.94.md
+.markdownlint.json
+.markdownlintignore
+.markdownlintignore.json

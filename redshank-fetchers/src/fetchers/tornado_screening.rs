@@ -43,18 +43,21 @@ pub fn screen_transactions(
     let normalized_address = normalize_address(address);
     let mut direct = false;
     let mut sanctioned = Vec::new();
-    let mut one_hop = false;
+    let one_hop = false;
 
     for transaction in transactions {
-        let counterparties = [transaction.from.as_deref(), transaction.to.as_deref()];
-        for counterparty in counterparties.into_iter().flatten() {
+        let counterparty = match (transaction.from.as_deref(), transaction.to.as_deref()) {
+            (Some(from), Some(to)) if normalize_address(from) == normalized_address => Some(to),
+            (Some(from), Some(to)) if normalize_address(to) == normalized_address => Some(from),
+            (Some(from), None) if normalize_address(from) == normalized_address => None,
+            (None, Some(to)) if normalize_address(to) == normalized_address => None,
+            _ => continue,
+        };
+
+        if let Some(counterparty) = counterparty {
             let normalized = normalize_address(counterparty);
             if is_known_tornado_address(&normalized) {
-                if normalized == normalized_address {
-                    direct = true;
-                } else {
-                    one_hop = true;
-                }
+                direct = true;
                 if !sanctioned.contains(&normalized) {
                     sanctioned.push(normalized);
                 }
@@ -113,14 +116,24 @@ mod tests {
 
     #[test]
     fn tornado_screening_returns_confidence_score_for_mixer_interaction() {
-        let result = screen_transactions(
-            "0xd90e2f925DA726b50C4Ed8D0Fb90Ad053324F31b",
-            &transaction_fixture(),
-        );
+        let result = screen_transactions("0xinvestigator", &transaction_fixture());
 
         assert!(result.direct_tornado_interaction);
         assert_eq!(result.hops_from_tornado, Some(0));
         assert_eq!(result.risk_score, 1.0);
-        assert_eq!(result.sanctioned_addresses_touched.len(), 2);
+        assert_eq!(
+            result.sanctioned_addresses_touched,
+            vec!["0xd90e2f925da726b50c4ed8d0fb90ad053324f31b".to_string()]
+        );
+    }
+
+    #[test]
+    fn tornado_screening_ignores_unrelated_tornado_activity() {
+        let result = screen_transactions("0xunrelated", &transaction_fixture());
+
+        assert!(!result.direct_tornado_interaction);
+        assert_eq!(result.hops_from_tornado, None);
+        assert_eq!(result.risk_score, 0.0);
+        assert!(result.sanctioned_addresses_touched.is_empty());
     }
 }
