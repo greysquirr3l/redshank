@@ -6,6 +6,7 @@
 //! Zero business logic in this layer.
 
 use clap::{Parser, Subcommand};
+use redshank_fetchers::fetchers::uk_corporate_intelligence::fetch_uk_corporate_intelligence;
 use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
@@ -202,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
             source,
             output,
             query,
-        } => cmd_fetch(&source, output.as_deref(), query.as_deref()),
+        } => cmd_fetch(&workspace, &source, output.as_deref(), query.as_deref()).await,
         Commands::Session { action } => cmd_session(action, &workspace).await,
         Commands::Configure => cmd_configure(&workspace),
         Commands::Version => {
@@ -599,14 +600,52 @@ fn summarize_tool_result(content: &str, is_error: bool) -> String {
     }
 }
 
-fn cmd_fetch(
+async fn cmd_fetch(
+    workspace: &Path,
     source: &str,
     output: Option<&std::path::Path>,
     query: Option<&str>,
 ) -> anyhow::Result<()> {
     tracing::info!(source, ?output, query, "fetching data");
-    // TODO(T24): Dispatch to named fetcher
-    anyhow::bail!("fetch dispatch not yet wired — source: {source}")
+    let output_dir = output.unwrap_or_else(|| std::path::Path::new("."));
+    let query = query.ok_or_else(|| anyhow::anyhow!("--query is required for fetch"))?;
+
+    match source {
+        "uk_corporate_intelligence" | "uk-corporate-intelligence" => {
+            let credentials = resolve_credentials(workspace, None);
+            let companies_house_api_key = required_secret(
+                &credentials.uk_companies_house_api_key,
+                "UK_COMPANIES_HOUSE_API_KEY",
+            )?;
+            let opencorporates_api_key = optional_secret(&credentials.opencorporates_api_key);
+            let result = fetch_uk_corporate_intelligence(
+                query,
+                &companies_house_api_key,
+                opencorporates_api_key.as_deref(),
+                output_dir,
+                500,
+                25,
+                2,
+            )
+            .await?;
+            println!("{}", result.output_path.display());
+            Ok(())
+        }
+        _ => anyhow::bail!("fetch dispatch not yet wired — source: {source}"),
+    }
+}
+
+fn required_secret(
+    value: &Option<CredentialGuard<String>>,
+    name: &str,
+) -> anyhow::Result<String> {
+    optional_secret(value)
+        .filter(|secret| !secret.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("missing required credential: {name}"))
+}
+
+fn optional_secret(value: &Option<CredentialGuard<String>>) -> Option<String> {
+    value.as_ref().map(|secret| secret.expose().to_string())
 }
 
 async fn cmd_session(action: SessionAction, workspace: &std::path::Path) -> anyhow::Result<()> {
@@ -767,6 +806,25 @@ mod tests {
             }
             _ => panic!("expected Fetch"),
         }
+    }
+
+    #[test]
+    fn cli_parses_fetch_for_uk_corporate_intelligence() {
+        let cli = Cli::try_parse_from([
+            "redshank",
+            "fetch",
+            "uk_corporate_intelligence",
+            "--query",
+            "Acme Holdings",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Commands::Fetch { source, query, .. }
+                if source == "uk_corporate_intelligence"
+                    && query.as_deref() == Some("Acme Holdings")
+        ));
     }
 
     #[test]

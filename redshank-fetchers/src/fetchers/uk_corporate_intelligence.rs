@@ -11,7 +11,7 @@ const COMPANIES_HOUSE_BASE_URL: &str = "https://api.company-information.service.
 const OPENCORPORATES_BASE_URL: &str = "https://api.opencorporates.com/v0.4";
 
 /// Normalized OpenCorporates fields for a UK company.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenCorporatesUkRecord {
     /// Registry company number.
     pub company_number: String,
@@ -23,6 +23,8 @@ pub struct OpenCorporatesUkRecord {
     pub registered_address: Option<String>,
     /// Canonical OpenCorporates entity URL.
     pub opencorporates_url: Option<String>,
+    /// OpenCorporates officer records.
+    pub officers: Vec<OfficerRecord>,
 }
 
 /// Unified UK company intelligence record.
@@ -46,6 +48,8 @@ pub struct UnifiedUkCompanyRecord {
     pub sic_codes: Vec<String>,
     /// Officers from Companies House.
     pub officers: Vec<OfficerRecord>,
+    /// Officers surfaced by OpenCorporates.
+    pub opencorporates_officers: Vec<OfficerRecord>,
     /// Persons with Significant Control from Companies House.
     pub pscs: Vec<PscRecord>,
     /// OpenCorporates entity URL when available.
@@ -55,7 +59,8 @@ pub struct UnifiedUkCompanyRecord {
 }
 
 fn normalize_company_number(value: &str) -> String {
-    value.chars()
+    value
+        .chars()
         .filter(|character| !character.is_whitespace())
         .collect::<String>()
         .to_ascii_uppercase()
@@ -275,11 +280,71 @@ pub fn parse_opencorporates_uk_results(json: &serde_json::Value) -> Vec<OpenCorp
                             .or_else(|| company.get("registry_url"))
                             .and_then(serde_json::Value::as_str)
                             .map(ToString::to_string),
+                        officers: Vec::new(),
                     })
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn parse_opencorporates_officers(json: &serde_json::Value) -> Vec<OfficerRecord> {
+    json.get("results")
+        .and_then(|results| results.get("company"))
+        .and_then(|company| company.get("officers"))
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let officer = item.get("officer")?;
+                    Some(OfficerRecord {
+                        name: officer
+                            .get("name")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
+                        officer_role: officer
+                            .get("position")
+                            .or_else(|| officer.get("occupation"))
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        appointed_on: officer
+                            .get("start_date")
+                            .or_else(|| officer.get("appointed_on"))
+                            .and_then(serde_json::Value::as_str)
+                            .map(ToString::to_string),
+                        resigned_on: officer
+                            .get("end_date")
+                            .or_else(|| officer.get("resigned_on"))
+                            .and_then(serde_json::Value::as_str)
+                            .map(ToString::to_string),
+                        nationality: officer
+                            .get("nationality")
+                            .and_then(serde_json::Value::as_str)
+                            .map(ToString::to_string),
+                        occupation: officer
+                            .get("occupation")
+                            .and_then(serde_json::Value::as_str)
+                            .map(ToString::to_string),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_opencorporates_canonical_url(json: &serde_json::Value) -> Option<String> {
+    json.get("results")
+        .and_then(|results| results.get("company"))
+        .and_then(|company| {
+            company
+                .get("opencorporates_url")
+                .or_else(|| company.get("registry_url"))
+        })
+        .and_then(serde_json::Value::as_str)
+        .map(ToString::to_string)
 }
 
 /// Merge Companies House and OpenCorporates UK records by company number.
@@ -304,6 +369,7 @@ pub fn merge_uk_company_records(
                 registered_office_address: company.registered_office_address.clone(),
                 sic_codes: company.sic_codes.clone(),
                 officers: company.officers.clone(),
+                opencorporates_officers: Vec::new(),
                 pscs: company.pscs.clone(),
                 opencorporates_url: None,
                 registry_sources: vec!["companies_house".to_string()],
@@ -313,22 +379,24 @@ pub fn merge_uk_company_records(
 
     for company in opencorporates_records {
         let company_number = normalize_company_number(&company.company_number);
-        let entry = merged
-            .entry(company_number.clone())
-            .or_insert_with(|| UnifiedUkCompanyRecord {
-                company_number,
-                company_name: company.company_name.clone(),
-                company_type: None,
-                companies_house_status: None,
-                opencorporates_status: None,
-                date_of_creation: None,
-                registered_office_address: company.registered_address.clone(),
-                sic_codes: Vec::new(),
-                officers: Vec::new(),
-                pscs: Vec::new(),
-                opencorporates_url: None,
-                registry_sources: Vec::new(),
-            });
+        let entry =
+            merged
+                .entry(company_number.clone())
+                .or_insert_with(|| UnifiedUkCompanyRecord {
+                    company_number,
+                    company_name: company.company_name.clone(),
+                    company_type: None,
+                    companies_house_status: None,
+                    opencorporates_status: None,
+                    date_of_creation: None,
+                    registered_office_address: company.registered_address.clone(),
+                    sic_codes: Vec::new(),
+                    officers: Vec::new(),
+                    opencorporates_officers: Vec::new(),
+                    pscs: Vec::new(),
+                    opencorporates_url: None,
+                    registry_sources: Vec::new(),
+                });
 
         if entry.company_name.is_empty() {
             entry.company_name = company.company_name.clone();
@@ -338,6 +406,7 @@ pub fn merge_uk_company_records(
         }
         entry.opencorporates_status = company.current_status.clone();
         entry.opencorporates_url = company.opencorporates_url.clone();
+        entry.opencorporates_officers = company.officers.clone();
         if !entry
             .registry_sources
             .iter()
@@ -400,6 +469,38 @@ async fn fetch_companies_house_pscs(
     Some(parse_companies_house_pscs(&json))
 }
 
+async fn fetch_opencorporates_company_detail(
+    client: &reqwest::Client,
+    company_number: &str,
+    api_token: Option<&str>,
+) -> Result<Option<serde_json::Value>, FetchError> {
+    let mut request = client
+        .get(format!(
+            "{OPENCORPORATES_BASE_URL}/companies/gb/{company_number}"
+        ))
+        .query(&[("normalise_company_name", "true")]);
+
+    if let Some(token) = api_token {
+        request = request.query(&[("api_token", token)]);
+    }
+
+    let response = request.send().await?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
+    }
+
+    Ok(Some(response.json().await?))
+}
+
 /// Fetch and merge UK Companies House and OpenCorporates results.
 ///
 /// # Errors
@@ -420,7 +521,10 @@ pub async fn fetch_uk_corporate_intelligence(
     let companies_house_response = client
         .get(format!("{COMPANIES_HOUSE_BASE_URL}/search/companies"))
         .basic_auth(companies_house_api_key, Option::<&str>::None)
-        .query(&[("q", query), ("items_per_page", &items_per_page.to_string())])
+        .query(&[
+            ("q", query),
+            ("items_per_page", &items_per_page.to_string()),
+        ])
         .send()
         .await?;
     let companies_house_status = companies_house_response.status();
@@ -445,20 +549,23 @@ pub async fn fetch_uk_corporate_intelligence(
         .await
         .unwrap_or_default();
         rate_limit_delay(rate_limit_ms).await;
-        company.pscs = fetch_companies_house_pscs(&client, companies_house_api_key, &company_number)
-            .await
-            .unwrap_or_default();
+        company.pscs =
+            fetch_companies_house_pscs(&client, companies_house_api_key, &company_number)
+                .await
+                .unwrap_or_default();
     }
 
     let max = if max_pages == 0 { u32::MAX } else { max_pages };
     let mut opencorporates_records = Vec::new();
     for page in 1..=max {
-        let mut request = client.get(format!("{OPENCORPORATES_BASE_URL}/companies/search")).query(&[
-            ("q", query),
-            ("jurisdiction_code", "gb"),
-            ("page", &page.to_string()),
-            ("per_page", "100"),
-        ]);
+        let mut request = client
+            .get(format!("{OPENCORPORATES_BASE_URL}/companies/search"))
+            .query(&[
+                ("q", query),
+                ("jurisdiction_code", "gb"),
+                ("page", &page.to_string()),
+                ("per_page", "100"),
+            ]);
 
         if let Some(token) = opencorporates_api_token {
             request = request.query(&[("api_token", token)]);
@@ -494,11 +601,30 @@ pub async fn fetch_uk_corporate_intelligence(
         rate_limit_delay(rate_limit_ms).await;
     }
 
-    let merged_records = merge_uk_company_records(&companies_house_records, &opencorporates_records);
+    for record in &mut opencorporates_records {
+        if let Some(json) = fetch_opencorporates_company_detail(
+            &client,
+            &record.company_number,
+            opencorporates_api_token,
+        )
+        .await?
+        {
+            record.officers = parse_opencorporates_officers(&json);
+            if let Some(url) = parse_opencorporates_canonical_url(&json) {
+                record.opencorporates_url = Some(url);
+            }
+            rate_limit_delay(rate_limit_ms).await;
+        }
+    }
+
+    let merged_records =
+        merge_uk_company_records(&companies_house_records, &opencorporates_records);
     let output_path = output_dir.join("uk_corporate_intelligence.ndjson");
     let values = merged_records
         .into_iter()
-        .map(|record| serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string())))
+        .map(|record| {
+            serde_json::to_value(record).map_err(|err| FetchError::Parse(err.to_string()))
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let count = write_ndjson(&output_path, &values)?;
 
@@ -585,12 +711,37 @@ mod tests {
         })
     }
 
+    fn opencorporates_detail_fixture() -> serde_json::Value {
+        serde_json::json!({
+            "results": {
+                "company": {
+                    "company_number": "01234567",
+                    "opencorporates_url": "https://opencorporates.com/companies/gb/01234567",
+                    "officers": [
+                        {
+                            "officer": {
+                                "name": "DOE, Jane",
+                                "position": "director",
+                                "start_date": "2017-01-01",
+                                "nationality": "British",
+                                "occupation": "Executive"
+                            }
+                        }
+                    ]
+                }
+            }
+        })
+    }
+
     #[test]
     fn uk_corporate_intelligence_merges_companies_house_and_opencorporates_records() {
-        let mut companies_house_records = parse_companies_house_search_results(&companies_house_fixture());
+        let mut companies_house_records =
+            parse_companies_house_search_results(&companies_house_fixture());
         companies_house_records[0].officers = parse_companies_house_officers(&officers_fixture());
         companies_house_records[0].pscs = parse_companies_house_pscs(&psc_fixture());
-        let opencorporates_records = parse_opencorporates_uk_results(&opencorporates_fixture());
+        let mut opencorporates_records = parse_opencorporates_uk_results(&opencorporates_fixture());
+        opencorporates_records[0].officers =
+            parse_opencorporates_officers(&opencorporates_detail_fixture());
 
         let merged = merge_uk_company_records(&companies_house_records, &opencorporates_records);
 
@@ -598,13 +749,33 @@ mod tests {
         assert_eq!(merged[0].company_number, "01234567");
         assert_eq!(merged[0].company_name, "Acme Holdings Ltd");
         assert_eq!(merged[0].officers.len(), 1);
+        assert_eq!(merged[0].opencorporates_officers.len(), 1);
         assert_eq!(merged[0].pscs.len(), 1);
         assert_eq!(merged[0].opencorporates_status.as_deref(), Some("Active"));
         assert_eq!(
             merged[0].opencorporates_url.as_deref(),
             Some("https://opencorporates.com/companies/gb/01234567")
         );
-        assert_eq!(merged[0].registry_sources, vec!["companies_house", "opencorporates"]);
+        assert_eq!(
+            merged[0].registry_sources,
+            vec!["companies_house", "opencorporates"]
+        );
+    }
+
+    #[test]
+    fn uk_corporate_intelligence_parses_opencorporates_detail_officers_and_url() {
+        let detail = opencorporates_detail_fixture();
+        let officers = parse_opencorporates_officers(&detail);
+        let canonical_url = parse_opencorporates_canonical_url(&detail);
+
+        assert_eq!(officers.len(), 1);
+        assert_eq!(officers[0].name, "DOE, Jane");
+        assert_eq!(officers[0].officer_role, "director");
+        assert_eq!(officers[0].appointed_on.as_deref(), Some("2017-01-01"));
+        assert_eq!(
+            canonical_url.as_deref(),
+            Some("https://opencorporates.com/companies/gb/01234567")
+        );
     }
 
     #[test]

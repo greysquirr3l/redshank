@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 redshank-core = { workspace = true, features = ["runtime"] }
+redshank-fetchers = { workspace = true }
 redshank-tui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

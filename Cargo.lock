@@ -2761,6 +2761,7 @@ dependencies = [
  "clap",
  "portable-pty",
  "redshank-core",
+ "redshank-fetchers",
  "redshank-tui",
  "serde",
  "serde_json",
