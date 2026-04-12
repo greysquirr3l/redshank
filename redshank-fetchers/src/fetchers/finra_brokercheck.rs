@@ -36,7 +36,7 @@ pub struct BrokerRecord {
 }
 
 /// A single employment history entry.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmploymentEntry {
     /// Name of the firm.
     pub firm_name: String,
@@ -49,7 +49,7 @@ pub struct EmploymentEntry {
 /// A disclosure event on a broker or firm record.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Disclosure {
-    /// Type of disclosure (CustomerDispute, RegulatoryAction, Criminal, Termination, Financial).
+    /// Type of disclosure (`CustomerDispute`, `RegulatoryAction`, Criminal, Termination, Financial).
     pub disclosure_type: String,
     /// Date of the event.
     pub event_date: Option<String>,
@@ -61,8 +61,8 @@ pub struct Disclosure {
     pub description: Option<String>,
 }
 
-/// A FINRA BrokerCheck firm record.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A FINRA `BrokerCheck` firm record.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FirmRecord {
     /// Central Registration Depository unique identifier for the firm.
     pub crd_number: String,
@@ -335,15 +335,13 @@ fn parse_firm_hit(hit: &serde_json::Value) -> Option<FirmRecord> {
         .get("branch_count")
         .or_else(|| source.get("branchCount"))
         .and_then(serde_json::Value::as_u64)
-        .map(|n| n as u32)
-        .unwrap_or(0);
+        .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX));
 
     let disclosure_count = source
         .get("disclosure_count")
         .or_else(|| source.get("disclosureCount"))
         .and_then(serde_json::Value::as_u64)
-        .map(|n| n as u32)
-        .unwrap_or(0);
+        .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX));
 
     Some(FirmRecord {
         crd_number,
@@ -354,7 +352,7 @@ fn parse_firm_hit(hit: &serde_json::Value) -> Option<FirmRecord> {
     })
 }
 
-/// Fetch FINRA BrokerCheck individual broker records by name query.
+/// Fetch FINRA `BrokerCheck` individual broker records by name query.
 ///
 /// # Errors
 ///
@@ -433,7 +431,7 @@ pub async fn fetch_individual(
     })
 }
 
-/// Fetch FINRA BrokerCheck firm records by name query.
+/// Fetch FINRA `BrokerCheck` firm records by name query.
 ///
 /// # Errors
 ///

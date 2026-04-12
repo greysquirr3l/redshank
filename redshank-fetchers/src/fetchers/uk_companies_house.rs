@@ -50,7 +50,7 @@ pub struct OfficerRecord {
     pub occupation: Option<String>,
 }
 
-/// A Person with Significant Control (UK equivalent of FinCEN BOI).
+/// A Person with Significant Control (UK equivalent of `FinCEN` BOI).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PscRecord {
     /// PSC name.

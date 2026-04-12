@@ -33,7 +33,10 @@ fn opt_f64(record: &serde_json::Value, keys: &[&str]) -> Option<f64> {
         record.get(*key).and_then(|value| {
             value
                 .as_f64()
-                .or_else(|| value.as_i64().map(|number| number as f64))
+                .or_else(|| {
+                    #[allow(clippy::cast_precision_loss)]
+                    value.as_i64().map(|number| number as f64)
+                })
                 .or_else(|| value.as_str().and_then(|text| text.parse::<f64>().ok()))
         })
     })
@@ -81,8 +84,13 @@ pub async fn fetch_series(
 ) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
     let mut payload = serde_json::json!({"seriesid": series_ids});
-    if let Some(key) = api_key {
-        payload["registrationkey"] = serde_json::Value::String(key.to_string());
+    if let Some(key) = api_key
+        && let Some(obj) = payload.as_object_mut()
+    {
+        obj.insert(
+            "registrationkey".to_string(),
+            serde_json::Value::String(key.to_string()),
+        );
     }
 
     let resp = client.post(API_BASE).json(&payload).send().await?;

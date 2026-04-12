@@ -115,15 +115,15 @@ fn parse_single_author(item: &serde_json::Value) -> Option<ScholarAuthor> {
         h_index: item
             .get("hIndex")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         citation_count: item
             .get("citationCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         paper_count: item
             .get("paperCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         affiliations,
         fields_of_study,
         papers,
@@ -160,7 +160,7 @@ fn parse_single_paper(item: &serde_json::Value) -> Option<ScholarPaper> {
         year: item
             .get("year")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         venue: item
             .get("venue")
             .and_then(serde_json::Value::as_str)
@@ -169,11 +169,11 @@ fn parse_single_paper(item: &serde_json::Value) -> Option<ScholarPaper> {
         citation_count: item
             .get("citationCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         influential_citation_count: item
             .get("influentialCitationCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         open_access_pdf,
         first_author,
         url: item

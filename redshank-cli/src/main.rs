@@ -614,10 +614,13 @@ async fn cmd_fetch(
         "uk_corporate_intelligence" | "uk-corporate-intelligence" => {
             let credentials = resolve_credentials(workspace, None);
             let companies_house_api_key = required_secret(
-                &credentials.uk_companies_house_api_key,
+                credentials.uk_companies_house_api_key.as_ref(),
                 "UK_COMPANIES_HOUSE_API_KEY",
             )?;
-            let opencorporates_api_key = optional_secret(&credentials.opencorporates_api_key);
+            let opencorporates_api_key = credentials
+                .opencorporates_api_key
+                .as_ref()
+                .map(|s| s.expose().clone());
             let result = fetch_uk_corporate_intelligence(
                 query,
                 &companies_house_api_key,
@@ -635,14 +638,11 @@ async fn cmd_fetch(
     }
 }
 
-fn required_secret(value: &Option<CredentialGuard<String>>, name: &str) -> anyhow::Result<String> {
-    optional_secret(value)
+fn required_secret(value: Option<&CredentialGuard<String>>, name: &str) -> anyhow::Result<String> {
+    value
+        .map(|secret| secret.expose().clone())
         .filter(|secret| !secret.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("missing required credential: {name}"))
-}
-
-fn optional_secret(value: &Option<CredentialGuard<String>>) -> Option<String> {
-    value.as_ref().map(|secret| secret.expose().to_string())
 }
 
 async fn cmd_session(action: SessionAction, workspace: &std::path::Path) -> anyhow::Result<()> {

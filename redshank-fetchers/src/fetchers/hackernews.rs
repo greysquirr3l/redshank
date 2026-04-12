@@ -120,7 +120,7 @@ pub fn parse_hn_item(json: &serde_json::Value) -> Option<HnItem> {
         descendants: json
             .get("descendants")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
     })
 }
 
@@ -187,9 +187,9 @@ mod tests {
         serde_json::json!({
             "id": "pg",
             "created": 1_160_418_092,
-            "karma": 155223,
+            "karma": 155_223,
             "about": "This is <a href=\"http://paulgraham.com\">my home page</a>.",
-            "submitted": [141865, 141564, 140813, 140190, 139309]
+            "submitted": [141_865, 141_564, 140_813, 140_190, 139_309]
         })
     }
 

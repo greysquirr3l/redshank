@@ -324,7 +324,7 @@ mod tests {
     use super::*;
 
     fn filing_fixture() -> &'static str {
-        r#"
+        r"
         <Return>
           <TaxPeriodEndDt>2024-12-31</TaxPeriodEndDt>
           <ReturnTypeCd>990</ReturnTypeCd>
@@ -374,7 +374,7 @@ mod tests {
             <RelationshipDescriptionTxt>Related 501(c)(4) advocacy affiliate</RelationshipDescriptionTxt>
           </RelatedOrganizationDetail>
         </Return>
-        "#
+        "
     }
 
     #[test]

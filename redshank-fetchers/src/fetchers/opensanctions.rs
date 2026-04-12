@@ -1,4 +1,4 @@
-//! OpenSanctions — global sanctions, PEP, and watchlist entity matching.
+//! `OpenSanctions` — global sanctions, PEP, and watchlist entity matching.
 //!
 //! Source: <https://api.opensanctions.org/>
 //! Free tier: 100 requests/day. Paid tiers and self-hosting available.
@@ -10,12 +10,12 @@ use std::path::Path;
 
 const API_BASE: &str = "https://api.opensanctions.org";
 
-/// An OpenSanctions entity match result.
+/// An `OpenSanctions` entity match result.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SanctionsMatch {
-    /// Entity ID in OpenSanctions.
+    /// Entity ID in `OpenSanctions`.
     pub id: String,
-    /// Schema type (Person, Organization, Company, LegalEntity, etc.).
+    /// Schema type (Person, Organization, Company, `LegalEntity`, etc.).
     pub schema: String,
     /// Match score (0.0–1.0).
     pub score: f64,
@@ -41,7 +41,7 @@ pub struct SanctionsMatch {
     pub identifiers: Vec<String>,
 }
 
-/// Match an entity name against the OpenSanctions database.
+/// Match an entity name against the `OpenSanctions` database.
 ///
 /// Uses the `/match/default` endpoint with `schema=Thing` for a broad match
 /// across all entity types.
@@ -106,10 +106,7 @@ pub async fn fetch_matches(
 pub fn parse_match_response(json: &serde_json::Value) -> Vec<SanctionsMatch> {
     // The response has shape: { "responses": { "<query_key>": { "results": [...] } } }
     // or equivalently the top-level object can be iterated directly.
-    let responses = match json.get("responses") {
-        Some(r) => r,
-        None => json,
-    };
+    let responses = json.get("responses").unwrap_or(json);
 
     let mut all_matches = Vec::new();
     if let Some(obj) = responses.as_object() {

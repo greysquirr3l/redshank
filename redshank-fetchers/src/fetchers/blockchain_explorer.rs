@@ -82,7 +82,7 @@ pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<
     let funded = chain_stats.get("funded_txo_sum").and_then(serde_json::Value::as_u64)?;
     let spent = chain_stats.get("spent_txo_sum").and_then(serde_json::Value::as_u64)?;
     let tx_count = chain_stats.get("tx_count").and_then(serde_json::Value::as_u64);
-    let native_balance = (funded.saturating_sub(spent)) as f64 / 100_000_000.0;
+    let native_balance = sats_to_btc(funded.saturating_sub(spent))?;
 
     Some(AddressSnapshot {
         chain: "bitcoin".to_string(),
@@ -93,6 +93,14 @@ pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<
         first_seen: None,
         last_active: tx_count,
     })
+}
+
+fn sats_to_btc(satoshis: u64) -> Option<f64> {
+    satoshis
+        .to_string()
+        .parse::<f64>()
+        .ok()
+        .map(|value| value / 100_000_000.0)
 }
 
 /// Parse a Bitcoin transaction list response.
@@ -124,7 +132,7 @@ pub fn parse_bitcoin_transactions(json: &serde_json::Value) -> Vec<BlockchainTra
                 items.first()
                     .and_then(|item| item.get("value"))
                     .and_then(serde_json::Value::as_u64)
-                    .map(|sats| sats as f64 / 100_000_000.0)
+                    .and_then(sats_to_btc)
             });
             let timestamp = entry
                 .get("status")
@@ -281,7 +289,7 @@ mod tests {
                 "txid": "tx-one",
                 "status": {"block_time": 1_710_000_000},
                 "vin": [{"prevout": {"scriptpubkey_address": "bc1from"}}],
-                "vout": [{"scriptpubkey_address": "bc1to", "value": 125000000}]
+                "vout": [{"scriptpubkey_address": "bc1to", "value": 125_000_000}]
             }
         ]);
 
@@ -306,6 +314,6 @@ mod tests {
         let holdings = parse_token_holdings(&json);
         assert_eq!(holdings.len(), 1);
         assert_eq!(holdings[0].symbol, "USDC");
-        assert_eq!(holdings[0].balance, 2534.5);
+        assert!((holdings[0].balance - 2_534.5).abs() < f64::EPSILON);
     }
 }

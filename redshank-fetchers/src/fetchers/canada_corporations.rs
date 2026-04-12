@@ -79,7 +79,7 @@ pub async fn fetch_corporations(
     })
 }
 
-/// Parse corporation records from a CKAN datastore_search API response.
+/// Parse corporation records from a CKAN `datastore_search` API response.
 #[must_use]
 pub fn parse_corporation_results(json: &serde_json::Value) -> Vec<CorpRecord> {
     json.get("result")

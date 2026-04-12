@@ -1,4 +1,4 @@
-//! Unified UK corporate intelligence fetcher built from Companies House and OpenCorporates.
+//! Unified UK corporate intelligence fetcher built from `Companies House` and `OpenCorporates`.
 
 use crate::domain::{Attribution, FetchError, FetchOutput};
 use crate::fetchers::opencorporates;
@@ -10,7 +10,7 @@ use std::path::Path;
 const COMPANIES_HOUSE_BASE_URL: &str = "https://api.company-information.service.gov.uk";
 const OPENCORPORATES_BASE_URL: &str = "https://api.opencorporates.com/v0.4";
 
-/// Normalized OpenCorporates fields for a UK company.
+/// Normalized `OpenCorporates` fields for a UK company.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenCorporatesUkRecord {
     /// Registry company number.
@@ -19,11 +19,11 @@ pub struct OpenCorporatesUkRecord {
     pub company_name: String,
     /// Current registry status.
     pub current_status: Option<String>,
-    /// Registered address as returned by OpenCorporates.
+    /// Registered address as returned by `OpenCorporates`.
     pub registered_address: Option<String>,
-    /// Canonical OpenCorporates entity URL.
+    /// Canonical `OpenCorporates` entity URL.
     pub opencorporates_url: Option<String>,
-    /// OpenCorporates officer records.
+    /// `OpenCorporates` officer records.
     pub officers: Vec<OfficerRecord>,
 }
 
@@ -38,7 +38,7 @@ pub struct UnifiedUkCompanyRecord {
     pub company_type: Option<String>,
     /// Companies House status.
     pub companies_house_status: Option<String>,
-    /// OpenCorporates status.
+    /// `OpenCorporates` status.
     pub opencorporates_status: Option<String>,
     /// Incorporation date if known.
     pub date_of_creation: Option<String>,
@@ -48,11 +48,11 @@ pub struct UnifiedUkCompanyRecord {
     pub sic_codes: Vec<String>,
     /// Officers from Companies House.
     pub officers: Vec<OfficerRecord>,
-    /// Officers surfaced by OpenCorporates.
+    /// Officers surfaced by `OpenCorporates`.
     pub opencorporates_officers: Vec<OfficerRecord>,
     /// Persons with Significant Control from Companies House.
     pub pscs: Vec<PscRecord>,
-    /// OpenCorporates entity URL when available.
+    /// `OpenCorporates` entity URL when available.
     pub opencorporates_url: Option<String>,
     /// Names of the registries that contributed data.
     pub registry_sources: Vec<String>,
@@ -238,7 +238,7 @@ fn parse_companies_house_pscs(json: &serde_json::Value) -> Vec<PscRecord> {
         .unwrap_or_default()
 }
 
-/// Parse OpenCorporates UK search results into normalized records.
+/// Parse `OpenCorporates` UK search results into normalized records.
 #[must_use]
 pub fn parse_opencorporates_uk_results(json: &serde_json::Value) -> Vec<OpenCorporatesUkRecord> {
     json.get("results")
@@ -347,7 +347,7 @@ fn parse_opencorporates_canonical_url(json: &serde_json::Value) -> Option<String
         .map(ToString::to_string)
 }
 
-/// Merge Companies House and OpenCorporates UK records by company number.
+/// Merge `Companies House` and `OpenCorporates` UK records by company number.
 #[must_use]
 pub fn merge_uk_company_records(
     companies_house_records: &[CompanyRecord],
@@ -399,14 +399,14 @@ pub fn merge_uk_company_records(
                 });
 
         if entry.company_name.is_empty() {
-            entry.company_name = company.company_name.clone();
+            entry.company_name.clone_from(&company.company_name);
         }
         if entry.registered_office_address.is_none() {
-            entry.registered_office_address = company.registered_address.clone();
+            entry.registered_office_address.clone_from(&company.registered_address);
         }
-        entry.opencorporates_status = company.current_status.clone();
-        entry.opencorporates_url = company.opencorporates_url.clone();
-        entry.opencorporates_officers = company.officers.clone();
+        entry.opencorporates_status.clone_from(&company.current_status);
+        entry.opencorporates_url.clone_from(&company.opencorporates_url);
+        entry.opencorporates_officers.clone_from(&company.officers);
         if !entry
             .registry_sources
             .iter()
@@ -501,12 +501,13 @@ async fn fetch_opencorporates_company_detail(
     Ok(Some(response.json().await?))
 }
 
-/// Fetch and merge UK Companies House and OpenCorporates results.
+/// Fetch and merge UK `Companies House` and `OpenCorporates` results.
 ///
 /// # Errors
 ///
-/// Returns `Err` if the Companies House request fails, the OpenCorporates request
+/// Returns `Err` if the `Companies House` request fails, the `OpenCorporates` request
 /// fails, or the merged records cannot be written.
+#[allow(clippy::too_many_lines)]
 pub async fn fetch_uk_corporate_intelligence(
     query: &str,
     companies_house_api_key: &str,

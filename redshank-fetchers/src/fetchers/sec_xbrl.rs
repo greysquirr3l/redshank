@@ -66,7 +66,7 @@ pub struct ExecutiveCompensationRecord {
     pub source_filing: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct RelatedPartyTransactionRecord {
     pub concept: String,
     pub value: String,
@@ -151,6 +151,7 @@ fn period_type_for_form(form: &str) -> String {
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn as_f64(value: &serde_json::Value) -> Option<f64> {
     value
         .as_f64()
@@ -167,7 +168,7 @@ fn select_ticker(json: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn metric_definitions() -> &'static [(&'static [&'static str], MetricField)] {
+const fn metric_definitions() -> &'static [(&'static [&'static str], MetricField)] {
     &[
         (REVENUE_TAGS, MetricField::Revenue),
         (NET_INCOME_TAGS, MetricField::NetIncome),
@@ -511,6 +512,7 @@ pub async fn fetch_company_facts(cik: &str, output_dir: &Path) -> Result<FetchOu
 mod tests {
     use super::*;
 
+    #[allow(clippy::too_many_lines)]
     fn company_facts_fixture() -> serde_json::Value {
         serde_json::json!({
             "cik": "0000320193",
@@ -522,7 +524,7 @@ mod tests {
                         "units": {
                             "USD": [
                                 {
-                                    "val": 394328000000_u64,
+                                    "val": 394_328_000_000_u64,
                                     "accn": "0000320193-23-000106",
                                     "fy": 2023,
                                     "fp": "FY",
@@ -531,7 +533,7 @@ mod tests {
                                     "end": "2023-09-30"
                                 },
                                 {
-                                    "val": 89500000000_u64,
+                                    "val": 89_500_000_000_u64,
                                     "accn": "0000320193-24-000081",
                                     "fy": 2024,
                                     "fp": "Q1",
@@ -546,7 +548,7 @@ mod tests {
                         "units": {
                             "USD": [
                                 {
-                                    "val": 96995000000_u64,
+                                    "val": 96_995_000_000_u64,
                                     "accn": "0000320193-23-000106",
                                     "fy": 2023,
                                     "fp": "FY",
@@ -555,7 +557,7 @@ mod tests {
                                     "end": "2023-09-30"
                                 },
                                 {
-                                    "val": 23600000000_u64,
+                                    "val": 23_600_000_000_u64,
                                     "accn": "0000320193-24-000081",
                                     "fy": 2024,
                                     "fp": "Q1",
@@ -569,7 +571,7 @@ mod tests {
                     "Assets": {
                         "units": {
                             "USD": [{
-                                "val": 352583000000_u64,
+                                "val": 352_583_000_000_u64,
                                 "accn": "0000320193-23-000106",
                                 "form": "10-K",
                                 "end": "2023-09-30"
@@ -579,7 +581,7 @@ mod tests {
                     "Liabilities": {
                         "units": {
                             "USD": [{
-                                "val": 290437000000_u64,
+                                "val": 290_437_000_000_u64,
                                 "accn": "0000320193-23-000106",
                                 "form": "10-K",
                                 "end": "2023-09-30"
@@ -589,7 +591,7 @@ mod tests {
                     "StockholdersEquity": {
                         "units": {
                             "USD": [{
-                                "val": 62146000000_u64,
+                                "val": 62_146_000_000_u64,
                                 "accn": "0000320193-23-000106",
                                 "form": "10-K",
                                 "end": "2023-09-30"
@@ -599,7 +601,7 @@ mod tests {
                     "AssetsCurrent": {
                         "units": {
                             "USD": [{
-                                "val": 143566000000_u64,
+                                "val": 143_566_000_000_u64,
                                 "accn": "0000320193-23-000106",
                                 "form": "10-K",
                                 "end": "2023-09-30"
@@ -609,7 +611,7 @@ mod tests {
                     "LiabilitiesCurrent": {
                         "units": {
                             "USD": [{
-                                "val": 145308000000_u64,
+                                "val": 145_308_000_000_u64,
                                 "accn": "0000320193-23-000106",
                                 "form": "10-K",
                                 "end": "2023-09-30"
@@ -637,13 +639,13 @@ mod tests {
                 {
                     "officer_name": "Tim Cook",
                     "title": "Chief Executive Officer",
-                    "total_compensation": 63209845,
+                    "total_compensation": 63_209_845,
                     "source_filing": "0000320193-24-000012"
                 },
                 {
                     "officer_name": "Luca Maestri",
                     "title": "Chief Financial Officer",
-                    "total_compensation": 27000000,
+                    "total_compensation": 27_000_000,
                     "source_filing": "0000320193-24-000012"
                 }
             ]
@@ -665,8 +667,8 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(annual.cik, "0000320193");
         assert_eq!(annual.ticker.as_deref(), Some("AAPL"));
-        assert_eq!(annual.financials.revenue, Some(394328000000.0));
-        assert_eq!(quarterly.financials.revenue, Some(89500000000.0));
+        assert_eq!(annual.financials.revenue, Some(394_328_000_000.0));
+        assert_eq!(quarterly.financials.revenue, Some(89_500_000_000.0));
     }
 
     #[test]
@@ -677,10 +679,10 @@ mod tests {
             .find(|record| record.period_type == "annual")
             .unwrap();
 
-        assert_eq!(annual.financials.net_income, Some(96995000000.0));
-        assert_eq!(annual.financials.total_assets, Some(352583000000.0));
-        assert_eq!(annual.financials.total_liabilities, Some(290437000000.0));
-        assert_eq!(annual.financials.stockholders_equity, Some(62146000000.0));
+        assert_eq!(annual.financials.net_income, Some(96_995_000_000.0));
+        assert_eq!(annual.financials.total_assets, Some(352_583_000_000.0));
+        assert_eq!(annual.financials.total_liabilities, Some(290_437_000_000.0));
+        assert_eq!(annual.financials.stockholders_equity, Some(62_146_000_000.0));
     }
 
     #[test]
@@ -706,7 +708,7 @@ mod tests {
 
         assert_eq!(compensation.len(), 2);
         assert_eq!(compensation[0].officer_name, "Tim Cook");
-        assert_eq!(compensation[0].total_compensation, Some(63209845.0));
+        assert_eq!(compensation[0].total_compensation, Some(63_209_845.0));
         assert_eq!(
             compensation[1].title.as_deref(),
             Some("Chief Financial Officer")

@@ -154,7 +154,7 @@ pub fn parse_scholar_profile(user_id: &str, html: &str) -> Option<GoogleScholarP
 /// # Errors
 ///
 /// Returns `Err` if the profile cannot be parsed, serialized, or written.
-pub async fn save_scholar_profile(
+pub fn save_scholar_profile(
     user_id: &str,
     html: &str,
     output_dir: &Path,

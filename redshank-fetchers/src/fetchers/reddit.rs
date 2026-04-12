@@ -1,6 +1,6 @@
 //! Reddit API — user comment and submission history.
 //!
-//! Uses OAuth2 bearer auth. Set `reddit_client_id` and `reddit_client_secret`
+//! Uses `OAuth2` bearer auth. Set `reddit_client_id` and `reddit_client_secret`
 //! in the credential store. Falls back to unauthenticated Pushshift for
 //! historical data when credentials are absent.
 //!
@@ -32,7 +32,7 @@ pub struct RedditProfile {
     pub verified: bool,
     /// Whether the account has premium.
     pub is_gold: bool,
-    /// Account age in days (calculated from created_utc).
+    /// Account age in days (calculated from `created_utc`).
     pub account_age_days: Option<i64>,
 }
 
@@ -77,6 +77,7 @@ pub struct RedditSubmission {
 }
 
 /// Parse a Reddit user profile from the `/user/{username}/about.json` response.
+#[allow(clippy::cast_possible_truncation)] // Unix timestamps fit in i64
 #[must_use]
 pub fn parse_user_profile(json: &serde_json::Value) -> Option<RedditProfile> {
     let data = json.get("data").unwrap_or(json);
@@ -89,8 +90,7 @@ pub fn parse_user_profile(json: &serde_json::Value) -> Option<RedditProfile> {
     let created_utc = data
         .get("created_utc")
         .and_then(serde_json::Value::as_f64)
-        .map(|f| f as i64)
-        .unwrap_or(0);
+        .map_or(0, |f| f as i64);
 
     // Calculate account age from created_utc relative to a fixed reference
     // so tests remain deterministic (account age grows with time but the field
@@ -126,6 +126,7 @@ pub fn parse_user_profile(json: &serde_json::Value) -> Option<RedditProfile> {
 }
 
 /// Parse a Reddit comment listing from `/user/{username}/comments.json`.
+#[allow(clippy::cast_possible_truncation)] // Unix timestamps from f64 fit in i64
 #[must_use]
 pub fn parse_comment_listing(json: &serde_json::Value) -> Vec<RedditComment> {
     let children = json
@@ -162,8 +163,7 @@ pub fn parse_comment_listing(json: &serde_json::Value) -> Vec<RedditComment> {
                         created_utc: d
                             .get("created_utc")
                             .and_then(serde_json::Value::as_f64)
-                            .map(|f| f as i64)
-                            .unwrap_or(0),
+                            .map_or(0, |f| f as i64),
                         link_title: d
                             .get("link_title")
                             .and_then(serde_json::Value::as_str)
@@ -176,6 +176,7 @@ pub fn parse_comment_listing(json: &serde_json::Value) -> Vec<RedditComment> {
 }
 
 /// Parse a Reddit submission listing from `/user/{username}/submitted.json`.
+#[allow(clippy::cast_possible_truncation)] // Unix timestamps from f64 fit in i64
 #[must_use]
 pub fn parse_submission_listing(json: &serde_json::Value) -> Vec<RedditSubmission> {
     let children = json
@@ -217,13 +218,11 @@ pub fn parse_submission_listing(json: &serde_json::Value) -> Vec<RedditSubmissio
                         created_utc: d
                             .get("created_utc")
                             .and_then(serde_json::Value::as_f64)
-                            .map(|f| f as i64)
-                            .unwrap_or(0),
+                            .map_or(0, |f| f as i64),
                         num_comments: d
                             .get("num_comments")
                             .and_then(serde_json::Value::as_u64)
-                            .map(|n| n as u32)
-                            .unwrap_or(0),
+                            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
                     })
                 })
                 .collect()
@@ -233,7 +232,7 @@ pub fn parse_submission_listing(json: &serde_json::Value) -> Vec<RedditSubmissio
 
 /// Fetch a Reddit user's profile, comments, and submissions.
 ///
-/// Requires `access_token` from Reddit OAuth2 (client_credentials flow).
+/// Requires `access_token` from Reddit `OAuth2` (`client_credentials` flow).
 ///
 /// # Errors
 ///
@@ -282,7 +281,7 @@ pub async fn fetch_reddit_user(
         .await?;
 
     let comments_json: serde_json::Value = if comments_resp.status().is_success() {
-        comments_resp.json().await.unwrap_or(serde_json::json!({}))
+        comments_resp.json().await.unwrap_or_else(|_| serde_json::json!({}))
     } else {
         serde_json::json!({})
     };

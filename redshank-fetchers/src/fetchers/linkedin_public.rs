@@ -1,4 +1,4 @@
-//! LinkedIn public profile scraping helpers.
+//! `LinkedIn` public profile scraping helpers.
 //!
 //! Only publicly visible profiles should be accessed. This module parses
 //! already-fetched HTML and exposes a lightweight pipeline config parser so the
@@ -11,10 +11,10 @@ use std::path::Path;
 /// Pipeline config loaded at compile time.
 pub const PIPELINE_CONFIG: &str = include_str!("../../pipelines/linkedin_public/config.toml");
 
-/// Minimum delay between LinkedIn public profile fetches.
+/// Minimum delay between `LinkedIn` public profile fetches.
 pub const PROFILE_DELAY_MS: u64 = 30_000;
 
-/// A parsed LinkedIn pipeline config.
+/// A parsed `LinkedIn` pipeline config.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkedInPipelineConfig {
     pub name: String,
@@ -23,7 +23,7 @@ pub struct LinkedInPipelineConfig {
     pub wait_for: String,
 }
 
-/// A single LinkedIn work history item.
+/// A single `LinkedIn` work history item.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct LinkedInPosition {
     pub title: String,
@@ -32,7 +32,7 @@ pub struct LinkedInPosition {
     pub description: Option<String>,
 }
 
-/// A single LinkedIn education entry.
+/// A single `LinkedIn` education entry.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct LinkedInEducation {
     pub school: String,
@@ -41,7 +41,7 @@ pub struct LinkedInEducation {
     pub dates: Option<String>,
 }
 
-/// A normalized LinkedIn public profile.
+/// A normalized `LinkedIn` public profile.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct LinkedInProfile {
     pub slug: String,
@@ -87,7 +87,7 @@ fn collect_values(html: &str, start: &str, end: &str) -> Vec<String> {
     values
 }
 
-/// Parse the LinkedIn pipeline config.
+/// Parse the `LinkedIn` pipeline config.
 #[must_use]
 pub fn parse_pipeline_config(toml_str: &str) -> LinkedInPipelineConfig {
     let mut config = LinkedInPipelineConfig {
@@ -120,7 +120,7 @@ pub fn parse_pipeline_config(toml_str: &str) -> LinkedInPipelineConfig {
     config
 }
 
-/// Parse mock or previously fetched LinkedIn public profile HTML.
+/// Parse mock or previously fetched `LinkedIn` public profile HTML.
 #[must_use]
 pub fn parse_public_profile_html(slug: &str, html: &str) -> Option<LinkedInProfile> {
     let name = extract_between(html, "data-profile-name=\"", "\"")?;
@@ -177,12 +177,12 @@ pub fn parse_public_profile_html(slug: &str, html: &str) -> Option<LinkedInProfi
     })
 }
 
-/// Persist a parsed LinkedIn public profile.
+/// Persist a parsed `LinkedIn` public profile.
 ///
 /// # Errors
 ///
 /// Returns `Err` if the parsed profile cannot be serialized or written.
-pub async fn save_public_profile(
+pub fn save_public_profile(
     slug: &str,
     html: &str,
     output_dir: &Path,

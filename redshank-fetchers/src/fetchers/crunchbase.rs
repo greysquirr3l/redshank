@@ -291,7 +291,7 @@ mod tests {
                 "region_name": "England",
                 "country_code": "GB",
                 "num_employees_enum": "11-50",
-                "funding_total_usd": 12500000
+                "funding_total_usd": 12_500_000
             },
             "cards": {
                 "funding_rounds": {
@@ -299,7 +299,7 @@ mod tests {
                         {
                             "investment_type": "Series A",
                             "announced_on": "2023-06-01",
-                            "money_raised_usd": 9000000,
+                            "money_raised_usd": 9_000_000,
                             "lead_investors": [
                                 {"name": "North Sea Ventures"},
                                 {"name": "Signal Capital"}

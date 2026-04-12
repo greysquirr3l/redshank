@@ -80,7 +80,7 @@ pub async fn fetch_hmt_sanctions(output_dir: &Path) -> Result<FetchOutput, Fetch
 /// function skips lines until it finds `"GroupID"` in the header row.
 #[must_use]
 pub fn parse_hmt_csv(csv: &str) -> Vec<HmtSanctionsEntry> {
-    let mut lines = csv.lines().peekable();
+    let mut lines = csv.lines();
     let mut header_idx: Option<usize> = None;
     let mut header: Vec<&str> = Vec::new();
 

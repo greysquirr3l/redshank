@@ -101,7 +101,7 @@ pub fn parse_author_page(author_id: &str, html: &str) -> Option<AmazonAuthorProf
 /// # Errors
 ///
 /// Returns `Err` if the profile cannot be parsed, serialized, or written.
-pub async fn save_author_page(
+pub fn save_author_page(
     author_id: &str,
     html: &str,
     output_dir: &Path,
