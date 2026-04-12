@@ -56,6 +56,11 @@ pub mod epa_superfund;
 pub mod sec_climate;
 pub mod state_env_permits;
 
+// ── T41: EU business register fetchers ───────────────────────────────────────
+pub mod eu_bris;
+pub mod france_infogreffe;
+pub mod germany_handelsregister;
+
 // ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
 pub mod github_profile;
 pub mod hibp;
