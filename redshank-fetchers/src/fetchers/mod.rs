@@ -44,6 +44,12 @@ pub mod guidestar_candid;
 pub mod irs_1023;
 pub mod irs_990_xml;
 
+// ── T39: Crypto and alternative finance fetchers ────────────────────────────
+pub mod blockchain_explorer;
+pub mod defi_protocols;
+pub mod exchange_transparency;
+pub mod tornado_screening;
+
 // ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
 pub mod github_profile;
 pub mod hibp;

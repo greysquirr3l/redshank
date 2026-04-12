@@ -104,6 +104,8 @@ pub struct CredentialBundle {
     pub pacer_password: Option<CredentialGuard<String>>,
     /// `Candid` / `GuideStar` API key for nonprofit profile enrichment.
     pub candid_api_key: Option<CredentialGuard<String>>,
+    /// `Etherscan`-compatible API key for EVM explorer lookups.
+    pub etherscan_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -136,6 +138,7 @@ impl CredentialBundle {
             || has(&self.pacer_username)
             || has(&self.pacer_password)
             || has(&self.candid_api_key)
+            || has(&self.etherscan_api_key)
             || self
                 .ollama_base_url
                 .as_ref()
@@ -172,6 +175,7 @@ impl CredentialBundle {
         fill!(pacer_username);
         fill!(pacer_password);
         fill!(candid_api_key);
+        fill!(etherscan_api_key);
     }
 }
 

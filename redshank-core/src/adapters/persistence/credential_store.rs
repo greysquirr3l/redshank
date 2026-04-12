@@ -216,6 +216,12 @@ where
         "OPENPLANTER_CANDID_API_KEY",
         "CANDID_API_KEY"
     );
+    set_secret!(
+        etherscan_api_key,
+        "REDSHANK_ETHERSCAN_API_KEY",
+        "OPENPLANTER_ETHERSCAN_API_KEY",
+        "ETHERSCAN_API_KEY"
+    );
 
     bundle
 }
