@@ -50,6 +50,12 @@ pub mod defi_protocols;
 pub mod exchange_transparency;
 pub mod tornado_screening;
 
+// ── T40: Environmental and permits intelligence fetchers ────────────────────
+pub mod carbon_registries;
+pub mod epa_superfund;
+pub mod sec_climate;
+pub mod state_env_permits;
+
 // ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
 pub mod github_profile;
 pub mod hibp;
