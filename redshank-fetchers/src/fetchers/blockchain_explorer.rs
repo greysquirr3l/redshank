@@ -53,7 +53,10 @@ pub struct AddressSnapshot {
 }
 
 fn parse_eth_wei_to_eth(value: &str) -> Option<f64> {
-    value.parse::<f64>().ok().map(|wei| wei / 1_000_000_000_000_000_000.0)
+    value
+        .parse::<f64>()
+        .ok()
+        .map(|wei| wei / 1_000_000_000_000_000_000.0)
 }
 
 /// Parse an Etherscan balance response.
@@ -79,10 +82,16 @@ pub fn parse_ethereum_balance(address: &str, json: &serde_json::Value) -> Option
 #[must_use]
 pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<AddressSnapshot> {
     let chain_stats = json.get("chain_stats")?;
-    let funded = chain_stats.get("funded_txo_sum").and_then(serde_json::Value::as_u64)?;
-    let spent = chain_stats.get("spent_txo_sum").and_then(serde_json::Value::as_u64)?;
-    let tx_count = chain_stats.get("tx_count").and_then(serde_json::Value::as_u64);
-    let native_balance = sats_to_btc(funded.saturating_sub(spent))?;
+    let funded = chain_stats
+        .get("funded_txo_sum")
+        .and_then(serde_json::Value::as_u64)?;
+    let spent = chain_stats
+        .get("spent_txo_sum")
+        .and_then(serde_json::Value::as_u64)?;
+    let tx_count = chain_stats
+        .get("tx_count")
+        .and_then(serde_json::Value::as_u64);
+    let native_balance = sats_to_btc(funded.saturating_sub(spent));
 
     Some(AddressSnapshot {
         chain: "bitcoin".to_string(),
@@ -95,12 +104,9 @@ pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<
     })
 }
 
-fn sats_to_btc(satoshis: u64) -> Option<f64> {
-    satoshis
-        .to_string()
-        .parse::<f64>()
-        .ok()
-        .map(|value| value / 100_000_000.0)
+#[allow(clippy::cast_precision_loss)]
+fn sats_to_btc(satoshis: u64) -> f64 {
+    satoshis as f64 / 100_000_000.0
 }
 
 /// Parse a Bitcoin transaction list response.
@@ -129,10 +135,11 @@ pub fn parse_bitcoin_transactions(json: &serde_json::Value) -> Vec<BlockchainTra
                 })
             });
             let amount = outputs.and_then(|items| {
-                items.first()
+                items
+                    .first()
                     .and_then(|item| item.get("value"))
                     .and_then(serde_json::Value::as_u64)
-                    .and_then(sats_to_btc)
+                    .map(sats_to_btc)
             });
             let timestamp = entry
                 .get("status")
@@ -252,7 +259,8 @@ pub async fn fetch_address_snapshot(
     };
 
     let output_path = output_dir.join("blockchain_explorer.ndjson");
-    let records = vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
     let count = write_ndjson(&output_path, &records)?;
 
     Ok(FetchOutput {

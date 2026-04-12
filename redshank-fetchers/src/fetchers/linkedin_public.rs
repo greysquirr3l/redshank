@@ -182,7 +182,8 @@ pub fn parse_public_profile_html(slug: &str, html: &str) -> Option<LinkedInProfi
 /// # Errors
 ///
 /// Returns `Err` if the parsed profile cannot be serialized or written.
-pub fn save_public_profile(
+#[allow(clippy::unused_async)]
+pub async fn save_public_profile(
     slug: &str,
     html: &str,
     output_dir: &Path,
