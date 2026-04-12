@@ -6,7 +6,6 @@
 //! Zero business logic in this layer.
 
 use clap::{Parser, Subcommand};
-use redshank_fetchers::fetchers::uk_corporate_intelligence::fetch_uk_corporate_intelligence;
 use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
@@ -23,6 +22,7 @@ use redshank_core::domain::credentials::{CredentialBundle, CredentialGuard};
 use redshank_core::domain::errors::DomainError;
 use redshank_core::domain::session::{SessionId, ToolResult};
 use redshank_core::ports::tool_dispatcher::ToolDispatcher;
+use redshank_fetchers::fetchers::uk_corporate_intelligence::fetch_uk_corporate_intelligence;
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -635,10 +635,7 @@ async fn cmd_fetch(
     }
 }
 
-fn required_secret(
-    value: &Option<CredentialGuard<String>>,
-    name: &str,
-) -> anyhow::Result<String> {
+fn required_secret(value: &Option<CredentialGuard<String>>, name: &str) -> anyhow::Result<String> {
     optional_secret(value)
         .filter(|secret| !secret.trim().is_empty())
         .ok_or_else(|| anyhow::anyhow!("missing required credential: {name}"))
