@@ -1,4 +1,4 @@
-//! Mastodon ActivityPub API — federated social network intelligence.
+//! Mastodon `ActivityPub` API — federated social network intelligence.
 //!
 //! Source: `https://{instance}/api/v1/`
 //! Public endpoints require no auth. Instance is parsed from `user@instance` format.
@@ -117,18 +117,15 @@ pub fn parse_mastodon_account(json: &serde_json::Value, instance: &str) -> Optio
         followers_count: json
             .get("followers_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
-            .unwrap_or(0),
+            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         following_count: json
             .get("following_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
-            .unwrap_or(0),
+            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         statuses_count: json
             .get("statuses_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
-            .unwrap_or(0),
+            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         created_at: json
             .get("created_at")
             .and_then(serde_json::Value::as_str)
@@ -169,17 +166,15 @@ fn parse_single_status(item: &serde_json::Value) -> Option<MastodonStatus> {
         favourites_count: item
             .get("favourites_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
-            .unwrap_or(0),
+            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         reblogs_count: item
             .get("reblogs_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
-            .unwrap_or(0),
+            .map_or(0, |n| u32::try_from(n).unwrap_or(u32::MAX)),
         replies_count: item
             .get("replies_count")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .map(|n| u32::try_from(n).unwrap_or(u32::MAX)),
         url: item
             .get("url")
             .and_then(serde_json::Value::as_str)

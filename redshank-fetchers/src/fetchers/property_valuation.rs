@@ -89,7 +89,7 @@ pub fn parse_zillow_json(json: &serde_json::Value) -> Option<PropertyValuation> 
             .get(key)
             .or_else(|| props.get(alt))
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
+            .and_then(|n| u32::try_from(n).ok())
     };
 
     let address = str_field("address", "streetAddress")?;
@@ -131,7 +131,11 @@ pub fn parse_zillow_json(json: &serde_json::Value) -> Option<PropertyValuation> 
         .get("bathrooms")
         .or_else(|| props.get("baths"))
         .and_then(serde_json::Value::as_f64)
-        .map(|v| v as f32);
+        .map(|v| {
+            #[allow(clippy::cast_possible_truncation)]
+            let result = v as f32;
+            result
+        });
 
     Some(PropertyValuation {
         address,

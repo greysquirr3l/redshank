@@ -118,7 +118,7 @@ fn parse_podcast_item(item: &serde_json::Value) -> Option<Podcast> {
         total_episodes: item
             .get("total_episodes")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         latest_pub_date_ms: item
             .get("latest_pub_date_ms")
             .and_then(serde_json::Value::as_i64),
@@ -166,7 +166,7 @@ fn parse_episode_item(item: &serde_json::Value) -> Option<PodcastEpisode> {
         audio_length_sec: item
             .get("audio_length_sec")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         podcast_id,
         podcast_title,
         listennotes_url: item
@@ -253,7 +253,7 @@ mod tests {
                     "publisher": "Investigative Media LLC",
                     "description": "Weekly deep dives into open-source intelligence techniques",
                     "rss": "https://feeds.buzzsprout.com/osinthour.rss",
-                    "itunes_id": 1234567890,
+                    "itunes_id": 1_234_567_890,
                     "total_episodes": 87,
                     "latest_pub_date_ms": 1_700_000_000_000_i64,
                     "listennotes_url": "https://www.listennotes.com/podcasts/the-osint-hour-abc123"

@@ -43,7 +43,7 @@ impl EntityStatus {
 
     /// Return the canonical display string for the status.
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
             Self::GoodStanding => "Good Standing",
             Self::Void => "Void",
@@ -56,7 +56,7 @@ impl EntityStatus {
 
     /// Return `true` if the entity is legally active (Good Standing).
     #[must_use]
-    pub fn is_active(&self) -> bool {
+    pub const fn is_active(&self) -> bool {
         matches!(self, Self::GoodStanding)
     }
 }
@@ -123,7 +123,7 @@ fn parse_single_entity(item: &serde_json::Value) -> Option<DelawareEntity> {
         .get("lastAnnualReport")
         .or_else(|| item.get("lastFiled"))
         .and_then(serde_json::Value::as_u64)
-        .map(|n| n as u32);
+        .and_then(|n| u32::try_from(n).ok());
 
     let franchise_tax_due = item
         .get("franchiseTaxDue")

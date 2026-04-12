@@ -58,6 +58,7 @@ pub fn parse_env_file(path: &Path) -> HashMap<String, String> {
 /// 1. `REDSHANK_<KEY>` — app-namespaced (use when running multiple agents)
 /// 2. `OPENPLANTER_<KEY>` — legacy `OpenPlanter` backward compatibility
 /// 3. `<KEY>` — bare/global env var
+#[allow(clippy::too_many_lines)]
 fn build_credential_bundle<Get, GetPlain>(get: Get, get_plain: GetPlain) -> CredentialBundle
 where
     Get: Fn(&str, &str, &str) -> Option<CredentialGuard<String>>,

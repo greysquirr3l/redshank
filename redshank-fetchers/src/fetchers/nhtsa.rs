@@ -114,7 +114,7 @@ fn extract_results(json: &serde_json::Value) -> Vec<serde_json::Value> {
 }
 
 /// Extracted complaint details.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComplaintDetails {
     /// Vehicle manufacturer.
     pub manufacturer: String,
@@ -192,7 +192,7 @@ mod tests {
             "count": 2,
             "results": [
                 {
-                    "odiNumber": 12345678,
+                    "odiNumber": 12_345_678,
                     "manufacturer": "TOYOTA",
                     "make": "TOYOTA",
                     "model": "CAMRY",
@@ -204,7 +204,7 @@ mod tests {
                     "deaths": false
                 },
                 {
-                    "odiNumber": 87654321,
+                    "odiNumber": 87_654_321,
                     "manufacturer": "TOYOTA",
                     "make": "TOYOTA",
                     "model": "CAMRY",

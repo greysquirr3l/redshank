@@ -198,7 +198,7 @@ mod tests {
     }
 
     fn filing_text_fixture() -> &'static str {
-        r#"
+        r"
 SCHEDULE 13D
 Name of Issuer
 Example Issuer Inc.
@@ -212,7 +212,7 @@ Item 4.
 The reporting person intends to seek board representation and evaluate strategic alternatives, including a possible merger or asset sale.
 Item 5.
 Interest in Securities of the Issuer.
-        "#
+    "
     }
 
     #[test]

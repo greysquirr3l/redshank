@@ -198,7 +198,7 @@ mod tests {
 
     fn organization_fixture() -> serde_json::Value {
         serde_json::json!({
-            "number": 1111222233_u64,
+            "number": 1_111_222_233_u64,
             "basic": {
                 "organization_name": "North Valley Cardiology Group",
                 "parent_organization_lbn": "9988776655",

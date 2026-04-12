@@ -1,4 +1,4 @@
-//! FAA Civil Aviation Registry — aircraft registration (N-Number database).
+//! FAA Civil Aviation Registry — aircraft registration (`N-Number` database).
 //!
 //! Source: <https://registry.faa.gov/database/ReleasableAircraft.zip>
 //! Bulk download (updated monthly). No authentication required.
@@ -13,7 +13,7 @@ const BULK_ZIP_URL: &str = "https://registry.faa.gov/database/ReleasableAircraft
 /// An FAA aircraft registration record.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AircraftRegistration {
-    /// N-Number (tail number), e.g., "N12345".
+    /// `N-Number` (tail number), e.g., "N12345".
     pub n_number: String,
     /// Aircraft serial number.
     pub serial_number: String,
@@ -50,11 +50,11 @@ pub struct AircraftRegistration {
 /// Parse FAA MASTER.txt CSV text into aircraft registration records.
 ///
 /// The file uses fixed 30-column CSV with no header; columns positions are
-/// defined by the FAA ReleasableAircraft documentation.
+/// defined by the FAA `ReleasableAircraft` documentation.
 ///
 /// | Col | Field |
 /// |-----|-------|
-/// | 0 | N-Number |
+/// | 0 | `N-Number` |
 /// | 1 | Serial Number |
 /// | 2 | MFR MDL Code |
 /// | 3 | Eng Mfr Code |
@@ -116,7 +116,7 @@ fn parse_master_row(line: &str) -> Option<AircraftRegistration> {
         address_zip: get(11),
         cert_issue_date: get(16),
         status_code: status_code_label(&get(20)),
-        mode_s_code_hex: get(29).to_string(),
+        mode_s_code_hex: get(29),
         fractional_ownership,
         registrant_type: registrant_type_label(&get(5)),
         air_worth_date: get(23),
@@ -163,7 +163,7 @@ pub fn search_by_name<'a>(
         .collect()
 }
 
-/// Fetch and parse the FAA ReleasableAircraft bulk CSV.
+/// Fetch and parse the FAA `ReleasableAircraft` bulk CSV.
 ///
 /// **Note**: The bulk file is a ZIP archive (~100 MB). This function fetches
 /// and parses MASTER.txt from the archive for full-dataset research. For
@@ -192,9 +192,10 @@ pub async fn fetch_aircraft_bulk(
     let csv = extract_master_from_zip(&bytes)?;
     let all_records = parse_master_csv(&csv);
 
-    let filtered: Vec<&AircraftRegistration> = filter_name
-        .map(|name| search_by_name(&all_records, name))
-        .unwrap_or_else(|| all_records.iter().collect());
+    let filtered: Vec<&AircraftRegistration> = filter_name.map_or_else(
+        || all_records.iter().collect(),
+        |name| search_by_name(&all_records, name),
+    );
 
     let serialized: Vec<serde_json::Value> = filtered
         .iter()
@@ -212,7 +213,7 @@ pub async fn fetch_aircraft_bulk(
     })
 }
 
-/// Extract MASTER.txt content from the FAA ReleasableAircraft ZIP bytes.
+/// Extract MASTER.txt content from the FAA `ReleasableAircraft` ZIP bytes.
 ///
 /// # Errors
 ///
@@ -230,7 +231,10 @@ fn extract_master_from_zip(bytes: &[u8]) -> Result<String, FetchError> {
             .map_err(|e| FetchError::Parse(format!("ZIP entry error: {e}")))?;
 
         let name = file.name().to_ascii_uppercase();
-        if name.contains("MASTER") && name.ends_with(".txt") {
+        let has_txt_ext = std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"));
+        if name.contains("MASTER") && has_txt_ext {
             let mut content = String::new();
             file.read_to_string(&mut content)
                 .map_err(|e| FetchError::Parse(format!("ZIP read error: {e}")))?;
@@ -301,16 +305,13 @@ NBADINP,,,,,,,,,,,,,\n\
     #[test]
     fn faa_handles_deregistered_status_code() {
         let records = parse_master_csv(MASTER_FIXTURE);
-        let active: Vec<_> = records
-            .iter()
-            .filter(|r| r.status_code == "Valid")
-            .collect();
-        let expired: Vec<_> = records
+        let active = records.iter().filter(|r| r.status_code == "Valid").count();
+        let expired = records
             .iter()
             .filter(|r| r.status_code == "Expired")
-            .collect();
+            .count();
 
-        assert_eq!(active.len(), 1);
-        assert_eq!(expired.len(), 1);
+        assert_eq!(active, 1);
+        assert_eq!(expired, 1);
     }
 }

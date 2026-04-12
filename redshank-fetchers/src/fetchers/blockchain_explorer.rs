@@ -53,7 +53,10 @@ pub struct AddressSnapshot {
 }
 
 fn parse_eth_wei_to_eth(value: &str) -> Option<f64> {
-    value.parse::<f64>().ok().map(|wei| wei / 1_000_000_000_000_000_000.0)
+    value
+        .parse::<f64>()
+        .ok()
+        .map(|wei| wei / 1_000_000_000_000_000_000.0)
 }
 
 /// Parse an Etherscan balance response.
@@ -79,10 +82,16 @@ pub fn parse_ethereum_balance(address: &str, json: &serde_json::Value) -> Option
 #[must_use]
 pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<AddressSnapshot> {
     let chain_stats = json.get("chain_stats")?;
-    let funded = chain_stats.get("funded_txo_sum").and_then(serde_json::Value::as_u64)?;
-    let spent = chain_stats.get("spent_txo_sum").and_then(serde_json::Value::as_u64)?;
-    let tx_count = chain_stats.get("tx_count").and_then(serde_json::Value::as_u64);
-    let native_balance = (funded.saturating_sub(spent)) as f64 / 100_000_000.0;
+    let funded = chain_stats
+        .get("funded_txo_sum")
+        .and_then(serde_json::Value::as_u64)?;
+    let spent = chain_stats
+        .get("spent_txo_sum")
+        .and_then(serde_json::Value::as_u64)?;
+    let tx_count = chain_stats
+        .get("tx_count")
+        .and_then(serde_json::Value::as_u64);
+    let native_balance = sats_to_btc(funded.saturating_sub(spent));
 
     Some(AddressSnapshot {
         chain: "bitcoin".to_string(),
@@ -93,6 +102,11 @@ pub fn parse_bitcoin_address(address: &str, json: &serde_json::Value) -> Option<
         first_seen: None,
         last_active: tx_count,
     })
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn sats_to_btc(satoshis: u64) -> f64 {
+    satoshis as f64 / 100_000_000.0
 }
 
 /// Parse a Bitcoin transaction list response.
@@ -121,10 +135,11 @@ pub fn parse_bitcoin_transactions(json: &serde_json::Value) -> Vec<BlockchainTra
                 })
             });
             let amount = outputs.and_then(|items| {
-                items.first()
+                items
+                    .first()
                     .and_then(|item| item.get("value"))
                     .and_then(serde_json::Value::as_u64)
-                    .map(|sats| sats as f64 / 100_000_000.0)
+                    .map(sats_to_btc)
             });
             let timestamp = entry
                 .get("status")
@@ -244,7 +259,8 @@ pub async fn fetch_address_snapshot(
     };
 
     let output_path = output_dir.join("blockchain_explorer.ndjson");
-    let records = vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
     let count = write_ndjson(&output_path, &records)?;
 
     Ok(FetchOutput {
@@ -281,7 +297,7 @@ mod tests {
                 "txid": "tx-one",
                 "status": {"block_time": 1_710_000_000},
                 "vin": [{"prevout": {"scriptpubkey_address": "bc1from"}}],
-                "vout": [{"scriptpubkey_address": "bc1to", "value": 125000000}]
+                "vout": [{"scriptpubkey_address": "bc1to", "value": 125_000_000}]
             }
         ]);
 
@@ -306,6 +322,6 @@ mod tests {
         let holdings = parse_token_holdings(&json);
         assert_eq!(holdings.len(), 1);
         assert_eq!(holdings[0].symbol, "USDC");
-        assert_eq!(holdings[0].balance, 2534.5);
+        assert!((holdings[0].balance - 2_534.5).abs() < f64::EPSILON);
     }
 }

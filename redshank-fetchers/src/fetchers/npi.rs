@@ -247,7 +247,7 @@ mod tests {
             "result_count": 2,
             "results": [
                 {
-                    "number": 1234567890_u64,
+                    "number": 1_234_567_890_u64,
                     "basic": {
                         "first_name": "JOHN",
                         "last_name": "DOE"
@@ -260,7 +260,7 @@ mod tests {
                     ]
                 },
                 {
-                    "number": 9876543210_u64,
+                    "number": 9_876_543_210_u64,
                     "basic": {
                         "organization_name": "ACME HOSPITAL"
                     },
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn npi_extracts_individual_provider_details() {
         let record = serde_json::json!({
-            "number": 1234567890_u64,
+            "number": 1_234_567_890_u64,
             "basic": {
                 "first_name": "JOHN",
                 "last_name": "DOE"
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn npi_extracts_organization_provider_details() {
         let record = serde_json::json!({
-            "number": 9876543210_u64,
+            "number": 9_876_543_210_u64,
             "basic": {
                 "organization_name": "ACME HOSPITAL"
             },

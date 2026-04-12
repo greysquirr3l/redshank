@@ -38,7 +38,7 @@ impl County {
 
     /// Return the base URL for the county's assessor search.
     #[must_use]
-    pub fn base_url(self) -> &'static str {
+    pub const fn base_url(self) -> &'static str {
         match self {
             Self::Cook => "https://www.cookcountyassessor.com/api/search",
             Self::Harris => "https://hcad.org/api/property",

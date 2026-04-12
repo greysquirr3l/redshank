@@ -79,15 +79,15 @@ pub fn parse_bsky_profile(json: &serde_json::Value) -> Option<BlueskyProfile> {
         followers_count: json
             .get("followersCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         follows_count: json
             .get("followsCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         posts_count: json
             .get("postsCount")
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32),
+            .and_then(|n| u32::try_from(n).ok()),
         created_at: json
             .get("createdAt")
             .and_then(serde_json::Value::as_str)
@@ -141,15 +141,15 @@ pub fn parse_bsky_feed(json: &serde_json::Value) -> Vec<BlueskyPost> {
                         like_count: post_obj
                             .get("likeCount")
                             .and_then(serde_json::Value::as_u64)
-                            .map(|n| n as u32),
+                            .and_then(|n| u32::try_from(n).ok()),
                         repost_count: post_obj
                             .get("repostCount")
                             .and_then(serde_json::Value::as_u64)
-                            .map(|n| n as u32),
+                            .and_then(|n| u32::try_from(n).ok()),
                         reply_count: post_obj
                             .get("replyCount")
                             .and_then(serde_json::Value::as_u64)
-                            .map(|n| n as u32),
+                            .and_then(|n| u32::try_from(n).ok()),
                     })
                 })
                 .collect()
@@ -200,7 +200,10 @@ pub async fn fetch_bsky_actor(
         .await?;
 
     let posts = if feed_resp.status().is_success() {
-        let feed_json: serde_json::Value = feed_resp.json().await.unwrap_or(serde_json::json!({}));
+        let feed_json: serde_json::Value = feed_resp
+            .json()
+            .await
+            .unwrap_or_else(|_| serde_json::json!({}));
         parse_bsky_feed(&feed_json)
     } else {
         Vec::new()

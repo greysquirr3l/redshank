@@ -267,7 +267,7 @@ mod tests {
         let record = serde_json::json!({
             "lessor": "DIRECT ADDRESS LLC",
             "address": "100 Pennsylvania Ave NW, Washington, DC 20500",
-            "rsf": 100000,
+            "rsf": 100_000,
             "annual_rent": 5_000_000.0
         });
 
@@ -277,7 +277,7 @@ mod tests {
             details.address,
             "100 Pennsylvania Ave NW, Washington, DC 20500"
         );
-        assert_eq!(details.square_feet, Some(100000));
+        assert_eq!(details.square_feet, Some(100_000));
     }
 
     #[test]

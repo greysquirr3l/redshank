@@ -117,7 +117,7 @@ pub fn parse_dfat_csv(csv: &str) -> Vec<DfatSanctionsEntry> {
     let idx_type = col("type");
     let idx_name = col("name");
     let idx_dob = col("dob").min(col("date of birth")).min(col("birth"));
-    let idx_pob = col("place of birth").min(col("place_of_birth"));
+    let idx_birth_place = col("place of birth").min(col("place_of_birth"));
     let idx_citizenship = col("citizenship").min(col("nationality"));
     let idx_address = col("address");
     let idx_listing = col("listing").min(col("information")).min(col("program"));
@@ -153,7 +153,7 @@ pub fn parse_dfat_csv(csv: &str) -> Vec<DfatSanctionsEntry> {
                 .enumerate()
                 .filter(|(i, _)| {
                     !matches!(*i, _ if *i == idx_type || *i == idx_name
-                        || *i == idx_dob || *i == idx_pob
+                        || *i == idx_dob || *i == idx_birth_place
                         || *i == idx_citizenship || *i == idx_address
                         || *i == idx_listing || *i == idx_control_date)
                 })
@@ -168,7 +168,7 @@ pub fn parse_dfat_csv(csv: &str) -> Vec<DfatSanctionsEntry> {
                 name,
                 aliases,
                 date_of_birth: get(&fields, idx_dob),
-                place_of_birth: get(&fields, idx_pob),
+                place_of_birth: get(&fields, idx_birth_place),
                 citizenship: get(&fields, idx_citizenship),
                 address: get(&fields, idx_address),
                 listing_information: get(&fields, idx_listing).unwrap_or_default(),
@@ -195,6 +195,14 @@ fn split_csv_line(line: &str) -> Vec<&str> {
     }
     fields.push(&line[start..]);
     fields
+}
+
+impl DfatSanctionsEntry {
+    /// Returns the entity type string (alias for `name_type`).
+    #[must_use]
+    pub fn entity_type(&self) -> &str {
+        &self.name_type
+    }
 }
 
 #[cfg(test)]
@@ -229,13 +237,5 @@ Entity,"Global Resources Pte Ltd",,,,,,"Russia autonomous sanctions",2022-03-10,
     fn dfat_handles_empty_csv() {
         let records = parse_dfat_csv("");
         assert!(records.is_empty());
-    }
-}
-
-impl DfatSanctionsEntry {
-    /// Returns the entity type string (alias for `name_type`).
-    #[must_use]
-    pub fn entity_type(&self) -> &str {
-        &self.name_type
     }
 }

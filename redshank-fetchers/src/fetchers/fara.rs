@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn fara_parses_xml_registrant_format() {
-        let xml = r#"<Registrants>
+        let xml = r"<Registrants>
             <Registrant>
                 <Registration_Number>5555</Registration_Number>
                 <Registrant_Name>Mercury Public Affairs</Registrant_Name>
@@ -533,7 +533,7 @@ mod tests {
                 <Registration_Date>2010-01-01</Registration_Date>
                 <Termination_Date>2019-06-30</Termination_Date>
             </Registrant>
-        </Registrants>"#;
+        </Registrants>";
 
         let registrants = parse_registrants_xml(xml);
         assert_eq!(registrants.len(), 2);

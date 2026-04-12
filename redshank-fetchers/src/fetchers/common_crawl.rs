@@ -2,14 +2,14 @@
 //!
 //! Source: <https://index.commoncrawl.org/>
 //! Public API, no authentication required. Archives ~3B pages/month.
-//! For WARC content retrieval: s3://commoncrawl/ (requestor-pays).
+//! For WARC content retrieval: `s3://commoncrawl/` (requestor-pays).
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, rate_limit_delay, write_ndjson};
 use std::path::Path;
 
 /// The main Common Crawl index API endpoint.
-const CC_INDEX_TEMPLATE: &str = "https://index.commoncrawl.org/{crawl_id}-index";
+const CC_INDEX_TEMPLATE: &str = "https://index.commoncrawl.org/CRAWL_ID-index";
 /// The canonical "latest" crawl ID alias — resolve via the Availability API.
 const CC_LATEST: &str = "CC-MAIN-2025-18";
 
@@ -18,7 +18,7 @@ const CC_LATEST: &str = "CC-MAIN-2025-18";
 pub struct CcRecord {
     /// Full URL of the captured page.
     pub url: String,
-    /// Crawl timestamp (14-char: YYYYMMDDhhmmss).
+    /// Crawl timestamp (14-char: `YYYYMMDDhhmmss`).
     pub timestamp: String,
     /// MIME type.
     pub mime: Option<String>,
@@ -63,7 +63,7 @@ fn parse_cc_record(json: &serde_json::Value, crawl_id: &str) -> Option<CcRecord>
     let status = json.get("status").and_then(|v| {
         v.as_str()
             .and_then(|s| s.parse().ok())
-            .or_else(|| v.as_u64().map(|n| n as u16))
+            .or_else(|| v.as_u64().and_then(|n| u16::try_from(n).ok()))
     });
 
     let offset = json.get("offset").and_then(|v| {
@@ -119,7 +119,7 @@ pub async fn fetch_cc_index(
     rate_limit_ms: u64,
 ) -> Result<FetchOutput, FetchError> {
     let crawl = crawl_id.unwrap_or(CC_LATEST);
-    let endpoint = CC_INDEX_TEMPLATE.replace("{crawl_id}", crawl);
+    let endpoint = CC_INDEX_TEMPLATE.replace("CRAWL_ID", crawl);
 
     let client = build_client()?;
     rate_limit_delay(rate_limit_ms).await;

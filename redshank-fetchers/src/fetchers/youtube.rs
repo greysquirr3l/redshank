@@ -1,4 +1,4 @@
-//! YouTube Data API v3 — channel and video metadata intelligence.
+//! `YouTube` Data API v3 — channel and video metadata intelligence.
 //!
 //! Source: <https://www.googleapis.com/youtube/v3/>
 //! Requires `youtube_api_key` in the credential store. Free tier: 10,000 units/day.
@@ -9,10 +9,10 @@ use std::path::Path;
 
 const API_BASE: &str = "https://www.googleapis.com/youtube/v3";
 
-/// A YouTube channel.
+/// A `YouTube` channel.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct YoutubeChannel {
-    /// YouTube channel ID.
+    /// `YouTube` channel ID.
     pub channel_id: String,
     /// Channel title.
     pub title: String,
@@ -32,7 +32,7 @@ pub struct YoutubeChannel {
     pub country: Option<String>,
 }
 
-/// A YouTube video.
+/// A `YouTube` video.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct YoutubeVideo {
     /// Video ID.
@@ -59,7 +59,7 @@ pub struct YoutubeVideo {
     pub tags: Vec<String>,
 }
 
-/// Parse a YouTube channel list response (`.items[].snippet` + `.statistics`).
+/// Parse a `YouTube` channel list response (`.items[].snippet` + `.statistics`).
 #[must_use]
 pub fn parse_channel_list(json: &serde_json::Value) -> Vec<YoutubeChannel> {
     json.get("items")
@@ -115,7 +115,7 @@ fn parse_single_channel(item: &serde_json::Value) -> Option<YoutubeChannel> {
     })
 }
 
-/// Parse a YouTube video list response.
+/// Parse a `YouTube` video list response.
 #[must_use]
 pub fn parse_video_list(json: &serde_json::Value) -> Vec<YoutubeVideo> {
     json.get("items")
@@ -186,7 +186,7 @@ fn parse_single_video(item: &serde_json::Value) -> Option<YoutubeVideo> {
     })
 }
 
-/// Fetch YouTube channel and video data by search query.
+/// Fetch `YouTube` channel and video data by search query.
 ///
 /// # Errors
 ///

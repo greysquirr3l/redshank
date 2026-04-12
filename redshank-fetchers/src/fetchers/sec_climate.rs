@@ -11,13 +11,13 @@ const SEC_SUBMISSIONS_BASE: &str = "https://data.sec.gov/submissions";
 pub struct SecClimateDisclosure {
     /// SEC CIK identifier.
     pub cik: String,
-    /// Whether the filing appears aligned to TCFD terminology.
+    /// Whether the filing appears aligned to `TCFD` terminology.
     pub tcfd_aligned: bool,
-    /// Scope 1 emissions in metric tons CO2e.
+    /// Scope 1 emissions in metric tons `CO2e`.
     pub scope1_emissions_mtco2e: Option<f64>,
-    /// Scope 2 emissions in metric tons CO2e.
+    /// Scope 2 emissions in metric tons `CO2e`.
     pub scope2_emissions_mtco2e: Option<f64>,
-    /// Scope 3 emissions in metric tons CO2e.
+    /// Scope 3 emissions in metric tons `CO2e`.
     pub scope3_emissions_mtco2e: Option<f64>,
     /// Physical climate risks described in the filing.
     pub physical_risks: Vec<String>,
@@ -64,7 +64,8 @@ fn collect_attr_values(html: &str, attr: &str) -> Vec<String> {
 pub fn parse_climate_disclosure(cik: &str, document: &str) -> Option<SecClimateDisclosure> {
     Some(SecClimateDisclosure {
         cik: cik.to_string(),
-        tcfd_aligned: document.contains("TCFD") || document.contains("Task Force on Climate-related Financial Disclosures"),
+        tcfd_aligned: document.contains("TCFD")
+            || document.contains("Task Force on Climate-related Financial Disclosures"),
         scope1_emissions_mtco2e: extract_metric(document, "data-scope1"),
         scope2_emissions_mtco2e: extract_metric(document, "data-scope2"),
         scope3_emissions_mtco2e: extract_metric(document, "data-scope3"),
@@ -75,9 +76,9 @@ pub fn parse_climate_disclosure(cik: &str, document: &str) -> Option<SecClimateD
 }
 
 /// Fetch SEC submissions JSON for a climate disclosure source document.
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `Err` if the submissions request fails.
 pub async fn fetch_sec_climate(cik: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
@@ -127,11 +128,13 @@ mod tests {
         let disclosure = parse_climate_disclosure("CIK0000123456", climate_fixture()).unwrap();
         assert!(disclosure.tcfd_aligned);
         assert_eq!(disclosure.physical_risks.len(), 2);
-        assert!(disclosure
-            .climate_governance
-            .as_deref()
-            .unwrap()
-            .contains("Board sustainability committee"));
+        assert!(
+            disclosure
+                .climate_governance
+                .as_deref()
+                .unwrap()
+                .contains("Board sustainability committee")
+        );
     }
 
     #[test]

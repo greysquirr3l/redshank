@@ -50,7 +50,7 @@ pub struct UccParty {
 
 /// Parse a California SOS UCC JSON search response.
 ///
-/// CA BizFile Online returns a JSON envelope with a `filings` array.
+/// `CA BizFile Online` returns a JSON envelope with a `filings` array.
 #[must_use]
 pub fn parse_california_ucc(json: &serde_json::Value) -> Vec<UccFiling> {
     let filings = json
@@ -395,16 +395,16 @@ mod tests {
     #[test]
     fn ucc_parses_ny_html_table_fixture() {
         // Minimal NY SOS HTML table format
-        let html = r#"
+        let html = r"
 <table>
 <tr><th>Filing</th><th>Date</th><th>Debtor</th><th>Secured Party</th></tr>
 <tr><td>201900001234</td><td>2019-06-01</td><td>SMITH ENTERPRISES INC</td><td>JP MORGAN CHASE BANK NA</td></tr>
 <tr><td>202000009999</td><td>2020-11-15</td><td>TECH STARTUP LLC</td><td>SILICON VALLEY BANK</td></tr>
 </table>
-"#;
+    ";
         let filings = parse_new_york_ucc(html);
 
-        assert!(filings.len() >= 1);
+        assert!(!filings.is_empty());
         assert_eq!(filings[0].filing_number, "201900001234");
         assert_eq!(filings[0].state, "NY");
         assert_eq!(filings[0].debtors[0].name, "SMITH ENTERPRISES INC");

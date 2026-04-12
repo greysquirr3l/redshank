@@ -1,9 +1,9 @@
 //! Maritime AIS (Automatic Identification System) — vessel tracking data.
 //!
-//! Primary source: VesselFinder API <https://www.vesselfinder.com/api>
+//! Primary source: `VesselFinder` API <https://www.vesselfinder.com/api>
 //! Fallback: ITU MARS ship station database.
 //!
-//! Requires a VesselFinder API key for vessel lookups.
+//! Requires a `VesselFinder` API key for vessel lookups.
 //! For OSINT: cross-reference vessel owners with sanctions lists, check for
 //! AIS gaps (transponder off) as indicators of sanctions evasion, and flag
 //! yachts > 30m as wealth indicators.
@@ -136,7 +136,7 @@ async fn fetch_by_mmsi(
     Ok(parse_vessel_item(&json))
 }
 
-/// Parse a vessel list response from VesselFinder API.
+/// Parse a vessel list response from `VesselFinder` API.
 ///
 /// Handles both `{"vessels": [...]}` and bare array `[...]` formats.
 #[must_use]
@@ -175,7 +175,7 @@ pub fn parse_vessel_item(item: &serde_json::Value) -> Option<VesselRecord> {
         item.get(key)
             .or_else(|| item.get(alt))
             .and_then(serde_json::Value::as_u64)
-            .map(|n| n as u32)
+            .and_then(|n| u32::try_from(n).ok())
     };
 
     let f64_field = |obj: &serde_json::Value, key: &str, alt: &str| -> Option<f64> {

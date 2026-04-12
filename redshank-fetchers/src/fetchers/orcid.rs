@@ -200,11 +200,7 @@ fn parse_date(date_obj: Option<&serde_json::Value>) -> Option<String> {
         .get("month")
         .and_then(|m| m.get("value"))
         .and_then(serde_json::Value::as_str);
-    if let Some(m) = month {
-        Some(format!("{year}-{m}"))
-    } else {
-        Some(year.to_string())
-    }
+    Some(month.map_or_else(|| year.to_string(), |m| format!("{year}-{m}")))
 }
 
 fn parse_employment(group: &serde_json::Value) -> Option<OrcidEmployment> {

@@ -272,7 +272,7 @@ mod tests {
         let records = parse_payments(&research_payments_fixture());
 
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].payment_amount, 120000.0);
+        assert!((records[0].payment_amount - 120_000.0).abs() < f64::EPSILON);
         assert_eq!(records[0].nature_of_payment.as_deref(), Some("Research"));
     }
 
@@ -281,7 +281,7 @@ mod tests {
         let records = parse_payments(&general_payments_fixture());
 
         assert_eq!(records[0].payer, "PharmaCo");
-        assert_eq!(records[0].payment_amount, 2500.50);
+        assert!((records[0].payment_amount - 2_500.50).abs() < f64::EPSILON);
         assert_eq!(
             records[0].nature_of_payment.as_deref(),
             Some("Consulting Fee")
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(aggregates.len(), 1);
         assert_eq!(aggregates[0].year, 2024);
         assert_eq!(aggregates[0].payer, "PharmaCo");
-        assert_eq!(aggregates[0].total_amount, 3000.50);
+        assert!((aggregates[0].total_amount - 3_000.50).abs() < f64::EPSILON);
         assert_eq!(aggregates[0].record_count, 2);
     }
 }

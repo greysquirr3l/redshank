@@ -1,4 +1,4 @@
-//! GuideStar / Candid nonprofit profile parser and fetch helper.
+//! `GuideStar` / Candid nonprofit profile parser and fetch helper.
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client_with_key, write_ndjson};
@@ -15,7 +15,7 @@ pub struct NonprofitLeader {
     pub compensation: Option<f64>,
 }
 
-/// A normalized GuideStar / Candid profile.
+/// A normalized `GuideStar` / Candid profile.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct GuidestarCandidProfile {
     /// Organization EIN.
@@ -65,7 +65,7 @@ fn collect_attr_values(html: &str, attr: &str) -> Vec<String> {
     values
 }
 
-/// Parse a GuideStar / Candid profile fixture or cached HTML.
+/// Parse a `GuideStar` / Candid profile fixture or cached HTML.
 #[must_use]
 pub fn parse_guidestar_profile(ein: &str, html: &str) -> Option<GuidestarCandidProfile> {
     let name = extract_between(html, "data-org-name=\"", "\"")?;
@@ -122,8 +122,8 @@ pub async fn fetch_guidestar_profile(
     let body = resp.text().await?;
     let profile = parse_guidestar_profile(ein, &body)
         .ok_or_else(|| FetchError::Parse("could not parse GuideStar/Candid profile".to_string()))?;
-    let records = vec![serde_json::to_value(profile)
-        .map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(profile).map_err(|err| FetchError::Parse(err.to_string()))?];
     let output_path = output_dir.join("guidestar_candid.ndjson");
     let count = write_ndjson(&output_path, &records)?;
 
@@ -169,10 +169,12 @@ mod tests {
         assert_eq!(profile.transparency_seal.as_deref(), Some("Platinum"));
         assert_eq!(profile.leadership[0].title.as_deref(), Some("CEO"));
         assert_eq!(profile.leadership[0].compensation, Some(245_000.0));
-        assert!(profile
-            .dei_statement
-            .as_deref()
-            .unwrap()
-            .contains("DEI commitment"));
+        assert!(
+            profile
+                .dei_statement
+                .as_deref()
+                .unwrap()
+                .contains("DEI commitment")
+        );
     }
 }

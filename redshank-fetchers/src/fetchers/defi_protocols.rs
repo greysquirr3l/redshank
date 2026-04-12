@@ -1,4 +1,4 @@
-//! DeFi protocol position parsing and fetch helpers.
+//! `DeFi` protocol position parsing and fetch helpers.
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, write_ndjson};
@@ -6,7 +6,7 @@ use std::path::Path;
 
 const COMPOUND_API_BASE: &str = "https://api.compound.finance/api/v2/account";
 
-/// A normalized DeFi position.
+/// A normalized `DeFi` position.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct DefiPosition {
     /// Protocol name.

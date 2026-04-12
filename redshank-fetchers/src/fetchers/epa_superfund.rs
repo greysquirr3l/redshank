@@ -7,7 +7,7 @@ use std::path::Path;
 const SUPERFUND_BASE: &str = "https://enviro.epa.gov/facts/sems/search.html";
 
 /// A responsible party tied to a Superfund site.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ResponsibleParty {
     /// Party name.
     pub name: String,
@@ -54,10 +54,20 @@ pub fn parse_superfund_site(json: &serde_json::Value) -> Option<SuperfundSite> {
 
     Some(SuperfundSite {
         site_name,
-        epa_id: json.get("epa_id").and_then(serde_json::Value::as_str).map(ToString::to_string),
-        npl_status: json.get("npl_status").and_then(serde_json::Value::as_str).map(ToString::to_string),
-        hazard_ranking_score: json.get("hazard_ranking_score").and_then(serde_json::Value::as_f64),
-        cleanup_cost_usd: json.get("cleanup_cost_usd").and_then(serde_json::Value::as_f64),
+        epa_id: json
+            .get("epa_id")
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        npl_status: json
+            .get("npl_status")
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        hazard_ranking_score: json
+            .get("hazard_ranking_score")
+            .and_then(serde_json::Value::as_f64),
+        cleanup_cost_usd: json
+            .get("cleanup_cost_usd")
+            .and_then(serde_json::Value::as_f64),
         responsible_parties,
     })
 }
@@ -67,13 +77,23 @@ pub fn parse_superfund_site(json: &serde_json::Value) -> Option<SuperfundSite> {
 /// # Errors
 ///
 /// Returns `Err` if the request fails.
-pub async fn fetch_superfund_site(query: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
+pub async fn fetch_superfund_site(
+    query: &str,
+    output_dir: &Path,
+) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
-    let resp = client.get(SUPERFUND_BASE).query(&[("query", query)]).send().await?;
+    let resp = client
+        .get(SUPERFUND_BASE)
+        .query(&[("query", query)])
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(FetchError::ApiError { status: status.as_u16(), body });
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
     }
 
     let body = resp.text().await?;
@@ -101,7 +121,7 @@ mod tests {
             "epa_id": "NJD980654321",
             "npl_status": "Final",
             "hazard_ranking_score": 54.22,
-            "cleanup_cost_usd": 125000000.0,
+            "cleanup_cost_usd": 125_000_000.0,
             "prps": [
                 {"name": "Acme Chemical Corp", "role": "Generator"},
                 {"name": "Riverside Holdings LLC", "role": "Current owner"}
@@ -118,7 +138,7 @@ mod tests {
     fn epa_superfund_extracts_cleanup_cost_and_responsible_parties() {
         let json = serde_json::json!({
             "site_name": "Riverside Drum Disposal",
-            "cleanup_cost_usd": 125000000.0,
+            "cleanup_cost_usd": 125_000_000.0,
             "prps": [
                 {"name": "Acme Chemical Corp", "role": "Generator"}
             ]
@@ -126,7 +146,8 @@ mod tests {
 
         let site = parse_superfund_site(&json).unwrap();
         assert_eq!(site.cleanup_cost_usd, Some(125_000_000.0));
-        assert_eq!(site.responsible_parties[0].name, "Acme Chemical Corp");
-        assert_eq!(site.responsible_parties[0].role.as_deref(), Some("Generator"));
+        let first_party = site.responsible_parties.first().unwrap();
+        assert_eq!(first_party.name, "Acme Chemical Corp");
+        assert_eq!(first_party.role.as_deref(), Some("Generator"));
     }
 }

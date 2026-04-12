@@ -19,7 +19,7 @@ pub struct ExchangeTransparencyReport {
     pub attestation_date: Option<String>,
     /// AML compliance statement or registration summary.
     pub aml_summary: Option<String>,
-    /// FinCEN MSB registration or similar identifier.
+    /// `FinCEN` MSB registration or similar identifier.
     pub registration_id: Option<String>,
 }
 
@@ -130,10 +130,12 @@ pub async fn fetch_exchange_transparency(
     }
 
     let body = resp.text().await?;
-    let report = parse_proof_of_reserves(&body)
-        .ok_or_else(|| FetchError::Parse("could not parse exchange transparency page".to_string()))?;
+    let report = parse_proof_of_reserves(&body).ok_or_else(|| {
+        FetchError::Parse("could not parse exchange transparency page".to_string())
+    })?;
     let output_path = output_dir.join("exchange_transparency.ndjson");
-    let records = vec![serde_json::to_value(report).map_err(|err| FetchError::Parse(err.to_string()))?];
+    let records =
+        vec![serde_json::to_value(report).map_err(|err| FetchError::Parse(err.to_string()))?];
     let count = write_ndjson(&output_path, &records)?;
 
     Ok(FetchOutput {
@@ -176,14 +178,13 @@ mod tests {
 
         let report = parse_aml_report(&json).unwrap();
         assert_eq!(report.exchange, "Kraken");
-        assert_eq!(
-            report.registration_id.as_deref(),
-            Some("31000234567890")
+        assert_eq!(report.registration_id.as_deref(), Some("31000234567890"));
+        assert!(
+            report
+                .aml_summary
+                .as_deref()
+                .unwrap()
+                .contains("sanctions screening")
         );
-        assert!(report
-            .aml_summary
-            .as_deref()
-            .unwrap()
-            .contains("sanctions screening"));
     }
 }

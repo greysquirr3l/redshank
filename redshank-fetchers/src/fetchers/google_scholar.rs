@@ -154,6 +154,7 @@ pub fn parse_scholar_profile(user_id: &str, html: &str) -> Option<GoogleScholarP
 /// # Errors
 ///
 /// Returns `Err` if the profile cannot be parsed, serialized, or written.
+#[allow(clippy::unused_async)]
 pub async fn save_scholar_profile(
     user_id: &str,
     html: &str,
