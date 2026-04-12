@@ -58,6 +58,168 @@ pub fn parse_env_file(path: &Path) -> HashMap<String, String> {
 /// 1. `REDSHANK_<KEY>` — app-namespaced (use when running multiple agents)
 /// 2. `OPENPLANTER_<KEY>` — legacy `OpenPlanter` backward compatibility
 /// 3. `<KEY>` — bare/global env var
+fn build_credential_bundle<Get, GetPlain>(get: Get, get_plain: GetPlain) -> CredentialBundle
+where
+    Get: Fn(&str, &str, &str) -> Option<CredentialGuard<String>>,
+    GetPlain: Fn(&str, &str, &str) -> Option<String>,
+{
+    let mut bundle = CredentialBundle {
+        ollama_base_url: get_plain(
+            "REDSHANK_OLLAMA_BASE_URL",
+            "OPENPLANTER_OLLAMA_BASE_URL",
+            "OLLAMA_BASE_URL",
+        ),
+        ..CredentialBundle::default()
+    };
+
+    macro_rules! set_secret {
+        ($field:ident, $redshank:literal, $openplanter:literal, $bare:literal) => {
+            bundle.$field = get($redshank, $openplanter, $bare);
+        };
+    }
+
+    set_secret!(
+        openai_api_key,
+        "REDSHANK_OPENAI_API_KEY",
+        "OPENPLANTER_OPENAI_API_KEY",
+        "OPENAI_API_KEY"
+    );
+    set_secret!(
+        anthropic_api_key,
+        "REDSHANK_ANTHROPIC_API_KEY",
+        "OPENPLANTER_ANTHROPIC_API_KEY",
+        "ANTHROPIC_API_KEY"
+    );
+    set_secret!(
+        openrouter_api_key,
+        "REDSHANK_OPENROUTER_API_KEY",
+        "OPENPLANTER_OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY"
+    );
+    set_secret!(
+        cerebras_api_key,
+        "REDSHANK_CEREBRAS_API_KEY",
+        "OPENPLANTER_CEREBRAS_API_KEY",
+        "CEREBRAS_API_KEY"
+    );
+    set_secret!(
+        exa_api_key,
+        "REDSHANK_EXA_API_KEY",
+        "OPENPLANTER_EXA_API_KEY",
+        "EXA_API_KEY"
+    );
+    set_secret!(
+        voyage_api_key,
+        "REDSHANK_VOYAGE_API_KEY",
+        "OPENPLANTER_VOYAGE_API_KEY",
+        "VOYAGE_API_KEY"
+    );
+    set_secret!(
+        hibp_api_key,
+        "REDSHANK_HIBP_API_KEY",
+        "OPENPLANTER_HIBP_API_KEY",
+        "HIBP_API_KEY"
+    );
+    set_secret!(
+        github_token,
+        "REDSHANK_GITHUB_TOKEN",
+        "OPENPLANTER_GITHUB_TOKEN",
+        "GITHUB_TOKEN"
+    );
+    set_secret!(
+        fec_api_key,
+        "REDSHANK_FEC_API_KEY",
+        "OPENPLANTER_FEC_API_KEY",
+        "FEC_API_KEY"
+    );
+    set_secret!(
+        opencorporates_api_key,
+        "REDSHANK_OPENCORPORATES_API_KEY",
+        "OPENPLANTER_OPENCORPORATES_API_KEY",
+        "OPENCORPORATES_API_KEY"
+    );
+    set_secret!(
+        uk_companies_house_api_key,
+        "REDSHANK_UK_COMPANIES_HOUSE_API_KEY",
+        "OPENPLANTER_UK_COMPANIES_HOUSE_API_KEY",
+        "UK_COMPANIES_HOUSE_API_KEY"
+    );
+    set_secret!(
+        opensanctions_api_key,
+        "REDSHANK_OPENSANCTIONS_API_KEY",
+        "OPENPLANTER_OPENSANCTIONS_API_KEY",
+        "OPENSANCTIONS_API_KEY"
+    );
+    set_secret!(
+        marinetraffic_api_key,
+        "REDSHANK_MARINETRAFFIC_API_KEY",
+        "OPENPLANTER_MARINETRAFFIC_API_KEY",
+        "MARINETRAFFIC_API_KEY"
+    );
+    set_secret!(
+        semantic_scholar_api_key,
+        "REDSHANK_SEMANTIC_SCHOLAR_API_KEY",
+        "OPENPLANTER_SEMANTIC_SCHOLAR_API_KEY",
+        "SEMANTIC_SCHOLAR_API_KEY"
+    );
+    set_secret!(
+        reddit_client_id,
+        "REDSHANK_REDDIT_CLIENT_ID",
+        "OPENPLANTER_REDDIT_CLIENT_ID",
+        "REDDIT_CLIENT_ID"
+    );
+    set_secret!(
+        reddit_client_secret,
+        "REDSHANK_REDDIT_CLIENT_SECRET",
+        "OPENPLANTER_REDDIT_CLIENT_SECRET",
+        "REDDIT_CLIENT_SECRET"
+    );
+    set_secret!(
+        youtube_api_key,
+        "REDSHANK_YOUTUBE_API_KEY",
+        "OPENPLANTER_YOUTUBE_API_KEY",
+        "YOUTUBE_API_KEY"
+    );
+    set_secret!(
+        listennotes_api_key,
+        "REDSHANK_LISTENNOTES_API_KEY",
+        "OPENPLANTER_LISTENNOTES_API_KEY",
+        "LISTENNOTES_API_KEY"
+    );
+    set_secret!(
+        crunchbase_api_key,
+        "REDSHANK_CRUNCHBASE_API_KEY",
+        "OPENPLANTER_CRUNCHBASE_API_KEY",
+        "CRUNCHBASE_API_KEY"
+    );
+    set_secret!(
+        bls_api_key,
+        "REDSHANK_BLS_API_KEY",
+        "OPENPLANTER_BLS_API_KEY",
+        "BLS_API_KEY"
+    );
+    set_secret!(
+        pacer_username,
+        "REDSHANK_PACER_USERNAME",
+        "OPENPLANTER_PACER_USERNAME",
+        "PACER_USERNAME"
+    );
+    set_secret!(
+        pacer_password,
+        "REDSHANK_PACER_PASSWORD",
+        "OPENPLANTER_PACER_PASSWORD",
+        "PACER_PASSWORD"
+    );
+    set_secret!(
+        candid_api_key,
+        "REDSHANK_CANDID_API_KEY",
+        "OPENPLANTER_CANDID_API_KEY",
+        "CANDID_API_KEY"
+    );
+
+    bundle
+}
+
 fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
     let get = |redshank_key: &str,
                openplanter_key: &str,
@@ -80,123 +242,7 @@ fn bundle_from_env_map(env: &HashMap<String, String>) -> CredentialBundle {
             .filter(|s| !s.is_empty())
     };
 
-    CredentialBundle {
-        openai_api_key: get(
-            "REDSHANK_OPENAI_API_KEY",
-            "OPENPLANTER_OPENAI_API_KEY",
-            "OPENAI_API_KEY",
-        ),
-        anthropic_api_key: get(
-            "REDSHANK_ANTHROPIC_API_KEY",
-            "OPENPLANTER_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-        ),
-        openrouter_api_key: get(
-            "REDSHANK_OPENROUTER_API_KEY",
-            "OPENPLANTER_OPENROUTER_API_KEY",
-            "OPENROUTER_API_KEY",
-        ),
-        cerebras_api_key: get(
-            "REDSHANK_CEREBRAS_API_KEY",
-            "OPENPLANTER_CEREBRAS_API_KEY",
-            "CEREBRAS_API_KEY",
-        ),
-        exa_api_key: get(
-            "REDSHANK_EXA_API_KEY",
-            "OPENPLANTER_EXA_API_KEY",
-            "EXA_API_KEY",
-        ),
-        voyage_api_key: get(
-            "REDSHANK_VOYAGE_API_KEY",
-            "OPENPLANTER_VOYAGE_API_KEY",
-            "VOYAGE_API_KEY",
-        ),
-        hibp_api_key: get(
-            "REDSHANK_HIBP_API_KEY",
-            "OPENPLANTER_HIBP_API_KEY",
-            "HIBP_API_KEY",
-        ),
-        github_token: get(
-            "REDSHANK_GITHUB_TOKEN",
-            "OPENPLANTER_GITHUB_TOKEN",
-            "GITHUB_TOKEN",
-        ),
-        fec_api_key: get(
-            "REDSHANK_FEC_API_KEY",
-            "OPENPLANTER_FEC_API_KEY",
-            "FEC_API_KEY",
-        ),
-        opencorporates_api_key: get(
-            "REDSHANK_OPENCORPORATES_API_KEY",
-            "OPENPLANTER_OPENCORPORATES_API_KEY",
-            "OPENCORPORATES_API_KEY",
-        ),
-        uk_companies_house_api_key: get(
-            "REDSHANK_UK_COMPANIES_HOUSE_API_KEY",
-            "OPENPLANTER_UK_COMPANIES_HOUSE_API_KEY",
-            "UK_COMPANIES_HOUSE_API_KEY",
-        ),
-        opensanctions_api_key: get(
-            "REDSHANK_OPENSANCTIONS_API_KEY",
-            "OPENPLANTER_OPENSANCTIONS_API_KEY",
-            "OPENSANCTIONS_API_KEY",
-        ),
-        marinetraffic_api_key: get(
-            "REDSHANK_MARINETRAFFIC_API_KEY",
-            "OPENPLANTER_MARINETRAFFIC_API_KEY",
-            "MARINETRAFFIC_API_KEY",
-        ),
-        semantic_scholar_api_key: get(
-            "REDSHANK_SEMANTIC_SCHOLAR_API_KEY",
-            "OPENPLANTER_SEMANTIC_SCHOLAR_API_KEY",
-            "SEMANTIC_SCHOLAR_API_KEY",
-        ),
-        reddit_client_id: get(
-            "REDSHANK_REDDIT_CLIENT_ID",
-            "OPENPLANTER_REDDIT_CLIENT_ID",
-            "REDDIT_CLIENT_ID",
-        ),
-        reddit_client_secret: get(
-            "REDSHANK_REDDIT_CLIENT_SECRET",
-            "OPENPLANTER_REDDIT_CLIENT_SECRET",
-            "REDDIT_CLIENT_SECRET",
-        ),
-        youtube_api_key: get(
-            "REDSHANK_YOUTUBE_API_KEY",
-            "OPENPLANTER_YOUTUBE_API_KEY",
-            "YOUTUBE_API_KEY",
-        ),
-        listennotes_api_key: get(
-            "REDSHANK_LISTENNOTES_API_KEY",
-            "OPENPLANTER_LISTENNOTES_API_KEY",
-            "LISTENNOTES_API_KEY",
-        ),
-        crunchbase_api_key: get(
-            "REDSHANK_CRUNCHBASE_API_KEY",
-            "OPENPLANTER_CRUNCHBASE_API_KEY",
-            "CRUNCHBASE_API_KEY",
-        ),
-        bls_api_key: get(
-            "REDSHANK_BLS_API_KEY",
-            "OPENPLANTER_BLS_API_KEY",
-            "BLS_API_KEY",
-        ),
-        pacer_username: get(
-            "REDSHANK_PACER_USERNAME",
-            "OPENPLANTER_PACER_USERNAME",
-            "PACER_USERNAME",
-        ),
-        pacer_password: get(
-            "REDSHANK_PACER_PASSWORD",
-            "OPENPLANTER_PACER_PASSWORD",
-            "PACER_PASSWORD",
-        ),
-        ollama_base_url: get_plain(
-            "REDSHANK_OLLAMA_BASE_URL",
-            "OPENPLANTER_OLLAMA_BASE_URL",
-            "OLLAMA_BASE_URL",
-        ),
-    }
+    build_credential_bundle(get, get_plain)
 }
 
 /// Build a `CredentialBundle` from a `.env` file.
@@ -238,123 +284,7 @@ pub fn credentials_from_env() -> CredentialBundle {
             .filter(|s| !s.is_empty())
     };
 
-    CredentialBundle {
-        openai_api_key: get(
-            "REDSHANK_OPENAI_API_KEY",
-            "OPENPLANTER_OPENAI_API_KEY",
-            "OPENAI_API_KEY",
-        ),
-        anthropic_api_key: get(
-            "REDSHANK_ANTHROPIC_API_KEY",
-            "OPENPLANTER_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-        ),
-        openrouter_api_key: get(
-            "REDSHANK_OPENROUTER_API_KEY",
-            "OPENPLANTER_OPENROUTER_API_KEY",
-            "OPENROUTER_API_KEY",
-        ),
-        cerebras_api_key: get(
-            "REDSHANK_CEREBRAS_API_KEY",
-            "OPENPLANTER_CEREBRAS_API_KEY",
-            "CEREBRAS_API_KEY",
-        ),
-        exa_api_key: get(
-            "REDSHANK_EXA_API_KEY",
-            "OPENPLANTER_EXA_API_KEY",
-            "EXA_API_KEY",
-        ),
-        voyage_api_key: get(
-            "REDSHANK_VOYAGE_API_KEY",
-            "OPENPLANTER_VOYAGE_API_KEY",
-            "VOYAGE_API_KEY",
-        ),
-        hibp_api_key: get(
-            "REDSHANK_HIBP_API_KEY",
-            "OPENPLANTER_HIBP_API_KEY",
-            "HIBP_API_KEY",
-        ),
-        github_token: get(
-            "REDSHANK_GITHUB_TOKEN",
-            "OPENPLANTER_GITHUB_TOKEN",
-            "GITHUB_TOKEN",
-        ),
-        fec_api_key: get(
-            "REDSHANK_FEC_API_KEY",
-            "OPENPLANTER_FEC_API_KEY",
-            "FEC_API_KEY",
-        ),
-        opencorporates_api_key: get(
-            "REDSHANK_OPENCORPORATES_API_KEY",
-            "OPENPLANTER_OPENCORPORATES_API_KEY",
-            "OPENCORPORATES_API_KEY",
-        ),
-        uk_companies_house_api_key: get(
-            "REDSHANK_UK_COMPANIES_HOUSE_API_KEY",
-            "OPENPLANTER_UK_COMPANIES_HOUSE_API_KEY",
-            "UK_COMPANIES_HOUSE_API_KEY",
-        ),
-        opensanctions_api_key: get(
-            "REDSHANK_OPENSANCTIONS_API_KEY",
-            "OPENPLANTER_OPENSANCTIONS_API_KEY",
-            "OPENSANCTIONS_API_KEY",
-        ),
-        marinetraffic_api_key: get(
-            "REDSHANK_MARINETRAFFIC_API_KEY",
-            "OPENPLANTER_MARINETRAFFIC_API_KEY",
-            "MARINETRAFFIC_API_KEY",
-        ),
-        semantic_scholar_api_key: get(
-            "REDSHANK_SEMANTIC_SCHOLAR_API_KEY",
-            "OPENPLANTER_SEMANTIC_SCHOLAR_API_KEY",
-            "SEMANTIC_SCHOLAR_API_KEY",
-        ),
-        reddit_client_id: get(
-            "REDSHANK_REDDIT_CLIENT_ID",
-            "OPENPLANTER_REDDIT_CLIENT_ID",
-            "REDDIT_CLIENT_ID",
-        ),
-        reddit_client_secret: get(
-            "REDSHANK_REDDIT_CLIENT_SECRET",
-            "OPENPLANTER_REDDIT_CLIENT_SECRET",
-            "REDDIT_CLIENT_SECRET",
-        ),
-        youtube_api_key: get(
-            "REDSHANK_YOUTUBE_API_KEY",
-            "OPENPLANTER_YOUTUBE_API_KEY",
-            "YOUTUBE_API_KEY",
-        ),
-        listennotes_api_key: get(
-            "REDSHANK_LISTENNOTES_API_KEY",
-            "OPENPLANTER_LISTENNOTES_API_KEY",
-            "LISTENNOTES_API_KEY",
-        ),
-        crunchbase_api_key: get(
-            "REDSHANK_CRUNCHBASE_API_KEY",
-            "OPENPLANTER_CRUNCHBASE_API_KEY",
-            "CRUNCHBASE_API_KEY",
-        ),
-        bls_api_key: get(
-            "REDSHANK_BLS_API_KEY",
-            "OPENPLANTER_BLS_API_KEY",
-            "BLS_API_KEY",
-        ),
-        pacer_username: get(
-            "REDSHANK_PACER_USERNAME",
-            "OPENPLANTER_PACER_USERNAME",
-            "PACER_USERNAME",
-        ),
-        pacer_password: get(
-            "REDSHANK_PACER_PASSWORD",
-            "OPENPLANTER_PACER_PASSWORD",
-            "PACER_PASSWORD",
-        ),
-        ollama_base_url: get_plain(
-            "REDSHANK_OLLAMA_BASE_URL",
-            "OPENPLANTER_OLLAMA_BASE_URL",
-            "OLLAMA_BASE_URL",
-        ),
-    }
+    build_credential_bundle(get, get_plain)
 }
 
 // ── JSON file credential store ──────────────────────────────

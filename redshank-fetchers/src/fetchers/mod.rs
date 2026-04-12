@@ -39,6 +39,11 @@ pub mod un_sanctions;
 pub mod wikidata;
 pub mod world_bank_debarred;
 
+// ── T38: Nonprofit and IRS intelligence fetchers ────────────────────────────
+pub mod guidestar_candid;
+pub mod irs_1023;
+pub mod irs_990_xml;
+
 // ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
 pub mod github_profile;
 pub mod hibp;

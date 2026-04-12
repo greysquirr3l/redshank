@@ -102,6 +102,8 @@ pub struct CredentialBundle {
     pub pacer_username: Option<CredentialGuard<String>>,
     /// `PACER` password for federal court access.
     pub pacer_password: Option<CredentialGuard<String>>,
+    /// `Candid` / `GuideStar` API key for nonprofit profile enrichment.
+    pub candid_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {
@@ -119,6 +121,21 @@ impl CredentialBundle {
             || has(&self.voyage_api_key)
             || has(&self.hibp_api_key)
             || has(&self.github_token)
+            || has(&self.fec_api_key)
+            || has(&self.opencorporates_api_key)
+            || has(&self.uk_companies_house_api_key)
+            || has(&self.opensanctions_api_key)
+            || has(&self.marinetraffic_api_key)
+            || has(&self.semantic_scholar_api_key)
+            || has(&self.reddit_client_id)
+            || has(&self.reddit_client_secret)
+            || has(&self.youtube_api_key)
+            || has(&self.listennotes_api_key)
+            || has(&self.crunchbase_api_key)
+            || has(&self.bls_api_key)
+            || has(&self.pacer_username)
+            || has(&self.pacer_password)
+            || has(&self.candid_api_key)
             || self
                 .ollama_base_url
                 .as_ref()
@@ -154,6 +171,7 @@ impl CredentialBundle {
         fill!(bls_api_key);
         fill!(pacer_username);
         fill!(pacer_password);
+        fill!(candid_api_key);
     }
 }
 
