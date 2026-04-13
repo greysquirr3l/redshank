@@ -149,7 +149,7 @@ pub fn build_provider_with_settings(
         kind @ (ProviderKind::OpenAI
         | ProviderKind::OpenRouter
         | ProviderKind::Cerebras
-        | ProviderKind::Ollama) => {
+        | ProviderKind::OpenAiCompatible) => {
             let key = resolve_provider_key(kind, &endpoint, creds)?;
             let mut provider = OpenAICompatibleModel::for_provider(kind, key, model_name, effort);
             if let Some(base_url) = endpoint.base_url.as_deref() {
@@ -279,14 +279,26 @@ pub async fn list_models_with_settings(
             "Authorization".to_string(),
             format!("Bearer {}", key.expose()),
         ),
-        ProviderKind::Ollama => {
-            let base = ollama_root_base_url(&endpoint, creds);
-            (
-                format!("{}/api/tags", base.trim_end_matches('/')),
-                String::new(),
-                String::new(),
-            )
-        }
+        ProviderKind::OpenAiCompatible => (
+            format!(
+                "{}/models",
+                endpoint
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("http://localhost:11434/v1")
+                    .trim_end_matches('/')
+            ),
+            if key.expose().is_empty() {
+                String::new()
+            } else {
+                "Authorization".to_string()
+            },
+            if key.expose().is_empty() {
+                String::new()
+            } else {
+                format!("Bearer {}", key.expose())
+            },
+        ),
     };
 
     let client = Client::new();
@@ -318,7 +330,14 @@ pub async fn list_models_with_settings(
 
     // Ollama uses { "models": [...] } with "name" field
     // OpenAI/Anthropic use { "data": [...] } with "id" field
-    let models = if kind == ProviderKind::Ollama {
+    // For now, treat all OpenAiCompatible as using OpenAI-style response; Ollama-specific
+    // format detection can be added later if needed.
+    let models = if kind == ProviderKind::OpenAiCompatible
+        && endpoint
+            .base_url
+            .as_deref()
+            .is_some_and(|u| u.contains("11434") || u.contains("ollama"))
+    {
         json.get("models")
             .and_then(serde_json::Value::as_array)
             .map(|arr| {
@@ -360,8 +379,8 @@ fn api_key_for(
         ProviderKind::OpenAI => creds.openai_api_key.clone(),
         ProviderKind::OpenRouter => creds.openrouter_api_key.clone(),
         ProviderKind::Cerebras => creds.cerebras_api_key.clone(),
-        ProviderKind::Ollama => {
-            // Ollama doesn't require an API key; use a placeholder.
+        ProviderKind::OpenAiCompatible => {
+            // OpenAI-compatible endpoints may not require an API key; use empty if not provided.
             Some(crate::domain::credentials::CredentialGuard::new(
                 String::new(),
             ))
@@ -427,17 +446,18 @@ const fn default_protocol_for(provider: ProviderKind) -> ProviderProtocolKind {
         ProviderKind::OpenAI
         | ProviderKind::OpenRouter
         | ProviderKind::Cerebras
-        | ProviderKind::Ollama => ProviderProtocolKind::OpenAiCompatible,
+        | ProviderKind::OpenAiCompatible => ProviderProtocolKind::OpenAiCompatible,
     }
 }
 
 const fn default_deployment_for(provider: ProviderKind) -> ProviderDeploymentKind {
     match provider {
-        ProviderKind::Ollama => ProviderDeploymentKind::Local,
         ProviderKind::Anthropic
         | ProviderKind::OpenAI
         | ProviderKind::OpenRouter
         | ProviderKind::Cerebras => ProviderDeploymentKind::Hosted,
+        // OpenAiCompatible defaults to Hosted; local deployments are configured via settings.
+        ProviderKind::OpenAiCompatible => ProviderDeploymentKind::Hosted,
     }
 }
 
@@ -447,7 +467,8 @@ const fn default_credential_field_name(provider: ProviderKind) -> Option<&'stati
         ProviderKind::OpenAI => Some("openai_api_key"),
         ProviderKind::OpenRouter => Some("openrouter_api_key"),
         ProviderKind::Cerebras => Some("cerebras_api_key"),
-        ProviderKind::Ollama => None,
+        // OpenAiCompatible typically doesn't require credentials (but can be overridden in settings).
+        ProviderKind::OpenAiCompatible => None,
     }
 }
 
@@ -457,7 +478,7 @@ fn default_base_url_for(provider: ProviderKind, creds: &CredentialBundle) -> Str
         ProviderKind::OpenAI => "https://api.openai.com/v1".to_string(),
         ProviderKind::OpenRouter => "https://openrouter.ai/api/v1".to_string(),
         ProviderKind::Cerebras => "https://api.cerebras.ai/v1".to_string(),
-        ProviderKind::Ollama => normalize_ollama_chat_base_url(
+        ProviderKind::OpenAiCompatible => normalize_ollama_chat_base_url(
             creds
                 .ollama_base_url
                 .as_deref()
@@ -475,6 +496,10 @@ fn normalize_ollama_chat_base_url(base_url: &str) -> String {
     }
 }
 
+// ── Ollama helpers (may be unused if no special Ollama-detection logic) ──
+
+/// Get the Ollama root base URL from an endpoint or credentials.
+#[allow(dead_code)]
 fn ollama_root_base_url(endpoint: &ProviderEndpointConfig, creds: &CredentialBundle) -> String {
     let base = endpoint.base_url.as_deref().unwrap_or_else(|| {
         creds
@@ -541,8 +566,8 @@ mod tests {
             ProviderKind::Cerebras => {
                 creds.cerebras_api_key = Some(CredentialGuard::new("csk-test".to_string()));
             }
-            ProviderKind::Ollama => {
-                // no key required
+            ProviderKind::OpenAiCompatible => {
+                // no key required for local OpenAI-compatible servers
             }
         }
         creds
@@ -590,7 +615,7 @@ mod tests {
     fn infer_ollama_prefix() {
         assert_eq!(
             infer_provider("ollama/llama3").unwrap(),
-            ProviderKind::Ollama
+            ProviderKind::OpenAiCompatible
         );
     }
 
@@ -678,9 +703,9 @@ mod tests {
 
     #[test]
     fn build_ollama_provider() {
-        let creds = make_creds(ProviderKind::Ollama);
+        let creds = make_creds(ProviderKind::OpenAiCompatible);
         let config = AgentConfig {
-            provider: ProviderKind::Ollama,
+            provider: ProviderKind::OpenAiCompatible,
             model: "ollama/llama3".to_string(),
             ..AgentConfig::default()
         };

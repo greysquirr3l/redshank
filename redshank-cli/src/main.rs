@@ -531,7 +531,7 @@ fn format_model_listing(provider: ProviderKind, active_model: &str, models: &[St
 
 fn format_model_name_for_display(provider: ProviderKind, model: &str) -> String {
     match provider {
-        ProviderKind::Ollama if !model.starts_with("ollama/") => format!("ollama/{model}"),
+        ProviderKind::OpenAiCompatible if !model.starts_with("ollama/") => format!("ollama/{model}"),
         ProviderKind::OpenRouter if !model.starts_with("openrouter/") => {
             format!("openrouter/{model}")
         }
@@ -585,7 +585,7 @@ const fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::OpenAI => "OpenAI",
         ProviderKind::OpenRouter => "OpenRouter",
         ProviderKind::Cerebras => "Cerebras",
-        ProviderKind::Ollama => "Ollama",
+        ProviderKind::OpenAiCompatible => "OpenAI-Compatible",
     }
 }
 
@@ -953,14 +953,14 @@ mod tests {
         assert_eq!(config.model, "ollama/gemma3:27b");
         assert_eq!(
             config.provider,
-            redshank_core::domain::agent::ProviderKind::Ollama
+            redshank_core::domain::agent::ProviderKind::OpenAiCompatible
         );
     }
 
     #[test]
     fn format_model_listing_prefixes_ollama_models() {
         let listing = format_model_listing(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             "ollama/llama3:latest",
             &["llama3:latest".into(), "gemma3:27b".into()],
         );
@@ -984,7 +984,7 @@ mod tests {
     #[test]
     fn format_model_listing_marks_active_model() {
         let listing = format_model_listing(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             "ollama/gemma3:27b",
             &["llama3:latest".into(), "gemma3:27b".into()],
         );

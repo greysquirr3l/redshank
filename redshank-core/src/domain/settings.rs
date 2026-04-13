@@ -313,7 +313,7 @@ impl PersistentSettings {
                 ProviderKind::OpenAI => self.default_model_openai.as_deref(),
                 ProviderKind::OpenRouter => self.default_model_openrouter.as_deref(),
                 ProviderKind::Cerebras => self.default_model_cerebras.as_deref(),
-                ProviderKind::Ollama => self.default_model_ollama.as_deref(),
+                ProviderKind::OpenAiCompatible => self.default_model_ollama.as_deref(),
             });
         specific.filter(|s| !s.trim().is_empty()).or_else(|| {
             self.default_model

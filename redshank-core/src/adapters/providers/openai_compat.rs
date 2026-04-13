@@ -362,7 +362,7 @@ impl OpenAICompatibleModel {
         model: String,
         reasoning_effort: Option<ReasoningEffort>,
     ) -> Self {
-        let model = if kind == ProviderKind::Ollama {
+        let model = if kind == ProviderKind::OpenAiCompatible {
             normalize_ollama_model_name(&model)
         } else {
             model
@@ -395,7 +395,7 @@ impl OpenAICompatibleModel {
                 DEFAULT_TIMEOUT,
                 128_000,
             ),
-            ProviderKind::Ollama => (
+            ProviderKind::OpenAiCompatible => (
                 OLLAMA_BASE_URL.to_string(),
                 HashMap::new(),
                 OLLAMA_TIMEOUT,
@@ -646,7 +646,7 @@ data: [DONE]\n\
     #[test]
     fn ollama_defaults_to_localhost() {
         let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             CredentialGuard::new(String::new()),
             "llama3".to_string(),
             None,
@@ -658,7 +658,7 @@ data: [DONE]\n\
     #[test]
     fn ollama_model_prefix_is_stripped() {
         let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             CredentialGuard::new(String::new()),
             "ollama/gemma3:27b".to_string(),
             None,

@@ -100,6 +100,12 @@ pub enum Permission {
     DeleteSession,
     /// Configure API credentials.
     ConfigureCredentials,
+    /// Read configuration (sources, providers, settings).
+    ReadConfiguration,
+    /// Update data source configuration.
+    ConfigureSources,
+    /// Update model provider configuration.
+    ConfigureProviders,
     /// Read wiki entries.
     ReadWiki,
     /// Write wiki entries.
@@ -176,7 +182,7 @@ impl std::error::Error for SecurityError {}
 ///
 /// Does NOT implement `Copy` or careless `Clone` — use `Arc<AuthContext>`
 /// at call sites that need to share it.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthContext {
     /// Unique user identity.
     pub user_id: UserId,
@@ -234,9 +240,9 @@ pub trait SecurityPolicy: Send + Sync {
 /// Default static role-based permission policy.
 ///
 /// Permission map:
-/// - **Owner** → all 8 permissions
-/// - **Operator** → `RunAgent`, `ReadSession`, `WriteSession`, `ReadWiki`, `WriteWiki`, `FetchData`
-/// - **Reader** → `ReadSession`, `ReadWiki`
+/// - **Owner** → all permissions
+/// - **Operator** → `RunAgent`, `ReadSession`, `WriteSession`, `ReadWiki`, `WriteWiki`, `FetchData`, `ReadConfiguration`, `ConfigureSources`, `ConfigureProviders`
+/// - **Reader** → `ReadSession`, `ReadWiki`, `ReadConfiguration`
 /// - **Service** → `ReadSession`, `WriteSession`, `ReadWiki`, `WriteWiki`, `FetchData`
 #[derive(Debug, Clone)]
 pub struct StaticPolicy;
@@ -254,8 +260,14 @@ impl StaticPolicy {
                     | Permission::ReadWiki
                     | Permission::WriteWiki
                     | Permission::FetchData
+                    | Permission::ReadConfiguration
+                    | Permission::ConfigureSources
+                    | Permission::ConfigureProviders
             ),
-            Role::Reader => matches!(permission, Permission::ReadSession | Permission::ReadWiki),
+            Role::Reader => matches!(
+                permission,
+                Permission::ReadSession | Permission::ReadWiki | Permission::ReadConfiguration
+            ),
             Role::Service => matches!(
                 permission,
                 Permission::ReadSession
@@ -366,6 +378,42 @@ pub fn can_configure_credentials(
     policy: &dyn SecurityPolicy,
 ) -> Result<(), SecurityError> {
     policy.check(ctx, Permission::ConfigureCredentials)
+}
+
+/// Check permission to read configuration (providers, sources, settings).
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_read_configuration(
+    ctx: &AuthContext,
+    policy: &dyn SecurityPolicy,
+) -> Result<(), SecurityError> {
+    policy.check(ctx, Permission::ReadConfiguration)
+}
+
+/// Check permission to configure data sources.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_configure_sources(
+    ctx: &AuthContext,
+    policy: &dyn SecurityPolicy,
+) -> Result<(), SecurityError> {
+    policy.check(ctx, Permission::ConfigureSources)
+}
+
+/// Check permission to configure model providers.
+///
+/// # Errors
+///
+/// Returns `Err(SecurityError::AccessDenied)` if denied by the policy.
+pub fn can_configure_providers(
+    ctx: &AuthContext,
+    policy: &dyn SecurityPolicy,
+) -> Result<(), SecurityError> {
+    policy.check(ctx, Permission::ConfigureProviders)
 }
 
 #[cfg(test)]
