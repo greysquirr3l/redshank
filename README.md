@@ -113,7 +113,7 @@ Model defaults live in `<workspace>/.redshank/settings.json`:
   "default_model": "claude-sonnet-4-20250514",
   "default_reasoning_effort": "medium",
   "providers": {
-    "Ollama": {
+    "OpenAiCompatible": {
       "enabled": true,
       "protocol": "openai_compatible",
       "deployment": "local",

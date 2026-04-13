@@ -231,18 +231,19 @@ pub async fn list_models_with_settings(
         .map_err(|err| DomainError::Validation(err.to_string()))?;
 
     let (url, auth_header, auth_value) = match kind {
-        ProviderKind::Anthropic => (
-            format!(
-                "{}/models",
-                endpoint
-                    .base_url
-                    .as_deref()
-                    .unwrap_or("https://api.anthropic.com/v1")
-                    .trim_end_matches('/')
-            ),
-            "x-api-key".to_string(),
-            key.expose().clone(),
-        ),
+        ProviderKind::Anthropic => {
+            let base = endpoint
+                .base_url
+                .as_deref()
+                .unwrap_or("https://api.anthropic.com/v1")
+                .trim_end_matches('/');
+            let url = if base.ends_with("/v1") {
+                format!("{base}/models")
+            } else {
+                format!("{base}/v1/models")
+            };
+            (url, "x-api-key".to_string(), key.expose().clone())
+        }
         ProviderKind::OpenAI => (
             format!(
                 "{}/models",
@@ -450,8 +451,14 @@ const fn default_protocol_for(provider: ProviderKind) -> ProviderProtocolKind {
     }
 }
 
-const fn default_deployment_for(_provider: ProviderKind) -> ProviderDeploymentKind {
-    ProviderDeploymentKind::Hosted
+const fn default_deployment_for(provider: ProviderKind) -> ProviderDeploymentKind {
+    match provider {
+        ProviderKind::OpenAiCompatible => ProviderDeploymentKind::Local,
+        ProviderKind::Anthropic
+        | ProviderKind::OpenAI
+        | ProviderKind::OpenRouter
+        | ProviderKind::Cerebras => ProviderDeploymentKind::Hosted,
+    }
 }
 
 const fn default_credential_field_name(provider: ProviderKind) -> Option<&'static str> {

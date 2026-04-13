@@ -118,12 +118,10 @@ pub fn all_sources(enabled_only: bool) -> Vec<&'static SourceDescriptor> {
         .filter(|s| !enabled_only || s.enabled_by_default)
         .collect();
     sources.sort_by(|a, b| {
-        let cat_order = a.category != b.category;
-        if cat_order {
-            format!("{:?}", a.category).cmp(&format!("{:?}", b.category))
-        } else {
-            a.title.cmp(b.title)
-        }
+        a.category
+            .display_name()
+            .cmp(b.category.display_name())
+            .then(a.title.cmp(b.title))
     });
     sources
 }
@@ -145,7 +143,7 @@ pub static SOURCES: &[SourceDescriptor] = &[
         description: "U.S. Federal Election Commission campaign contributions, expenditures, and candidate finance disclosures.",
         category: SourceCategory::Government,
         homepage_url: "https://www.fec.gov/",
-        auth_requirement: AuthRequirement::None,
+        auth_requirement: AuthRequirement::Optional,
         credential_field: Some("fec_api_key"),
         enabled_by_default: true,
         access_instructions: "API key optional; https://api.open.fec.gov/",
@@ -436,7 +434,7 @@ pub static SOURCES: &[SourceDescriptor] = &[
         category: SourceCategory::Courts,
         homepage_url: "https://www.pacer.uscourts.gov/",
         auth_requirement: AuthRequirement::Required,
-        credential_field: Some("pacer_credentials"),
+        credential_field: Some("pacer_username"),
         enabled_by_default: false,
         access_instructions: "Requires PACER account and login; paid per-document access.",
     },

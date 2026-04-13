@@ -17,7 +17,7 @@ use ratatui::{
 };
 use redshank_core::domain::{
     agent::ProviderKind,
-    source_catalog::{AuthRequirement, all_sources},
+    source_catalog::{AuthRequirement, SourceDescriptor, all_sources},
 };
 
 /// Figlet-style banner for startup.
@@ -283,8 +283,9 @@ fn render_workbench_content(frame: &mut Frame, area: Rect, state: &AppState) {
             render_provider_detail(frame, panes[1], state);
         }
         WorkbenchTab::Sources => {
-            render_source_list(frame, panes[0], state);
-            render_source_detail(frame, panes[1], state);
+            let sources = all_sources(false);
+            render_source_list(frame, panes[0], state, &sources);
+            render_source_detail(frame, panes[1], state, &sources);
         }
     }
 }
@@ -410,8 +411,12 @@ fn render_provider_detail(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(para, area);
 }
 
-fn render_source_list(frame: &mut Frame, area: Rect, state: &AppState) {
-    let sources = all_sources(false);
+fn render_source_list(
+    frame: &mut Frame,
+    area: Rect,
+    state: &AppState,
+    sources: &[&'static SourceDescriptor],
+) {
     let items: Vec<ListItem> = sources
         .iter()
         .enumerate()
@@ -441,8 +446,12 @@ fn render_source_list(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(list, area);
 }
 
-fn render_source_detail(frame: &mut Frame, area: Rect, state: &AppState) {
-    let sources = all_sources(false);
+fn render_source_detail(
+    frame: &mut Frame,
+    area: Rect,
+    state: &AppState,
+    sources: &[&'static SourceDescriptor],
+) {
     if sources.is_empty() {
         let empty = Paragraph::new("  (no sources)").block(
             Block::default()

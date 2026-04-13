@@ -67,10 +67,7 @@ impl UpdateProviderConfigurationHandler {
             .providers
             .entry(cmd.provider_kind)
             .or_insert_with(|| {
-                crate::domain::settings::ProviderEndpointConfig::new(
-                    crate::domain::settings::ProviderProtocolKind::Native,
-                    crate::domain::settings::ProviderDeploymentKind::Hosted,
-                )
+                crate::domain::settings::ProviderEndpointConfig::default_for(cmd.provider_kind)
             });
         endpoint.enabled = cmd.enabled;
         endpoint.default_model.clone_from(&cmd.default_model);

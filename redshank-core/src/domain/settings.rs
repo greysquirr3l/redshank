@@ -63,6 +63,24 @@ impl ProviderEndpointConfig {
         }
     }
 
+    /// Create a provider endpoint configuration with provider-specific defaults.
+    #[must_use]
+    pub const fn default_for(kind: ProviderKind) -> Self {
+        match kind {
+            ProviderKind::Anthropic => {
+                Self::new(ProviderProtocolKind::Native, ProviderDeploymentKind::Hosted)
+            }
+            ProviderKind::OpenAI | ProviderKind::OpenRouter | ProviderKind::Cerebras => Self::new(
+                ProviderProtocolKind::OpenAiCompatible,
+                ProviderDeploymentKind::Hosted,
+            ),
+            ProviderKind::OpenAiCompatible => Self::new(
+                ProviderProtocolKind::OpenAiCompatible,
+                ProviderDeploymentKind::Local,
+            ),
+        }
+    }
+
     /// Returns `true` if this endpoint can operate without an API key.
     #[must_use]
     pub fn allows_anonymous_access(&self) -> bool {

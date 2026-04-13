@@ -10,7 +10,7 @@
 
   "_providers_comment": "Optional explicit provider endpoint configuration for hosted vendors, Ollama, and local OpenAI-compatible servers.",
   "providers": {
-    "Ollama": {
+    "OpenAiCompatible": {
       "enabled": true,
       "protocol": "openai_compatible",
       "deployment": "local",
