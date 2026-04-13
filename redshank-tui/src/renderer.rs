@@ -297,7 +297,7 @@ const ALL_PROVIDERS: &[ProviderKind] = &[
     ProviderKind::OpenAiCompatible,
 ];
 
-fn provider_display_name(kind: ProviderKind) -> &'static str {
+const fn provider_display_name(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Anthropic => "Anthropic",
         ProviderKind::OpenAI => "OpenAI",
@@ -307,17 +307,17 @@ fn provider_display_name(kind: ProviderKind) -> &'static str {
     }
 }
 
-fn provider_protocol(kind: ProviderKind) -> &'static str {
+const fn provider_protocol(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Anthropic => "Anthropic Messages API",
-        ProviderKind::OpenAI => "OpenAI Chat Completions",
-        ProviderKind::OpenRouter => "OpenAI Chat Completions",
-        ProviderKind::Cerebras => "OpenAI Chat Completions",
-        ProviderKind::OpenAiCompatible => "OpenAI Chat Completions",
+        ProviderKind::OpenAI
+        | ProviderKind::OpenRouter
+        | ProviderKind::Cerebras
+        | ProviderKind::OpenAiCompatible => "OpenAI Chat Completions",
     }
 }
 
-fn provider_default_endpoint(kind: ProviderKind) -> &'static str {
+const fn provider_default_endpoint(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Anthropic => "https://api.anthropic.com",
         ProviderKind::OpenAI => "https://api.openai.com",
@@ -327,7 +327,7 @@ fn provider_default_endpoint(kind: ProviderKind) -> &'static str {
     }
 }
 
-fn provider_credential_field(kind: ProviderKind) -> &'static str {
+const fn provider_credential_field(kind: ProviderKind) -> &'static str {
     match kind {
         ProviderKind::Anthropic => "anthropic_api_key",
         ProviderKind::OpenAI => "openai_api_key",
@@ -362,7 +362,9 @@ fn render_provider_detail(frame: &mut Frame, area: Rect, state: &AppState) {
     let idx = state
         .workbench_provider_idx
         .min(ALL_PROVIDERS.len().saturating_sub(1));
-    let kind = ALL_PROVIDERS[idx];
+    let Some(kind) = ALL_PROVIDERS.get(idx).copied() else {
+        return;
+    };
 
     let lines = vec![
         Line::from(""),
@@ -453,7 +455,9 @@ fn render_source_detail(frame: &mut Frame, area: Rect, state: &AppState) {
     let idx = state
         .workbench_source_idx
         .min(sources.len().saturating_sub(1));
-    let s = sources[idx];
+    let Some(s) = sources.get(idx).copied() else {
+        return;
+    };
 
     let auth_text = match s.auth_requirement {
         AuthRequirement::None => "Public — no credentials needed",
@@ -580,8 +584,10 @@ mod tests {
     fn tui_renders_workbench_without_panic_on_80x24() {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        let state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            ..Default::default()
+        };
         terminal.draw(|frame| render(frame, &state)).unwrap();
     }
 
@@ -598,9 +604,11 @@ mod tests {
     fn tui_renders_workbench_with_providers_tab() {
         let backend = TestBackend::new(120, 40);
         let mut terminal = Terminal::new(backend).unwrap();
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_tab = crate::domain::WorkbenchTab::Providers;
+        let state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_tab: crate::domain::WorkbenchTab::Providers,
+            ..Default::default()
+        };
         terminal.draw(|frame| render(frame, &state)).unwrap();
     }
 
@@ -608,9 +616,11 @@ mod tests {
     fn tui_renders_workbench_with_sources_tab() {
         let backend = TestBackend::new(120, 40);
         let mut terminal = Terminal::new(backend).unwrap();
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_tab = crate::domain::WorkbenchTab::Sources;
+        let state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_tab: crate::domain::WorkbenchTab::Sources,
+            ..Default::default()
+        };
         terminal.draw(|frame| render(frame, &state)).unwrap();
     }
 }

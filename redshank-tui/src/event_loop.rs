@@ -248,7 +248,7 @@ fn handle_chat_key_with_command(
     }
 }
 
-fn handle_workbench_key_with_command(
+const fn handle_workbench_key_with_command(
     state: &mut AppState,
     key: crossterm::event::KeyEvent,
 ) -> Option<UiCommand> {
@@ -633,8 +633,10 @@ mod tests {
 
     #[test]
     fn workbench_esc_returns_to_chat() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            ..Default::default()
+        };
 
         let key = crossterm::event::KeyEvent::from(KeyCode::Esc);
         let cmd = handle_key_with_command(&mut state, key);
@@ -645,8 +647,10 @@ mod tests {
 
     #[test]
     fn workbench_tab_key_cycles_tabs() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            ..Default::default()
+        };
         assert_eq!(state.workbench_tab, crate::domain::WorkbenchTab::Providers);
 
         // Tab switches to Sources
@@ -662,9 +666,11 @@ mod tests {
 
     #[test]
     fn workbench_up_key_decrements_selection() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_provider_idx = 2;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_provider_idx: 2,
+            ..Default::default()
+        };
 
         let key = crossterm::event::KeyEvent::from(KeyCode::Up);
         let _ = handle_key_with_command(&mut state, key);
@@ -674,9 +680,11 @@ mod tests {
 
     #[test]
     fn workbench_up_key_saturates_at_zero() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_provider_idx = 0;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_provider_idx: 0,
+            ..Default::default()
+        };
 
         let key = crossterm::event::KeyEvent::from(KeyCode::Up);
         let _ = handle_key_with_command(&mut state, key);
@@ -686,9 +694,11 @@ mod tests {
 
     #[test]
     fn workbench_down_key_increments_selection() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_provider_idx = 1;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_provider_idx: 1,
+            ..Default::default()
+        };
 
         let key = crossterm::event::KeyEvent::from(KeyCode::Down);
         let _ = handle_key_with_command(&mut state, key);
@@ -698,10 +708,12 @@ mod tests {
 
     #[test]
     fn workbench_source_up_down_navigate_source_idx() {
-        let mut state = AppState::default();
-        state.active_screen = crate::domain::ActiveScreen::Workbench;
-        state.workbench_tab = crate::domain::WorkbenchTab::Sources;
-        state.workbench_source_idx = 3;
+        let mut state = AppState {
+            active_screen: crate::domain::ActiveScreen::Workbench,
+            workbench_tab: crate::domain::WorkbenchTab::Sources,
+            workbench_source_idx: 3,
+            ..Default::default()
+        };
 
         let key = crossterm::event::KeyEvent::from(KeyCode::Up);
         let _ = handle_key_with_command(&mut state, key);

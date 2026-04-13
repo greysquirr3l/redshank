@@ -1309,7 +1309,7 @@ mod tests {
         assert!(!gov_sources.is_empty());
         // Verify they are sorted by title
         for window in gov_sources.windows(2) {
-            if let (Some(a), Some(b)) = (window.get(0), window.get(1)) {
+            if let (Some(a), Some(b)) = (window.first(), window.get(1)) {
                 assert!(a.title <= b.title);
             }
         }
