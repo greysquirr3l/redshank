@@ -72,10 +72,14 @@ pub type FetchersConfig = HashMap<String, FetcherSourceConfig>;
 
 /// Known fetcher source identifiers.
 ///
-/// This list is used to provide defaults and validate source IDs.
+/// This list is derived from the `domain::source_catalog` and provides all known data sources
+/// for defaults and validation.
 pub const KNOWN_FETCHERS: &[&str] = &[
-    // T19: Core fetchers
+    // T19: 15 core fetchers
+    "bls_qcew",
     "census_acs",
+    "clinical_trials",
+    "cms_open_payments",
     "epa_echo",
     "fdic",
     "fec",
@@ -87,7 +91,8 @@ pub const KNOWN_FETCHERS: &[&str] = &[
     "sec_edgar",
     "senate_lobbying",
     "usaspending",
-    // T20: Extended fetchers
+    // T20: 17 extended fetchers
+    "amazon_authors",
     "county_property",
     "courtlistener",
     "eu_sanctions",
@@ -96,21 +101,85 @@ pub const KNOWN_FETCHERS: &[&str] = &[
     "fpds",
     "gdelt",
     "gleif",
+    "google_scholar",
     "house_lobbying",
     "opencorporates",
+    "pacer",
     "state_sos",
     "un_sanctions",
     "wikidata",
     "world_bank_debarred",
-    // T21: Individual-person OSINT fetchers
+    // T21: 8 OSINT fetchers
     "github_profile",
     "hibp",
+    "linkedin_public",
     "social_profiles",
     "username_enum",
     "uspto",
     "voter_reg",
     "wayback",
     "whois_rdap",
+    // T27: 10 regulatory enforcement fetchers
+    "cfpb",
+    "cftc",
+    "crunchbase",
+    "fda_warnings",
+    "finra_brokercheck",
+    "ftc",
+    "gsa_eoffer",
+    "msha",
+    "nhtsa",
+    "nlrb",
+    "npi",
+    "npi_extended",
+    // T28: FARA & FINRA
+    "fara",
+    // T29: 7 international registries & sanctions
+    "australia_dfat_sanctions",
+    "canada_corporations",
+    "canada_sema_sanctions",
+    "opensanctions",
+    "uk_companies_house",
+    "uk_corporate_intelligence",
+    "uk_hmt_sanctions",
+    // T30: 2 aviation & maritime
+    "faa_nnumber",
+    "maritime_ais",
+    // T31: 5 property & UCC
+    "assessor_portals",
+    "delaware_franchise_tax",
+    "property_valuation",
+    "sec_13d_13g",
+    "ucc_filings",
+    // T32: 10 academic & media
+    "bluesky",
+    "common_crawl",
+    "hackernews",
+    "listen_notes",
+    "mastodon",
+    "orcid",
+    "reddit",
+    "sec_xbrl",
+    "semantic_scholar",
+    "youtube",
+    // T35: 4 environmental & permits
+    "carbon_registries",
+    "epa_superfund",
+    "sec_climate",
+    "state_env_permits",
+    // T38: 3 nonprofit
+    "guidestar_candid",
+    "irs_1023",
+    "irs_990_xml",
+    // T39: 4 crypto
+    "blockchain_explorer",
+    "defi_protocols",
+    "exchange_transparency",
+    "tornado_screening",
+    // T41: 3 EU registers
+    "eu_bris",
+    "france_infogreffe",
+    "germany_handelsregister",
 ];
 
 // ── PersistentSettings ───────────────────────────────────────────────────────

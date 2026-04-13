@@ -11,4 +11,5 @@ pub mod errors;
 pub mod events;
 pub mod session;
 pub mod settings;
+pub mod source_catalog;
 pub mod wiki;
