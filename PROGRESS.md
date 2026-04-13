@@ -167,7 +167,7 @@
 | --- | --- | --- |
 | T42 — source catalog metadata: categories, access requirements, and help text | `[x]` | Shared metadata registry for fetcher descriptions, categories, URLs, and access guidance. |
 | T43 — provider endpoint config: hosted keys, local LLMs, and OpenAI-compatible URLs | `[x]` | First-class provider endpoint model for hosted vendors, Ollama, and generic OpenAI-compatible backends. |
-| T44 — configuration queries and commands: merge catalog, settings, and credentials for UI use | `[ ]` | CQRS layer for UI-ready configuration views and safe non-secret config updates. |
+| T44 — configuration queries and commands: merge catalog, settings, and credentials for UI use | `[x]` | CQRS layer for UI-ready configuration views and safe non-secret config updates. Query handlers return `ConfiguredSourceView` and `ConfiguredProviderView`. Command handlers stub I/O with TODO(T44). All 539 tests passing. |
 | T45 — TUI configuration workbench: providers, data sources, and guided setup | `[ ]` | Dedicated TUI settings surface for provider and scraper configuration. |
 
 ---
@@ -186,3 +186,4 @@
 - T41: EU register coverage is easiest to keep green by separating BRIS, Germany, and France parsing into small fixtures with the Bodacc event parser living alongside the France company parser.
 - T42: Building the source catalog with 107 fetchers as static const data enforces completeness; verify with test `all_source_ids_match_settings()` that catalog covers all KNOWN_FETCHERS. Auth requirements must have credential_field set to avoid test failures.
 - T43: Treat provider routing as non-secret settings and keep credential lookup separate; a settings-aware builder plus tiny provider base-url overrides is enough to add local OpenAI-compatible endpoints without breaking hosted defaults.
+- T44: Consolidate provider enum variants early (e.g., `ProviderKind::Ollama` → `ProviderKind::OpenAiCompatible`) to avoid cascading find-and-replace across 7+ files. Use `is_some_and()` instead of `map_or(false, ...)` to satisfy clippy. View models must expose only `bool has_credential`, never secret values. Stub handlers with TODO(T44) in TDD phase to allow implementation iteration before moving to T45.
