@@ -104,7 +104,7 @@ mod tests {
         let restored: UpdateSourceConfigurationCommand = serde_json::from_str(&json).unwrap();
 
         assert_eq!(restored.source_id, cmd.source_id);
-        assert_eq!(restored.enabled, false);
+        assert!(!restored.enabled);
         assert_eq!(restored.rate_limit_ms_override, Some(10000));
     }
 

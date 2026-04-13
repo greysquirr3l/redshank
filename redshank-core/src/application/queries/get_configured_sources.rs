@@ -14,7 +14,7 @@ use crate::ports::workspace_config::WorkspaceConfig;
 /// UI-facing view of a configured data source with effective settings and credential status.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfiguredSourceView {
-    /// Source ID (lowercase snake_case).
+    /// Source ID (lowercase `snake_case`).
     pub id: SourceId,
     /// Display title.
     pub title: String,
@@ -80,7 +80,7 @@ impl<C: WorkspaceConfig> GetConfiguredSourcesHandler<C> {
     /// permission, or a storage error if loading settings or credentials fails.
     pub fn handle(
         &self,
-        query: GetConfiguredSourcesQuery,
+        query: &GetConfiguredSourcesQuery,
     ) -> Result<Vec<ConfiguredSourceView>, DomainError> {
         can_read_configuration(&query.auth, &self.policy).map_err(DomainError::Security)?;
 
@@ -95,7 +95,7 @@ impl<C: WorkspaceConfig> GetConfiguredSourcesHandler<C> {
                 let max_pages_override = fetcher_cfg.and_then(|c| c.max_pages);
                 let has_credential = s
                     .credential_field
-                    .map_or(false, |f| self.workspace_config.has_credential(f));
+                    .is_some_and(|f| self.workspace_config.has_credential(f));
 
                 ConfiguredSourceView {
                     id: SourceId::new(s.id),
@@ -177,7 +177,7 @@ mod tests {
         let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
         let handler = GetConfiguredSourcesHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .handle(&GetConfiguredSourcesQuery { auth: owner_auth() })
             .unwrap();
         assert!(!views.is_empty(), "Should return at least one source");
     }
@@ -189,7 +189,7 @@ mod tests {
             .with_credential("opencorporates_api_key");
         let handler = GetConfiguredSourcesHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .handle(&GetConfiguredSourcesQuery { auth: owner_auth() })
             .unwrap();
         let oc = views.iter().find(|v| v.id.as_str() == "opencorporates");
         if let Some(oc) = oc {
@@ -214,13 +214,13 @@ mod tests {
             },
         );
         let settings = PersistentSettings {
-            fetchers: fetchers,
+            fetchers,
             ..Default::default()
         };
         let cfg = MockWorkspaceConfig::new(settings);
         let handler = GetConfiguredSourcesHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .handle(&GetConfiguredSourcesQuery { auth: owner_auth() })
             .unwrap();
         if let Some(fec) = views.iter().find(|v| v.id.as_str() == "fec") {
             assert!(!fec.enabled, "fec should be disabled by settings override");
@@ -232,7 +232,7 @@ mod tests {
     fn access_denied_for_service() {
         let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
         let handler = GetConfiguredSourcesHandler::new(cfg);
-        let result = handler.handle(GetConfiguredSourcesQuery {
+        let result = handler.handle(&GetConfiguredSourcesQuery {
             auth: service_auth(),
         });
         assert!(result.is_err());

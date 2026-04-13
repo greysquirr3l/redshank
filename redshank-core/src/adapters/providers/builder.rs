@@ -450,15 +450,8 @@ const fn default_protocol_for(provider: ProviderKind) -> ProviderProtocolKind {
     }
 }
 
-const fn default_deployment_for(provider: ProviderKind) -> ProviderDeploymentKind {
-    match provider {
-        ProviderKind::Anthropic
-        | ProviderKind::OpenAI
-        | ProviderKind::OpenRouter
-        | ProviderKind::Cerebras => ProviderDeploymentKind::Hosted,
-        // OpenAiCompatible defaults to Hosted; local deployments are configured via settings.
-        ProviderKind::OpenAiCompatible => ProviderDeploymentKind::Hosted,
-    }
+const fn default_deployment_for(_provider: ProviderKind) -> ProviderDeploymentKind {
+    ProviderDeploymentKind::Hosted
 }
 
 const fn default_credential_field_name(provider: ProviderKind) -> Option<&'static str> {

@@ -16,7 +16,7 @@ use crate::ports::workspace_config::WorkspaceConfig;
 /// UI-facing view of a configured model provider with endpoint routing and credential status.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfiguredProviderView {
-    /// Provider kind (e.g., Anthropic, OpenAI).
+    /// Provider kind (e.g., `Anthropic`, `OpenAI`).
     pub provider_kind: ProviderKind,
     /// Display name for the provider.
     pub display_name: String,
@@ -45,7 +45,7 @@ struct ProviderDefaults {
     credential_field: Option<&'static str>,
 }
 
-fn provider_defaults(kind: ProviderKind) -> ProviderDefaults {
+const fn provider_defaults(kind: ProviderKind) -> ProviderDefaults {
     match kind {
         ProviderKind::Anthropic => ProviderDefaults {
             display_name: "Anthropic Claude",
@@ -126,7 +126,7 @@ impl<C: WorkspaceConfig> GetConfiguredProvidersHandler<C> {
     /// permission, or a storage error if loading settings or credentials fails.
     pub fn handle(
         &self,
-        query: GetConfiguredProvidersQuery,
+        query: &GetConfiguredProvidersQuery,
     ) -> Result<Vec<ConfiguredProviderView>, DomainError> {
         can_read_configuration(&query.auth, &self.policy).map_err(DomainError::Security)?;
 
@@ -146,7 +146,7 @@ impl<C: WorkspaceConfig> GetConfiguredProvidersHandler<C> {
                 let defaults = provider_defaults(kind);
                 let saved: Option<&ProviderEndpointConfig> = settings.provider_endpoint(kind);
 
-                let enabled = saved.map_or(true, |c| c.enabled);
+                let enabled = saved.is_none_or(|c| c.enabled);
                 let protocol = saved.map_or(defaults.protocol, |c| c.protocol);
                 let deployment = saved.map_or(defaults.deployment, |c| c.deployment);
                 let base_url = saved.and_then(|c| c.base_url.clone());
@@ -159,7 +159,7 @@ impl<C: WorkspaceConfig> GetConfiguredProvidersHandler<C> {
                     .or_else(|| defaults.credential_field.map(ToOwned::to_owned));
                 let has_credential = credential_field_name
                     .as_deref()
-                    .map_or(false, |f| self.workspace_config.has_credential(f));
+                    .is_some_and(|f| self.workspace_config.has_credential(f));
 
                 ConfiguredProviderView {
                     provider_kind: kind,
@@ -239,7 +239,7 @@ mod tests {
         let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
         let handler = GetConfiguredProvidersHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredProvidersQuery { auth: owner_auth() })
+            .handle(&GetConfiguredProvidersQuery { auth: owner_auth() })
             .unwrap();
         assert_eq!(views.len(), 5);
     }
@@ -250,7 +250,7 @@ mod tests {
             .with_credential("anthropic_api_key");
         let handler = GetConfiguredProvidersHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredProvidersQuery { auth: owner_auth() })
+            .handle(&GetConfiguredProvidersQuery { auth: owner_auth() })
             .unwrap();
         let anthropic = views
             .iter()
@@ -287,7 +287,7 @@ mod tests {
         let cfg = MockWorkspaceConfig::new(settings);
         let handler = GetConfiguredProvidersHandler::new(cfg);
         let views = handler
-            .handle(GetConfiguredProvidersQuery { auth: owner_auth() })
+            .handle(&GetConfiguredProvidersQuery { auth: owner_auth() })
             .unwrap();
         let anthropic = views
             .iter()
@@ -301,7 +301,7 @@ mod tests {
     fn access_denied_for_service() {
         let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
         let handler = GetConfiguredProvidersHandler::new(cfg);
-        let result = handler.handle(GetConfiguredProvidersQuery {
+        let result = handler.handle(&GetConfiguredProvidersQuery {
             auth: service_auth(),
         });
         assert!(result.is_err());

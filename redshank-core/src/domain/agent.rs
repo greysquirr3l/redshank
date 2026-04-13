@@ -10,7 +10,7 @@ use super::session::{SessionId, TurnSummary};
 
 /// Unique data source identifier (newtype over string).
 ///
-/// Source IDs are lowercase snake_case, e.g., "fec", "opencorporates", "ofac".
+/// Source IDs are lowercase `snake_case`, e.g., `"fec"`, `"opencorporates"`, `"ofac"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SourceId(String);
 

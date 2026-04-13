@@ -74,8 +74,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = WorkspaceConfigStore::new(dir.path());
 
-        let mut settings = PersistentSettings::default();
-        settings.default_reasoning_effort = Some(ReasoningEffort::High);
+        let settings = PersistentSettings {
+            default_reasoning_effort: Some(ReasoningEffort::High),
+            ..Default::default()
+        };
         store.save_settings(&settings).unwrap();
 
         let reloaded = store.settings();

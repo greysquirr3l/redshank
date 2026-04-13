@@ -16,9 +16,9 @@ pub enum SourceCategory {
     Media,
     /// Academic publications, researcher profiles, papers.
     Academic,
-    /// Blockchain, DeFi, crypto exchanges, transaction analysis.
+    /// Blockchain, `DeFi`, crypto exchanges, transaction analysis.
     Crypto,
-    /// Nonprofit filings, 990s, GuideStar, charitable registries.
+    /// Nonprofit filings, `990s`, `GuideStar`, charitable registries.
     Nonprofit,
     /// Financial regulators, healthcare, labor, environmental, consumer protection.
     Regulatory,
@@ -33,7 +33,7 @@ pub enum SourceCategory {
 impl SourceCategory {
     /// Display name for the category.
     #[must_use]
-    pub fn display_name(self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
             Self::Corporate => "Corporate Registries",
             Self::Sanctions => "Sanctions Lists",
@@ -64,7 +64,7 @@ pub enum AuthRequirement {
 impl AuthRequirement {
     /// Display name for the auth requirement.
     #[must_use]
-    pub fn display_name(self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
             Self::None => "Public",
             Self::Optional => "Optional",
@@ -76,7 +76,7 @@ impl AuthRequirement {
 /// Metadata for a single data source fetcher.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceDescriptor {
-    /// Unique source ID (lowercase snake_case, e.g., "opencorporates", "fec").
+    /// Unique source ID (lowercase `snake_case`, e.g., `"opencorporates"`, `"fec"`).
     pub id: &'static str,
     /// Display name for the source.
     pub title: &'static str,
@@ -88,7 +88,7 @@ pub struct SourceDescriptor {
     pub homepage_url: &'static str,
     /// Access requirement (public, optional API key, required).
     pub auth_requirement: AuthRequirement,
-    /// Field name in credentials.json if credentials are needed (e.g., "opencorporates_api_key").
+    /// Field name in `credentials.json` if credentials are needed (e.g., `"opencorporates_api_key"`).
     pub credential_field: Option<&'static str>,
     /// Whether this source is enabled by default.
     pub enabled_by_default: bool,
@@ -1298,8 +1298,7 @@ mod tests {
         for fetcher_id in crate::domain::settings::KNOWN_FETCHERS {
             assert!(
                 catalog_ids.contains(fetcher_id),
-                "Fetcher {} in KNOWN_FETCHERS but not in catalog",
-                fetcher_id
+                "Fetcher {fetcher_id} in KNOWN_FETCHERS but not in catalog"
             );
         }
     }
@@ -1310,7 +1309,9 @@ mod tests {
         assert!(!gov_sources.is_empty());
         // Verify they are sorted by title
         for window in gov_sources.windows(2) {
-            assert!(window[0].title <= window[1].title);
+            if let (Some(a), Some(b)) = (window.get(0), window.get(1)) {
+                assert!(a.title <= b.title);
+            }
         }
     }
 

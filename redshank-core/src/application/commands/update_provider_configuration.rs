@@ -25,7 +25,7 @@ pub struct UpdateProviderConfigurationCommand {
     pub default_model: Option<String>,
     /// Override base URL for the provider (for local or custom endpoints).
     pub base_url: Option<String>,
-    /// Override credential field name (for named credentials, e.g., "github_token").
+    /// Override credential field name (for named credentials, e.g., `"github_token"`).
     pub credential_field_name: Option<String>,
     /// Caller's auth context.
     pub auth: AuthContext,
@@ -73,9 +73,11 @@ impl UpdateProviderConfigurationHandler {
                 )
             });
         endpoint.enabled = cmd.enabled;
-        endpoint.default_model = cmd.default_model.clone();
-        endpoint.base_url = cmd.base_url.clone();
-        endpoint.credential_field_name = cmd.credential_field_name.clone();
+        endpoint.default_model.clone_from(&cmd.default_model);
+        endpoint.base_url.clone_from(&cmd.base_url);
+        endpoint
+            .credential_field_name
+            .clone_from(&cmd.credential_field_name);
         store.save(&settings)
     }
 }
