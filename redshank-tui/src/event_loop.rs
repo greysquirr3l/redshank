@@ -7,7 +7,7 @@ use crate::domain::{
 use crate::renderer;
 use crossterm::{
     ExecutableCommand,
-    event::{self, Event, KeyCode, KeyModifiers},
+    event::{self, Event},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::Terminal;
@@ -175,6 +175,18 @@ fn handle_key_with_command(
     state: &mut AppState,
     key: crossterm::event::KeyEvent,
 ) -> Option<UiCommand> {
+    match state.active_screen {
+        crate::domain::ActiveScreen::Chat => handle_chat_key_with_command(state, key),
+        crate::domain::ActiveScreen::Workbench => handle_workbench_key_with_command(state, key),
+    }
+}
+
+fn handle_chat_key_with_command(
+    state: &mut AppState,
+    key: crossterm::event::KeyEvent,
+) -> Option<UiCommand> {
+    use crossterm::event::{KeyCode, KeyModifiers};
+
     match key.code {
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
             state.should_quit = true;
@@ -236,6 +248,55 @@ fn handle_key_with_command(
     }
 }
 
+fn handle_workbench_key_with_command(
+    state: &mut AppState,
+    key: crossterm::event::KeyEvent,
+) -> Option<UiCommand> {
+    use crate::domain::{ActiveScreen, WorkbenchTab};
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            state.active_screen = ActiveScreen::Chat;
+            Some(UiCommand::CloseWorkbench)
+        }
+        KeyCode::Tab => {
+            state.workbench_tab = match state.workbench_tab {
+                WorkbenchTab::Providers => WorkbenchTab::Sources,
+                WorkbenchTab::Sources => WorkbenchTab::Providers,
+            };
+            None
+        }
+        KeyCode::Up => {
+            match state.workbench_tab {
+                WorkbenchTab::Providers => {
+                    state.workbench_provider_idx = state.workbench_provider_idx.saturating_sub(1);
+                }
+                WorkbenchTab::Sources => {
+                    state.workbench_source_idx = state.workbench_source_idx.saturating_sub(1);
+                }
+            }
+            None
+        }
+        KeyCode::Down => {
+            match state.workbench_tab {
+                WorkbenchTab::Providers => {
+                    state.workbench_provider_idx = state.workbench_provider_idx.saturating_add(1);
+                }
+                WorkbenchTab::Sources => {
+                    state.workbench_source_idx = state.workbench_source_idx.saturating_add(1);
+                }
+            }
+            None
+        }
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            state.should_quit = true;
+            None
+        }
+        _ => None,
+    }
+}
+
 fn handle_slash_command_with_command(state: &mut AppState, cmd: SlashCommand) -> Option<UiCommand> {
     match cmd {
         SlashCommand::Quit => {
@@ -256,6 +317,7 @@ fn handle_slash_command_with_command(state: &mut AppState, cmd: SlashCommand) ->
                     "  /model list             List available models",
                     "  /reasoning <level>      Set reasoning (off|low|medium|high)",
                     "  /status                 Show current session info",
+                    "  /config                 Open configuration workbench",
                     "  /clear                  Clear chat log",
                     "  /quit                   Exit",
                     "  /help                   Show this help",
@@ -263,6 +325,10 @@ fn handle_slash_command_with_command(state: &mut AppState, cmd: SlashCommand) ->
                 .join("\n"),
             });
             None
+        }
+        SlashCommand::Config => {
+            state.active_screen = crate::domain::ActiveScreen::Workbench;
+            Some(UiCommand::OpenWorkbench)
         }
         SlashCommand::Status => {
             let session_info = if state.sessions.is_empty() {
@@ -331,6 +397,7 @@ pub async fn run_headless(rx: &mut mpsc::Receiver<AppEvent>) {
 mod tests {
     use super::*;
     use crate::domain::*;
+    use crossterm::event::KeyCode;
 
     #[test]
     fn handle_content_delta_appends() {
@@ -533,5 +600,115 @@ mod tests {
         drop(tx);
         run_headless(&mut rx).await;
         // If we got here, it exited cleanly.
+    }
+
+    #[test]
+    fn slash_config_opens_workbench() {
+        let mut state = AppState::default();
+        assert_eq!(state.active_screen, crate::domain::ActiveScreen::Chat);
+
+        let command = handle_slash_command_with_command(&mut state, SlashCommand::Config);
+
+        assert_eq!(state.active_screen, crate::domain::ActiveScreen::Workbench);
+        assert_eq!(command, Some(UiCommand::OpenWorkbench));
+    }
+
+    #[test]
+    fn workbench_tab_starts_on_providers() {
+        let state = AppState::default();
+        assert_eq!(state.workbench_tab, crate::domain::WorkbenchTab::Providers);
+    }
+
+    #[test]
+    fn workbench_provider_selection_initializes_to_zero() {
+        let state = AppState::default();
+        assert_eq!(state.workbench_provider_idx, 0);
+    }
+
+    #[test]
+    fn workbench_source_selection_initializes_to_zero() {
+        let state = AppState::default();
+        assert_eq!(state.workbench_source_idx, 0);
+    }
+
+    #[test]
+    fn workbench_esc_returns_to_chat() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Esc);
+        let cmd = handle_key_with_command(&mut state, key);
+
+        assert_eq!(state.active_screen, crate::domain::ActiveScreen::Chat);
+        assert_eq!(cmd, Some(UiCommand::CloseWorkbench));
+    }
+
+    #[test]
+    fn workbench_tab_key_cycles_tabs() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        assert_eq!(state.workbench_tab, crate::domain::WorkbenchTab::Providers);
+
+        // Tab switches to Sources
+        let key = crossterm::event::KeyEvent::from(KeyCode::Tab);
+        let _ = handle_key_with_command(&mut state, key);
+        assert_eq!(state.workbench_tab, crate::domain::WorkbenchTab::Sources);
+
+        // Tab again wraps back to Providers
+        let key = crossterm::event::KeyEvent::from(KeyCode::Tab);
+        let _ = handle_key_with_command(&mut state, key);
+        assert_eq!(state.workbench_tab, crate::domain::WorkbenchTab::Providers);
+    }
+
+    #[test]
+    fn workbench_up_key_decrements_selection() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        state.workbench_provider_idx = 2;
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Up);
+        let _ = handle_key_with_command(&mut state, key);
+
+        assert_eq!(state.workbench_provider_idx, 1);
+    }
+
+    #[test]
+    fn workbench_up_key_saturates_at_zero() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        state.workbench_provider_idx = 0;
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Up);
+        let _ = handle_key_with_command(&mut state, key);
+
+        assert_eq!(state.workbench_provider_idx, 0);
+    }
+
+    #[test]
+    fn workbench_down_key_increments_selection() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        state.workbench_provider_idx = 1;
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Down);
+        let _ = handle_key_with_command(&mut state, key);
+
+        assert_eq!(state.workbench_provider_idx, 2);
+    }
+
+    #[test]
+    fn workbench_source_up_down_navigate_source_idx() {
+        let mut state = AppState::default();
+        state.active_screen = crate::domain::ActiveScreen::Workbench;
+        state.workbench_tab = crate::domain::WorkbenchTab::Sources;
+        state.workbench_source_idx = 3;
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Up);
+        let _ = handle_key_with_command(&mut state, key);
+        assert_eq!(state.workbench_source_idx, 2);
+
+        let key = crossterm::event::KeyEvent::from(KeyCode::Down);
+        let _ = handle_key_with_command(&mut state, key);
+        assert_eq!(state.workbench_source_idx, 3);
     }
 }

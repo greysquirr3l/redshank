@@ -374,6 +374,10 @@ async fn run_tui_command_loop(
             redshank_tui::domain::UiCommand::SetReasoning(level) => {
                 active_reasoning = tui_to_core_reasoning(level);
             }
+            redshank_tui::domain::UiCommand::OpenWorkbench
+            | redshank_tui::domain::UiCommand::CloseWorkbench => {
+                // Workbench is a TUI-only UI concept; no CLI action needed.
+            }
         }
     }
 }
