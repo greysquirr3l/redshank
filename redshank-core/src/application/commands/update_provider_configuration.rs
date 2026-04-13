@@ -120,10 +120,7 @@ mod tests {
         };
 
         assert_eq!(cmd.provider_kind, ProviderKind::OpenAiCompatible);
-        assert_eq!(
-            cmd.base_url,
-            Some("http://localhost:11434/v1".to_string())
-        );
+        assert_eq!(cmd.base_url, Some("http://localhost:11434/v1".to_string()));
     }
 
     #[test]

@@ -531,7 +531,9 @@ fn format_model_listing(provider: ProviderKind, active_model: &str, models: &[St
 
 fn format_model_name_for_display(provider: ProviderKind, model: &str) -> String {
     match provider {
-        ProviderKind::OpenAiCompatible if !model.starts_with("ollama/") => format!("ollama/{model}"),
+        ProviderKind::OpenAiCompatible if !model.starts_with("ollama/") => {
+            format!("ollama/{model}")
+        }
         ProviderKind::OpenRouter if !model.starts_with("openrouter/") => {
             format!("openrouter/{model}")
         }
