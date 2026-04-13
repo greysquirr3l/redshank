@@ -5,6 +5,82 @@ use crate::domain::agent::{ProviderKind, ReasoningEffort};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// ── Provider Endpoint Configuration ─────────────────────────────────────────
+
+/// Protocol family used by a configured provider endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderProtocolKind {
+    /// Provider-specific native API protocol.
+    Native,
+    /// `OpenAI`-compatible chat completions API.
+    #[serde(rename = "openai_compatible")]
+    OpenAiCompatible,
+}
+
+/// Whether a provider endpoint is local or hosted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderDeploymentKind {
+    /// Hosted remote service.
+    Hosted,
+    /// Local or self-hosted endpoint.
+    Local,
+}
+
+/// Persistent endpoint configuration for one model provider.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProviderEndpointConfig {
+    /// Whether the endpoint is available for selection.
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    /// Protocol family for the endpoint.
+    pub protocol: ProviderProtocolKind,
+    /// Base URL override for the provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// Default model to use for this provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model: Option<String>,
+    /// Credential bundle field name used to authenticate requests, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_field_name: Option<String>,
+    /// Whether the endpoint is local or hosted.
+    pub deployment: ProviderDeploymentKind,
+}
+
+impl ProviderEndpointConfig {
+    /// Create a new provider endpoint configuration.
+    #[must_use]
+    pub const fn new(protocol: ProviderProtocolKind, deployment: ProviderDeploymentKind) -> Self {
+        Self {
+            enabled: true,
+            protocol,
+            base_url: None,
+            default_model: None,
+            credential_field_name: None,
+            deployment,
+        }
+    }
+
+    /// Returns `true` if this endpoint can operate without an API key.
+    #[must_use]
+    pub fn allows_anonymous_access(&self) -> bool {
+        self.deployment == ProviderDeploymentKind::Local
+            && self.credential_field_name.is_none()
+            && self.protocol == ProviderProtocolKind::OpenAiCompatible
+    }
+}
+
+impl Default for ProviderEndpointConfig {
+    fn default() -> Self {
+        Self::new(ProviderProtocolKind::Native, ProviderDeploymentKind::Hosted)
+    }
+}
+
+/// Map of provider kinds to endpoint configuration.
+pub type ProviderEndpointsConfig = HashMap<ProviderKind, ProviderEndpointConfig>;
+
 // ── Fetcher / Data Source Configuration ──────────────────────────────────────
 
 /// Per-source configuration for a data fetcher.
@@ -212,6 +288,9 @@ pub struct PersistentSettings {
     /// Default model for Ollama.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_model_ollama: Option<String>,
+    /// Explicit provider endpoint configuration keyed by provider kind.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub providers: ProviderEndpointsConfig,
     /// Per-source data fetcher configuration.
     ///
     /// Keys are fetcher source IDs (e.g., `"opencorporates"`, `"fec"`).
@@ -226,18 +305,36 @@ impl PersistentSettings {
     /// Returns the per-provider default if set, otherwise falls back to `default_model`.
     #[must_use]
     pub fn default_model_for_provider(&self, provider: ProviderKind) -> Option<&str> {
-        let specific = match provider {
-            ProviderKind::Anthropic => self.default_model_anthropic.as_deref(),
-            ProviderKind::OpenAI => self.default_model_openai.as_deref(),
-            ProviderKind::OpenRouter => self.default_model_openrouter.as_deref(),
-            ProviderKind::Cerebras => self.default_model_cerebras.as_deref(),
-            ProviderKind::Ollama => self.default_model_ollama.as_deref(),
-        };
+        let specific = self
+            .provider_endpoint(provider)
+            .and_then(|cfg| cfg.default_model.as_deref())
+            .or(match provider {
+                ProviderKind::Anthropic => self.default_model_anthropic.as_deref(),
+                ProviderKind::OpenAI => self.default_model_openai.as_deref(),
+                ProviderKind::OpenRouter => self.default_model_openrouter.as_deref(),
+                ProviderKind::Cerebras => self.default_model_cerebras.as_deref(),
+                ProviderKind::Ollama => self.default_model_ollama.as_deref(),
+            });
         specific.filter(|s| !s.trim().is_empty()).or_else(|| {
             self.default_model
                 .as_deref()
                 .filter(|s| !s.trim().is_empty())
         })
+    }
+
+    /// Return endpoint configuration for a provider, if explicitly configured.
+    #[must_use]
+    pub fn provider_endpoint(&self, provider: ProviderKind) -> Option<&ProviderEndpointConfig> {
+        self.providers.get(&provider)
+    }
+
+    /// Return the enabled endpoint configuration for a provider.
+    #[must_use]
+    pub fn enabled_provider_endpoint(
+        &self,
+        provider: ProviderKind,
+    ) -> Option<&ProviderEndpointConfig> {
+        self.provider_endpoint(provider).filter(|cfg| cfg.enabled)
     }
 
     /// Check if a data source fetcher is enabled.
@@ -291,6 +388,97 @@ mod tests {
         assert!(s.default_model.is_none());
         assert!(s.default_reasoning_effort.is_none());
         assert!(s.default_model_anthropic.is_none());
+        assert!(s.providers.is_empty());
+    }
+
+    #[test]
+    fn provider_endpoint_roundtrips_through_settings() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            ProviderKind::OpenAI,
+            ProviderEndpointConfig {
+                enabled: true,
+                protocol: ProviderProtocolKind::OpenAiCompatible,
+                base_url: Some("http://localhost:1234/v1".to_string()),
+                default_model: Some("qwen2.5-coder".to_string()),
+                credential_field_name: None,
+                deployment: ProviderDeploymentKind::Local,
+            },
+        );
+        let settings = PersistentSettings {
+            providers,
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&settings).unwrap();
+        let restored: PersistentSettings = serde_json::from_str(&json).unwrap();
+        let endpoint = restored.provider_endpoint(ProviderKind::OpenAI).unwrap();
+
+        assert_eq!(
+            endpoint.base_url.as_deref(),
+            Some("http://localhost:1234/v1")
+        );
+        assert_eq!(endpoint.default_model.as_deref(), Some("qwen2.5-coder"));
+        assert_eq!(endpoint.protocol, ProviderProtocolKind::OpenAiCompatible);
+        assert_eq!(endpoint.deployment, ProviderDeploymentKind::Local);
+    }
+
+    #[test]
+    fn provider_endpoint_default_model_overrides_legacy_field() {
+        let mut providers = HashMap::new();
+        providers.insert(
+            ProviderKind::OpenAI,
+            ProviderEndpointConfig {
+                enabled: true,
+                protocol: ProviderProtocolKind::OpenAiCompatible,
+                base_url: Some("https://example.test/v1".to_string()),
+                default_model: Some("gpt-4.1-mini".to_string()),
+                credential_field_name: Some("openai_api_key".to_string()),
+                deployment: ProviderDeploymentKind::Hosted,
+            },
+        );
+        let settings = PersistentSettings {
+            default_model_openai: Some("gpt-4o".to_string()),
+            providers,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            settings.default_model_for_provider(ProviderKind::OpenAI),
+            Some("gpt-4.1-mini")
+        );
+    }
+
+    #[test]
+    fn local_openai_compatible_endpoint_can_skip_api_key() {
+        let endpoint = ProviderEndpointConfig {
+            enabled: true,
+            protocol: ProviderProtocolKind::OpenAiCompatible,
+            base_url: Some("http://localhost:11434/v1".to_string()),
+            default_model: Some("llama3.2".to_string()),
+            credential_field_name: None,
+            deployment: ProviderDeploymentKind::Local,
+        };
+
+        assert!(endpoint.allows_anonymous_access());
+    }
+
+    #[test]
+    fn hosted_required_auth_endpoint_keeps_credential_field_name() {
+        let endpoint = ProviderEndpointConfig {
+            enabled: true,
+            protocol: ProviderProtocolKind::OpenAiCompatible,
+            base_url: Some("https://openrouter.ai/api/v1".to_string()),
+            default_model: Some("anthropic/claude-sonnet-4".to_string()),
+            credential_field_name: Some("openrouter_api_key".to_string()),
+            deployment: ProviderDeploymentKind::Hosted,
+        };
+
+        assert_eq!(
+            endpoint.credential_field_name.as_deref(),
+            Some("openrouter_api_key")
+        );
+        assert!(!endpoint.allows_anonymous_access());
     }
 
     #[test]

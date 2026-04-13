@@ -493,6 +493,19 @@ impl AnthropicModel {
         self
     }
 
+    /// Override the provider base URL.
+    #[must_use]
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// Return the configured base URL.
+    #[must_use]
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Process a complete SSE response body into a `ModelTurn`.
     fn process_sse_body(body: &[u8]) -> ModelTurn {
         let events = parse_sse_events(body);

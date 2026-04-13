@@ -10,8 +10,11 @@ use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
 use redshank_core::adapters::persistence::replay_log::FileReplayLogger;
+use redshank_core::adapters::persistence::settings_store::SettingsStore;
 use redshank_core::adapters::persistence::sqlite::SqliteSessionStore;
-use redshank_core::adapters::providers::builder::{build_provider, infer_provider, list_models};
+use redshank_core::adapters::providers::builder::{
+    build_provider_with_settings, infer_provider, list_models_with_settings,
+};
 use redshank_core::adapters::tool_defs::tool_definitions;
 use redshank_core::adapters::tools::WorkspaceTools;
 use redshank_core::application::services::engine::RLMEngine;
@@ -439,7 +442,8 @@ async fn solve_objective(
 ) -> anyhow::Result<String> {
     let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
     let creds = resolve_credentials(workspace, None);
-    let provider = build_provider(&config, &creds)?;
+    let settings = SettingsStore::new(workspace).load();
+    let provider = build_provider_with_settings(&config, &settings, &creds)?;
     let tools = WorkspaceTools::new(workspace, creds.clone())?
         .with_command_timeout(config.command_timeout.as_secs())
         .with_max_file_chars(config.max_file_chars);
@@ -463,7 +467,8 @@ async fn solve_objective_with_events(
 ) -> anyhow::Result<String> {
     let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
     let creds = resolve_credentials(workspace, None);
-    let provider = build_provider(&config, &creds)?;
+    let settings = SettingsStore::new(workspace).load();
+    let provider = build_provider_with_settings(&config, &settings, &creds)?;
     let tools = EventingWorkspaceTools {
         inner: WorkspaceTools::new(workspace, creds.clone())?
             .with_command_timeout(config.command_timeout.as_secs())
@@ -482,7 +487,8 @@ async fn solve_objective_with_events(
 async fn list_models_for_active_provider(workspace: &Path, model: &str) -> anyhow::Result<String> {
     let provider = infer_provider(model)?;
     let creds = resolve_credentials(workspace, None);
-    let models = list_models(provider, &creds).await?;
+    let settings = SettingsStore::new(workspace).load();
+    let models = list_models_with_settings(provider, &settings, &creds).await?;
     Ok(format_model_listing(provider, model, &models))
 }
 

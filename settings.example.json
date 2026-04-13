@@ -8,6 +8,24 @@
   "default_model_cerebras": "llama-3.3-70b",
   "default_model_ollama": "llama3.2",
 
+  "_providers_comment": "Optional explicit provider endpoint configuration for hosted vendors, Ollama, and local OpenAI-compatible servers.",
+  "providers": {
+    "Ollama": {
+      "enabled": true,
+      "protocol": "openai_compatible",
+      "deployment": "local",
+      "base_url": "http://localhost:11434/v1",
+      "default_model": "llama3.2"
+    },
+    "OpenAI": {
+      "enabled": false,
+      "protocol": "openai_compatible",
+      "deployment": "local",
+      "base_url": "http://localhost:1234/v1",
+      "default_model": "qwen2.5-coder:latest"
+    }
+  },
+
   "_fetchers_comment": "Per-source data fetcher configuration. Sources not listed are enabled by default.",
   "fetchers": {
     "_example_disabled": {

@@ -111,9 +111,30 @@ Model defaults live in `<workspace>/.redshank/settings.json`:
 ```json
 {
   "default_model": "claude-sonnet-4-20250514",
-  "default_reasoning_effort": "medium"
+  "default_reasoning_effort": "medium",
+  "providers": {
+    "Ollama": {
+      "enabled": true,
+      "protocol": "openai_compatible",
+      "deployment": "local",
+      "base_url": "http://localhost:11434/v1",
+      "default_model": "llama3.2"
+    },
+    "OpenAI": {
+      "enabled": true,
+      "protocol": "openai_compatible",
+      "deployment": "local",
+      "base_url": "http://localhost:1234/v1",
+      "default_model": "qwen2.5-coder:latest"
+    }
+  }
 }
 ```
+
+Provider routing stays in `settings.json`, while actual secrets remain in
+`.redshank/credentials.json`. That lets you point `OpenAI` at a local
+OpenAI-compatible server, or route `Ollama` to a non-default host, without
+copying API keys into general settings.
 
 Override at runtime with CLI flags:
 

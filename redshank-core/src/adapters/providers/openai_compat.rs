@@ -426,6 +426,19 @@ impl OpenAICompatibleModel {
         }
     }
 
+    /// Override the provider base URL.
+    #[must_use]
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// Return the configured base URL.
+    #[must_use]
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Process a complete SSE response body into a [`ModelTurn`].
     fn process_sse_body(body: &[u8]) -> ModelTurn {
         let events = parse_sse_events(body);
@@ -518,10 +531,11 @@ async fn send_chat_completion_request(
     extra_headers: &HashMap<String, String>,
     body: &Value,
 ) -> Result<Vec<u8>, (reqwest::StatusCode, String)> {
-    let mut request = client
-        .post(url)
-        .header("Authorization", format!("Bearer {}", api_key.expose()))
-        .header("Content-Type", "application/json");
+    let mut request = client.post(url).header("Content-Type", "application/json");
+
+    if !api_key.expose().trim().is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", api_key.expose()));
+    }
 
     for (key, value) in extra_headers {
         request = request.header(key.as_str(), value.as_str());
