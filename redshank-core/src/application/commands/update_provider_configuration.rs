@@ -57,13 +57,26 @@ impl UpdateProviderConfigurationHandler {
     pub fn handle(
         &self,
         cmd: &UpdateProviderConfigurationCommand,
-        _workspace: &Path,
+        workspace: &Path,
     ) -> Result<(), DomainError> {
         can_configure_providers(&cmd.auth, &self.policy).map_err(DomainError::Security)?;
 
-        // TODO(T44): Load settings, update provider endpoint config for cmd.provider_kind,
-        // persist to workspace settings store.
-        Ok(())
+        let store = crate::adapters::persistence::settings_store::SettingsStore::new(workspace);
+        let mut settings = store.load();
+        let endpoint = settings
+            .providers
+            .entry(cmd.provider_kind)
+            .or_insert_with(|| {
+                crate::domain::settings::ProviderEndpointConfig::new(
+                    crate::domain::settings::ProviderProtocolKind::Native,
+                    crate::domain::settings::ProviderDeploymentKind::Hosted,
+                )
+            });
+        endpoint.enabled = cmd.enabled;
+        endpoint.default_model = cmd.default_model.clone();
+        endpoint.base_url = cmd.base_url.clone();
+        endpoint.credential_field_name = cmd.credential_field_name.clone();
+        store.save(&settings)
     }
 }
 

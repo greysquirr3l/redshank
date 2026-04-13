@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::domain::agent::SourceId;
 use crate::domain::auth::{AuthContext, StaticPolicy, can_read_configuration};
 use crate::domain::errors::DomainError;
-use crate::domain::source_catalog::{AuthRequirement, SourceCategory};
-use crate::ports::session_store::SessionStore;
+use crate::domain::source_catalog::{AuthRequirement, SourceCategory, all_sources};
+use crate::ports::workspace_config::WorkspaceConfig;
 
 /// UI-facing view of a configured data source with effective settings and credential status.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,18 +57,17 @@ pub struct GetConfiguredSourcesQuery {
 /// - Credential bundle (credential presence, not values)
 ///
 /// Returns a sorted list of UI-ready source views.
-#[allow(dead_code)]
-pub struct GetConfiguredSourcesHandler<S> {
-    session_store: S,
+pub struct GetConfiguredSourcesHandler<C> {
+    workspace_config: C,
     policy: StaticPolicy,
 }
 
-impl<S: SessionStore> GetConfiguredSourcesHandler<S> {
-    /// Create a new handler backed by the given session store.
+impl<C: WorkspaceConfig> GetConfiguredSourcesHandler<C> {
+    /// Create a new handler backed by the given workspace config.
     #[must_use]
-    pub const fn new(session_store: S) -> Self {
+    pub const fn new(workspace_config: C) -> Self {
         Self {
-            session_store,
+            workspace_config,
             policy: StaticPolicy,
         }
     }
@@ -79,15 +78,42 @@ impl<S: SessionStore> GetConfiguredSourcesHandler<S> {
     ///
     /// Returns [`DomainError::Security`] if the caller lacks `ReadConfiguration`
     /// permission, or a storage error if loading settings or credentials fails.
-    pub async fn handle(
+    pub fn handle(
         &self,
         query: GetConfiguredSourcesQuery,
     ) -> Result<Vec<ConfiguredSourceView>, DomainError> {
         can_read_configuration(&query.auth, &self.policy).map_err(DomainError::Security)?;
 
-        // TODO(T44): Load settings and credentials from session store / workspace.
-        // For now, return empty to make test fail.
-        Ok(Vec::new())
+        let settings = self.workspace_config.settings();
+
+        let views = all_sources(false)
+            .into_iter()
+            .map(|s| {
+                let fetcher_cfg = settings.fetcher_config(s.id);
+                let enabled = fetcher_cfg.map_or(s.enabled_by_default, |c| c.enabled);
+                let rate_limit_ms_override = fetcher_cfg.and_then(|c| c.rate_limit_ms);
+                let max_pages_override = fetcher_cfg.and_then(|c| c.max_pages);
+                let has_credential = s
+                    .credential_field
+                    .map_or(false, |f| self.workspace_config.has_credential(f));
+
+                ConfiguredSourceView {
+                    id: SourceId::new(s.id),
+                    title: s.title.to_string(),
+                    description: s.description.to_string(),
+                    category: s.category,
+                    homepage_url: s.homepage_url.to_string(),
+                    auth_requirement: s.auth_requirement,
+                    access_instructions: s.access_instructions.to_string(),
+                    enabled,
+                    has_credential,
+                    rate_limit_ms_override,
+                    max_pages_override,
+                }
+            })
+            .collect();
+
+        Ok(views)
     }
 }
 
@@ -95,6 +121,122 @@ impl<S: SessionStore> GetConfiguredSourcesHandler<S> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::domain::settings::{FetcherSourceConfig, PersistentSettings};
+
+    struct MockWorkspaceConfig {
+        settings: PersistentSettings,
+        credentials: std::collections::HashSet<String>,
+    }
+
+    impl MockWorkspaceConfig {
+        fn new(settings: PersistentSettings) -> Self {
+            Self {
+                settings,
+                credentials: std::collections::HashSet::new(),
+            }
+        }
+
+        fn with_credential(mut self, field: &str) -> Self {
+            self.credentials.insert(field.to_string());
+            self
+        }
+    }
+
+    impl WorkspaceConfig for MockWorkspaceConfig {
+        fn settings(&self) -> PersistentSettings {
+            self.settings.clone()
+        }
+
+        fn has_credential(&self, field_name: &str) -> bool {
+            self.credentials.contains(field_name)
+        }
+
+        fn save_settings(
+            &self,
+            _settings: &PersistentSettings,
+        ) -> Result<(), crate::domain::errors::DomainError> {
+            Ok(())
+        }
+    }
+
+    fn owner_auth() -> AuthContext {
+        use crate::domain::auth::UserId;
+        AuthContext::owner(UserId::new(), "tok".into())
+    }
+
+    fn service_auth() -> AuthContext {
+        AuthContext {
+            user_id: crate::domain::auth::UserId::new(),
+            roles: vec![crate::domain::auth::Role::Service],
+            session_token: crate::domain::credentials::CredentialGuard::new("tok".to_string()),
+        }
+    }
+
+    #[test]
+    fn returns_sources_from_catalog() {
+        let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
+        let handler = GetConfiguredSourcesHandler::new(cfg);
+        let views = handler
+            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .unwrap();
+        assert!(!views.is_empty(), "Should return at least one source");
+    }
+
+    #[test]
+    fn has_credential_reflects_mock() {
+        // The "opencorporates" source requires "opencorporates_api_key".
+        let cfg = MockWorkspaceConfig::new(PersistentSettings::default())
+            .with_credential("opencorporates_api_key");
+        let handler = GetConfiguredSourcesHandler::new(cfg);
+        let views = handler
+            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .unwrap();
+        let oc = views.iter().find(|v| v.id.as_str() == "opencorporates");
+        if let Some(oc) = oc {
+            assert!(
+                oc.has_credential,
+                "opencorporates should have credential set"
+            );
+        }
+    }
+
+    #[test]
+    fn settings_override_enabled_state() {
+        use std::collections::HashMap;
+        let mut fetchers = HashMap::new();
+        fetchers.insert(
+            "fec".to_string(),
+            FetcherSourceConfig {
+                enabled: false,
+                rate_limit_ms: Some(5000),
+                max_pages: None,
+                api_key: None,
+            },
+        );
+        let settings = PersistentSettings {
+            fetchers: fetchers,
+            ..Default::default()
+        };
+        let cfg = MockWorkspaceConfig::new(settings);
+        let handler = GetConfiguredSourcesHandler::new(cfg);
+        let views = handler
+            .handle(GetConfiguredSourcesQuery { auth: owner_auth() })
+            .unwrap();
+        if let Some(fec) = views.iter().find(|v| v.id.as_str() == "fec") {
+            assert!(!fec.enabled, "fec should be disabled by settings override");
+            assert_eq!(fec.rate_limit_ms_override, Some(5000));
+        }
+    }
+
+    #[test]
+    fn access_denied_for_service() {
+        let cfg = MockWorkspaceConfig::new(PersistentSettings::default());
+        let handler = GetConfiguredSourcesHandler::new(cfg);
+        let result = handler.handle(GetConfiguredSourcesQuery {
+            auth: service_auth(),
+        });
+        assert!(result.is_err());
+    }
 
     #[test]
     fn get_configured_sources_query_serde() {
@@ -108,8 +250,6 @@ mod tests {
 
     #[test]
     fn configured_source_view_shows_effective_enabled_state() {
-        // Test: ConfiguredSourceView correctly reflects effective enabled state
-        // (catalog default + settings override).
         let view = ConfiguredSourceView {
             id: SourceId::new("fec"),
             title: "FEC Campaign Finance".to_string(),

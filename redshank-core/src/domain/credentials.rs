@@ -145,6 +145,43 @@ impl CredentialBundle {
                 .is_some_and(|u| !u.trim().is_empty())
     }
 
+    /// Returns `true` if the named credential field is set (non-empty).
+    ///
+    /// Field names match the JSON keys in `credentials.json` (e.g., `"anthropic_api_key"`).
+    #[must_use]
+    pub fn has_field(&self, field_name: &str) -> bool {
+        let is_set = |opt: &Option<CredentialGuard<String>>| -> bool {
+            opt.as_ref().is_some_and(|g| !g.expose().trim().is_empty())
+        };
+        match field_name {
+            "openai_api_key" => is_set(&self.openai_api_key),
+            "anthropic_api_key" => is_set(&self.anthropic_api_key),
+            "openrouter_api_key" => is_set(&self.openrouter_api_key),
+            "cerebras_api_key" => is_set(&self.cerebras_api_key),
+            "exa_api_key" => is_set(&self.exa_api_key),
+            "voyage_api_key" => is_set(&self.voyage_api_key),
+            "hibp_api_key" => is_set(&self.hibp_api_key),
+            "github_token" => is_set(&self.github_token),
+            "fec_api_key" => is_set(&self.fec_api_key),
+            "opencorporates_api_key" => is_set(&self.opencorporates_api_key),
+            "uk_companies_house_api_key" => is_set(&self.uk_companies_house_api_key),
+            "opensanctions_api_key" => is_set(&self.opensanctions_api_key),
+            "marinetraffic_api_key" => is_set(&self.marinetraffic_api_key),
+            "semantic_scholar_api_key" => is_set(&self.semantic_scholar_api_key),
+            "reddit_client_id" => is_set(&self.reddit_client_id),
+            "reddit_client_secret" => is_set(&self.reddit_client_secret),
+            "youtube_api_key" => is_set(&self.youtube_api_key),
+            "listennotes_api_key" => is_set(&self.listennotes_api_key),
+            "crunchbase_api_key" => is_set(&self.crunchbase_api_key),
+            "bls_api_key" => is_set(&self.bls_api_key),
+            "pacer_username" => is_set(&self.pacer_username),
+            "pacer_password" => is_set(&self.pacer_password),
+            "candid_api_key" => is_set(&self.candid_api_key),
+            "etherscan_api_key" => is_set(&self.etherscan_api_key),
+            _ => false,
+        }
+    }
+
     /// Fill in empty fields from a lower-priority bundle.
     pub fn merge_missing(&mut self, other: &Self) {
         macro_rules! fill {
@@ -297,5 +334,27 @@ mod tests {
             high.ollama_base_url.as_deref(),
             Some("http://localhost:11434")
         );
+    }
+
+    #[test]
+    fn has_field_returns_true_when_set() {
+        let bundle = CredentialBundle {
+            anthropic_api_key: Some(CredentialGuard::new("sk-ant".to_string())),
+            fec_api_key: Some(CredentialGuard::new("fec-key".to_string())),
+            ..Default::default()
+        };
+        assert!(bundle.has_field("anthropic_api_key"));
+        assert!(bundle.has_field("fec_api_key"));
+        assert!(!bundle.has_field("openai_api_key"));
+        assert!(!bundle.has_field("unknown_field"));
+    }
+
+    #[test]
+    fn has_field_returns_false_for_whitespace_only() {
+        let bundle = CredentialBundle {
+            openai_api_key: Some(CredentialGuard::new("   ".to_string())),
+            ..Default::default()
+        };
+        assert!(!bundle.has_field("openai_api_key"));
     }
 }

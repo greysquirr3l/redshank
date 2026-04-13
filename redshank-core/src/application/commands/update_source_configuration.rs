@@ -55,13 +55,20 @@ impl UpdateSourceConfigurationHandler {
     pub fn handle(
         &self,
         cmd: &UpdateSourceConfigurationCommand,
-        _workspace: &Path,
+        workspace: &Path,
     ) -> Result<(), DomainError> {
         can_configure_sources(&cmd.auth, &self.policy).map_err(DomainError::Security)?;
 
-        // TODO(T44): Load settings, update fetcher config for cmd.source_id,
-        // persist to workspace settings store.
-        Ok(())
+        let store = crate::adapters::persistence::settings_store::SettingsStore::new(workspace);
+        let mut settings = store.load();
+        let fetcher_cfg = settings
+            .fetchers
+            .entry(cmd.source_id.as_str().to_string())
+            .or_default();
+        fetcher_cfg.enabled = cmd.enabled;
+        fetcher_cfg.rate_limit_ms = cmd.rate_limit_ms_override;
+        fetcher_cfg.max_pages = cmd.max_pages_override;
+        store.save(&settings)
     }
 }
 
