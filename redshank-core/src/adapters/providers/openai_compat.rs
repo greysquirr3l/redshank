@@ -362,7 +362,7 @@ impl OpenAICompatibleModel {
         model: String,
         reasoning_effort: Option<ReasoningEffort>,
     ) -> Self {
-        let model = if kind == ProviderKind::Ollama {
+        let model = if kind == ProviderKind::OpenAiCompatible {
             normalize_ollama_model_name(&model)
         } else {
             model
@@ -395,7 +395,7 @@ impl OpenAICompatibleModel {
                 DEFAULT_TIMEOUT,
                 128_000,
             ),
-            ProviderKind::Ollama => (
+            ProviderKind::OpenAiCompatible => (
                 OLLAMA_BASE_URL.to_string(),
                 HashMap::new(),
                 OLLAMA_TIMEOUT,
@@ -424,6 +424,19 @@ impl OpenAICompatibleModel {
             extra_headers,
             context_window,
         }
+    }
+
+    /// Override the provider base URL.
+    #[must_use]
+    pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// Return the configured base URL.
+    #[must_use]
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// Process a complete SSE response body into a [`ModelTurn`].
@@ -518,10 +531,11 @@ async fn send_chat_completion_request(
     extra_headers: &HashMap<String, String>,
     body: &Value,
 ) -> Result<Vec<u8>, (reqwest::StatusCode, String)> {
-    let mut request = client
-        .post(url)
-        .header("Authorization", format!("Bearer {}", api_key.expose()))
-        .header("Content-Type", "application/json");
+    let mut request = client.post(url).header("Content-Type", "application/json");
+
+    if !api_key.expose().trim().is_empty() {
+        request = request.header("Authorization", format!("Bearer {}", api_key.expose()));
+    }
 
     for (key, value) in extra_headers {
         request = request.header(key.as_str(), value.as_str());
@@ -632,7 +646,7 @@ data: [DONE]\n\
     #[test]
     fn ollama_defaults_to_localhost() {
         let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             CredentialGuard::new(String::new()),
             "llama3".to_string(),
             None,
@@ -644,7 +658,7 @@ data: [DONE]\n\
     #[test]
     fn ollama_model_prefix_is_stripped() {
         let model = OpenAICompatibleModel::for_provider(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             CredentialGuard::new(String::new()),
             "ollama/gemma3:27b".to_string(),
             None,

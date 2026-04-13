@@ -10,8 +10,11 @@ use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
 use redshank_core::adapters::persistence::replay_log::FileReplayLogger;
+use redshank_core::adapters::persistence::settings_store::SettingsStore;
 use redshank_core::adapters::persistence::sqlite::SqliteSessionStore;
-use redshank_core::adapters::providers::builder::{build_provider, infer_provider, list_models};
+use redshank_core::adapters::providers::builder::{
+    build_provider_with_settings, infer_provider, list_models_with_settings,
+};
 use redshank_core::adapters::tool_defs::tool_definitions;
 use redshank_core::adapters::tools::WorkspaceTools;
 use redshank_core::application::services::engine::RLMEngine;
@@ -371,6 +374,10 @@ async fn run_tui_command_loop(
             redshank_tui::domain::UiCommand::SetReasoning(level) => {
                 active_reasoning = tui_to_core_reasoning(level);
             }
+            redshank_tui::domain::UiCommand::OpenWorkbench
+            | redshank_tui::domain::UiCommand::CloseWorkbench => {
+                // Workbench is a TUI-only UI concept; no CLI action needed.
+            }
         }
     }
 }
@@ -439,7 +446,8 @@ async fn solve_objective(
 ) -> anyhow::Result<String> {
     let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
     let creds = resolve_credentials(workspace, None);
-    let provider = build_provider(&config, &creds)?;
+    let settings = SettingsStore::new(workspace).load();
+    let provider = build_provider_with_settings(&config, &settings, &creds)?;
     let tools = WorkspaceTools::new(workspace, creds.clone())?
         .with_command_timeout(config.command_timeout.as_secs())
         .with_max_file_chars(config.max_file_chars);
@@ -463,7 +471,8 @@ async fn solve_objective_with_events(
 ) -> anyhow::Result<String> {
     let config = build_agent_config(workspace, model, reasoning_effort, max_depth, demo)?;
     let creds = resolve_credentials(workspace, None);
-    let provider = build_provider(&config, &creds)?;
+    let settings = SettingsStore::new(workspace).load();
+    let provider = build_provider_with_settings(&config, &settings, &creds)?;
     let tools = EventingWorkspaceTools {
         inner: WorkspaceTools::new(workspace, creds.clone())?
             .with_command_timeout(config.command_timeout.as_secs())
@@ -482,7 +491,8 @@ async fn solve_objective_with_events(
 async fn list_models_for_active_provider(workspace: &Path, model: &str) -> anyhow::Result<String> {
     let provider = infer_provider(model)?;
     let creds = resolve_credentials(workspace, None);
-    let models = list_models(provider, &creds).await?;
+    let settings = SettingsStore::new(workspace).load();
+    let models = list_models_with_settings(provider, &settings, &creds).await?;
     Ok(format_model_listing(provider, model, &models))
 }
 
@@ -525,7 +535,9 @@ fn format_model_listing(provider: ProviderKind, active_model: &str, models: &[St
 
 fn format_model_name_for_display(provider: ProviderKind, model: &str) -> String {
     match provider {
-        ProviderKind::Ollama if !model.starts_with("ollama/") => format!("ollama/{model}"),
+        ProviderKind::OpenAiCompatible if !model.starts_with("ollama/") => {
+            format!("ollama/{model}")
+        }
         ProviderKind::OpenRouter if !model.starts_with("openrouter/") => {
             format!("openrouter/{model}")
         }
@@ -579,7 +591,7 @@ const fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::OpenAI => "OpenAI",
         ProviderKind::OpenRouter => "OpenRouter",
         ProviderKind::Cerebras => "Cerebras",
-        ProviderKind::Ollama => "Ollama",
+        ProviderKind::OpenAiCompatible => "OpenAI-Compatible",
     }
 }
 
@@ -947,14 +959,14 @@ mod tests {
         assert_eq!(config.model, "ollama/gemma3:27b");
         assert_eq!(
             config.provider,
-            redshank_core::domain::agent::ProviderKind::Ollama
+            redshank_core::domain::agent::ProviderKind::OpenAiCompatible
         );
     }
 
     #[test]
     fn format_model_listing_prefixes_ollama_models() {
         let listing = format_model_listing(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             "ollama/llama3:latest",
             &["llama3:latest".into(), "gemma3:27b".into()],
         );
@@ -978,7 +990,7 @@ mod tests {
     #[test]
     fn format_model_listing_marks_active_model() {
         let listing = format_model_listing(
-            ProviderKind::Ollama,
+            ProviderKind::OpenAiCompatible,
             "ollama/gemma3:27b",
             &["llama3:latest".into(), "gemma3:27b".into()],
         );

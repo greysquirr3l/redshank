@@ -8,6 +8,32 @@ use std::time::Duration;
 use super::events::DomainEvent;
 use super::session::{SessionId, TurnSummary};
 
+/// Unique data source identifier (newtype over string).
+///
+/// Source IDs are lowercase `snake_case`, e.g., `"fec"`, `"opencorporates"`, `"ofac"`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SourceId(String);
+
+impl SourceId {
+    /// Create a new source ID from a string.
+    #[must_use]
+    pub fn new(id: &str) -> Self {
+        Self(id.to_string())
+    }
+
+    /// Get the source ID as a string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SourceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// LLM provider kind, inferred from model name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ProviderKind {
@@ -19,8 +45,8 @@ pub enum ProviderKind {
     OpenRouter,
     /// Cerebras fast inference.
     Cerebras,
-    /// Local Ollama server.
-    Ollama,
+    /// Local Ollama server or OpenAI-compatible endpoint.
+    OpenAiCompatible,
 }
 
 impl ProviderKind {
@@ -37,7 +63,7 @@ impl ProviderKind {
         {
             Some(Self::OpenAI)
         } else if lower.starts_with("ollama/") {
-            Some(Self::Ollama)
+            Some(Self::OpenAiCompatible)
         } else if lower.starts_with("cerebras/") || lower.starts_with("llama") {
             Some(Self::Cerebras)
         } else if lower.starts_with("openrouter/") || lower.contains('/') {
@@ -45,6 +71,18 @@ impl ProviderKind {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod provider_kind_tests {
+    use super::*;
+
+    #[test]
+    fn infer_provider_kind_from_model_name() {
+        assert_eq!(ProviderKind::from_model_name("claude-opus"), Some(ProviderKind::Anthropic));
+        assert_eq!(ProviderKind::from_model_name("gpt-4"), Some(ProviderKind::OpenAI));
+        assert_eq!(ProviderKind::from_model_name("ollama/llama2"), Some(ProviderKind::OpenAiCompatible));
     }
 }
 
@@ -270,7 +308,7 @@ mod tests {
         );
         assert_eq!(
             ProviderKind::from_model_name("ollama/mistral"),
-            Some(ProviderKind::Ollama)
+            Some(ProviderKind::OpenAiCompatible)
         );
         assert_eq!(ProviderKind::from_model_name("unknown-model"), None);
     }

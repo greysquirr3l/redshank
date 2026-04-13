@@ -9,3 +9,4 @@ pub mod replay_log;
 pub mod session_store;
 pub mod tool_dispatcher;
 pub mod wiki_store;
+pub mod workspace_config;

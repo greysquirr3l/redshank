@@ -3,11 +3,35 @@
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+// ── Screen Navigation ───────────────────────────────────────────────────────
+
+/// Active TUI screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ActiveScreen {
+    /// Main chat and graph interface.
+    #[default]
+    Chat,
+    /// Configuration workbench for providers and data sources.
+    Workbench,
+}
+
+/// Active tab in the configuration workbench.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WorkbenchTab {
+    /// Configured model providers.
+    #[default]
+    Providers,
+    /// Available data sources and scrapers.
+    Sources,
+}
+
 // ── Application State ────────────────────────────────────────────────────────
 
 /// Application state for the TUI.
 #[derive(Debug, Clone)]
 pub struct AppState {
+    /// Currently active screen.
+    pub active_screen: ActiveScreen,
     /// Chat log entries.
     pub chat_log: Vec<ChatEntry>,
     /// Current user input buffer.
@@ -34,11 +58,18 @@ pub struct AppState {
     pub agent_running: bool,
     /// Should quit.
     pub should_quit: bool,
+    /// Active workbench tab.
+    pub workbench_tab: WorkbenchTab,
+    /// Selected provider index in workbench.
+    pub workbench_provider_idx: usize,
+    /// Selected source index in workbench.
+    pub workbench_source_idx: usize,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            active_screen: ActiveScreen::Chat,
             chat_log: Vec::new(),
             input_buffer: String::new(),
             input_cursor: 0,
@@ -52,6 +83,9 @@ impl Default for AppState {
             wiki_edges: Vec::new(),
             agent_running: false,
             should_quit: false,
+            workbench_tab: WorkbenchTab::Providers,
+            workbench_provider_idx: 0,
+            workbench_source_idx: 0,
         }
     }
 }
@@ -193,6 +227,10 @@ pub enum UiCommand {
     SetModel { name: String, save: bool },
     /// Update the active reasoning level.
     SetReasoning(ReasoningEffort),
+    /// Open the configuration workbench.
+    OpenWorkbench,
+    /// Close the configuration workbench (return to chat).
+    CloseWorkbench,
 }
 
 // ── Slash Commands (CQRS command variants) ───────────────────────────────────
@@ -210,6 +248,8 @@ pub enum SlashCommand {
     Status,
     /// `/clear` — clear chat log.
     Clear,
+    /// `/config` — open configuration workbench.
+    Config,
     /// `/quit` — exit the TUI.
     Quit,
     /// `/help` — show help.
@@ -245,6 +285,7 @@ pub fn parse_slash_command(input: &str) -> Option<SlashCommand> {
         }
         "/status" => Some(SlashCommand::Status),
         "/clear" => Some(SlashCommand::Clear),
+        "/config" => Some(SlashCommand::Config),
         "/quit" | "/q" | "/exit" => Some(SlashCommand::Quit),
         "/help" | "/h" | "/?" => Some(SlashCommand::Help),
         _ => None,
@@ -320,6 +361,12 @@ mod tests {
         assert_eq!(parse_slash_command("/help").unwrap(), SlashCommand::Help);
         assert_eq!(parse_slash_command("/h").unwrap(), SlashCommand::Help);
         assert_eq!(parse_slash_command("/?").unwrap(), SlashCommand::Help);
+    }
+
+    #[test]
+    fn slash_command_parses_config() {
+        let cmd = parse_slash_command("/config").unwrap();
+        assert_eq!(cmd, SlashCommand::Config);
     }
 
     #[test]

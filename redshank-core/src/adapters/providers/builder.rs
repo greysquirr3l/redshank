@@ -9,9 +9,12 @@
 use reqwest::Client;
 
 use crate::domain::agent::{AgentConfig, ProviderKind};
-use crate::domain::credentials::CredentialBundle;
+use crate::domain::credentials::{CredentialBundle, CredentialGuard};
 use crate::domain::errors::DomainError;
 use crate::domain::session::ModelTurn;
+use crate::domain::settings::{
+    PersistentSettings, ProviderDeploymentKind, ProviderEndpointConfig, ProviderProtocolKind,
+};
 use crate::ports::model_provider::{ChatMessage, ModelProvider, ToolDefinition};
 
 use super::anthropic::AnthropicModel;
@@ -70,6 +73,12 @@ impl ModelProvider for ProviderBox {
 /// Errors that can occur when building a provider.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// The provider is explicitly disabled in persistent settings.
+    #[error("provider {provider:?} is disabled in settings")]
+    ProviderDisabled {
+        /// Disabled provider kind.
+        provider: ProviderKind,
+    },
     /// The required API key for the inferred provider is missing.
     #[error("missing API key for provider {provider:?}")]
     MissingApiKey {
@@ -112,29 +121,41 @@ pub fn build_provider(
     config: &AgentConfig,
     creds: &CredentialBundle,
 ) -> Result<ProviderBox, BuildError> {
+    build_provider_with_settings(config, &PersistentSettings::default(), creds)
+}
+
+/// Build a [`ProviderBox`] using persistent provider endpoint settings.
+///
+/// # Errors
+///
+/// Returns `Err` if the provider is disabled or required credentials are missing.
+pub fn build_provider_with_settings(
+    config: &AgentConfig,
+    settings: &PersistentSettings,
+    creds: &CredentialBundle,
+) -> Result<ProviderBox, BuildError> {
     let effort = Some(config.reasoning_effort);
+    let endpoint = effective_provider_endpoint(config.provider, settings, creds)?;
+    let model_name = resolved_model_name(config, settings);
     match config.provider {
         ProviderKind::Anthropic => {
-            let key = creds
-                .anthropic_api_key
-                .clone()
-                .ok_or(BuildError::MissingApiKey {
-                    provider: ProviderKind::Anthropic,
-                })?;
-            Ok(ProviderBox::Anthropic(AnthropicModel::new(
-                key,
-                config.model.clone(),
-                effort,
-            )))
+            let key = resolve_provider_key(config.provider, &endpoint, creds)?;
+            let mut provider = AnthropicModel::new(key, model_name, effort);
+            if let Some(base_url) = endpoint.base_url.as_deref() {
+                provider = provider.with_base_url(base_url);
+            }
+            Ok(ProviderBox::Anthropic(provider))
         }
         kind @ (ProviderKind::OpenAI
         | ProviderKind::OpenRouter
         | ProviderKind::Cerebras
-        | ProviderKind::Ollama) => {
-            let key = api_key_for(kind, creds)?;
-            Ok(ProviderBox::OpenAICompat(
-                OpenAICompatibleModel::for_provider(kind, key, config.model.clone(), effort),
-            ))
+        | ProviderKind::OpenAiCompatible) => {
+            let key = resolve_provider_key(kind, &endpoint, creds)?;
+            let mut provider = OpenAICompatibleModel::for_provider(kind, key, model_name, effort);
+            if let Some(base_url) = endpoint.base_url.as_deref() {
+                provider = provider.with_base_url(base_url);
+            }
+            Ok(ProviderBox::OpenAICompat(provider))
         }
     }
 }
@@ -189,63 +210,101 @@ pub async fn list_models(
     kind: ProviderKind,
     creds: &CredentialBundle,
 ) -> Result<Vec<String>, DomainError> {
+    list_models_with_settings(kind, &PersistentSettings::default(), creds).await
+}
+
+/// List available models using settings-aware provider endpoint configuration.
+///
+/// # Errors
+///
+/// Returns `Err` if the provider is disabled, auth is missing, or the endpoint fails.
+#[allow(clippy::too_many_lines)]
+#[cfg(feature = "runtime")]
+pub async fn list_models_with_settings(
+    kind: ProviderKind,
+    settings: &PersistentSettings,
+    creds: &CredentialBundle,
+) -> Result<Vec<String>, DomainError> {
+    let endpoint = effective_provider_endpoint(kind, settings, creds)
+        .map_err(|err| DomainError::Validation(err.to_string()))?;
+    let key = resolve_provider_key(kind, &endpoint, creds)
+        .map_err(|err| DomainError::Validation(err.to_string()))?;
+
     let (url, auth_header, auth_value) = match kind {
         ProviderKind::Anthropic => {
-            let key = creds
-                .anthropic_api_key
-                .as_ref()
-                .ok_or_else(|| DomainError::Validation("missing Anthropic API key".into()))?;
-            (
-                "https://api.anthropic.com/v1/models".to_string(),
-                "x-api-key".to_string(),
-                key.expose().clone(),
-            )
-        }
-        ProviderKind::OpenAI => {
-            let key = creds
-                .openai_api_key
-                .as_ref()
-                .ok_or_else(|| DomainError::Validation("missing OpenAI API key".into()))?;
-            (
-                "https://api.openai.com/v1/models".to_string(),
-                "Authorization".to_string(),
-                format!("Bearer {}", key.expose()),
-            )
-        }
-        ProviderKind::OpenRouter => {
-            let key = creds
-                .openrouter_api_key
-                .as_ref()
-                .ok_or_else(|| DomainError::Validation("missing OpenRouter API key".into()))?;
-            (
-                "https://openrouter.ai/api/v1/models".to_string(),
-                "Authorization".to_string(),
-                format!("Bearer {}", key.expose()),
-            )
-        }
-        ProviderKind::Cerebras => {
-            let key = creds
-                .cerebras_api_key
-                .as_ref()
-                .ok_or_else(|| DomainError::Validation("missing Cerebras API key".into()))?;
-            (
-                "https://api.cerebras.ai/v1/models".to_string(),
-                "Authorization".to_string(),
-                format!("Bearer {}", key.expose()),
-            )
-        }
-        ProviderKind::Ollama => {
-            let base = creds
-                .ollama_base_url
+            let base = endpoint
+                .base_url
                 .as_deref()
-                .unwrap_or("http://localhost:11434");
-            (format!("{base}/api/tags"), String::new(), String::new())
+                .unwrap_or("https://api.anthropic.com/v1")
+                .trim_end_matches('/');
+            let url = if base.ends_with("/v1") {
+                format!("{base}/models")
+            } else {
+                format!("{base}/v1/models")
+            };
+            (url, "x-api-key".to_string(), key.expose().clone())
         }
+        ProviderKind::OpenAI => (
+            format!(
+                "{}/models",
+                endpoint
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("https://api.openai.com/v1")
+                    .trim_end_matches('/')
+            ),
+            "Authorization".to_string(),
+            format!("Bearer {}", key.expose()),
+        ),
+        ProviderKind::OpenRouter => (
+            format!(
+                "{}/models",
+                endpoint
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("https://openrouter.ai/api/v1")
+                    .trim_end_matches('/')
+            ),
+            "Authorization".to_string(),
+            format!("Bearer {}", key.expose()),
+        ),
+        ProviderKind::Cerebras => (
+            format!(
+                "{}/models",
+                endpoint
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("https://api.cerebras.ai/v1")
+                    .trim_end_matches('/')
+            ),
+            "Authorization".to_string(),
+            format!("Bearer {}", key.expose()),
+        ),
+        ProviderKind::OpenAiCompatible => (
+            format!(
+                "{}/models",
+                endpoint
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("http://localhost:11434/v1")
+                    .trim_end_matches('/')
+            ),
+            if key.expose().is_empty() {
+                String::new()
+            } else {
+                "Authorization".to_string()
+            },
+            if key.expose().is_empty() {
+                String::new()
+            } else {
+                format!("Bearer {}", key.expose())
+            },
+        ),
     };
 
     let client = Client::new();
     let mut req = client.get(&url);
-    if !auth_header.is_empty() {
+    if !auth_header.is_empty() && !auth_value.is_empty() {
         req = req.header(&auth_header, &auth_value);
     }
     if kind == ProviderKind::Anthropic {
@@ -272,7 +331,14 @@ pub async fn list_models(
 
     // Ollama uses { "models": [...] } with "name" field
     // OpenAI/Anthropic use { "data": [...] } with "id" field
-    let models = if kind == ProviderKind::Ollama {
+    // For now, treat all OpenAiCompatible as using OpenAI-style response; Ollama-specific
+    // format detection can be added later if needed.
+    let models = if kind == ProviderKind::OpenAiCompatible
+        && endpoint
+            .base_url
+            .as_deref()
+            .is_some_and(|u| u.contains("11434") || u.contains("ollama"))
+    {
         json.get("models")
             .and_then(serde_json::Value::as_array)
             .map(|arr| {
@@ -309,13 +375,13 @@ pub async fn list_models(
 fn api_key_for(
     kind: ProviderKind,
     creds: &CredentialBundle,
-) -> Result<crate::domain::credentials::CredentialGuard<String>, BuildError> {
+) -> Result<CredentialGuard<String>, BuildError> {
     let key = match kind {
         ProviderKind::OpenAI => creds.openai_api_key.clone(),
         ProviderKind::OpenRouter => creds.openrouter_api_key.clone(),
         ProviderKind::Cerebras => creds.cerebras_api_key.clone(),
-        ProviderKind::Ollama => {
-            // Ollama doesn't require an API key; use a placeholder.
+        ProviderKind::OpenAiCompatible => {
+            // OpenAI-compatible endpoints may not require an API key; use empty if not provided.
             Some(crate::domain::credentials::CredentialGuard::new(
                 String::new(),
             ))
@@ -325,6 +391,157 @@ fn api_key_for(
     key.ok_or(BuildError::MissingApiKey { provider: kind })
 }
 
+fn effective_provider_endpoint(
+    provider: ProviderKind,
+    settings: &PersistentSettings,
+    creds: &CredentialBundle,
+) -> Result<ProviderEndpointConfig, BuildError> {
+    let mut endpoint = ProviderEndpointConfig {
+        enabled: true,
+        protocol: default_protocol_for(provider),
+        base_url: Some(default_base_url_for(provider, creds)),
+        default_model: settings
+            .default_model_for_provider(provider)
+            .map(str::to_string),
+        credential_field_name: default_credential_field_name(provider).map(str::to_string),
+        deployment: default_deployment_for(provider),
+    };
+
+    if let Some(explicit) = settings.provider_endpoint(provider) {
+        endpoint.enabled = explicit.enabled;
+        endpoint.protocol = explicit.protocol;
+        endpoint.deployment = explicit.deployment;
+        if explicit.base_url.is_some() {
+            endpoint.base_url.clone_from(&explicit.base_url);
+        }
+        if explicit.default_model.is_some() {
+            endpoint.default_model.clone_from(&explicit.default_model);
+        }
+        if explicit.credential_field_name.is_some() || explicit.allows_anonymous_access() {
+            endpoint
+                .credential_field_name
+                .clone_from(&explicit.credential_field_name);
+        }
+    }
+
+    if !endpoint.enabled {
+        return Err(BuildError::ProviderDisabled { provider });
+    }
+
+    Ok(endpoint)
+}
+
+fn resolved_model_name(config: &AgentConfig, settings: &PersistentSettings) -> String {
+    if !config.model.trim().is_empty() {
+        return config.model.clone();
+    }
+
+    settings
+        .default_model_for_provider(config.provider)
+        .map_or_else(String::new, str::to_string)
+}
+
+const fn default_protocol_for(provider: ProviderKind) -> ProviderProtocolKind {
+    match provider {
+        ProviderKind::Anthropic => ProviderProtocolKind::Native,
+        ProviderKind::OpenAI
+        | ProviderKind::OpenRouter
+        | ProviderKind::Cerebras
+        | ProviderKind::OpenAiCompatible => ProviderProtocolKind::OpenAiCompatible,
+    }
+}
+
+const fn default_deployment_for(provider: ProviderKind) -> ProviderDeploymentKind {
+    match provider {
+        ProviderKind::OpenAiCompatible => ProviderDeploymentKind::Local,
+        ProviderKind::Anthropic
+        | ProviderKind::OpenAI
+        | ProviderKind::OpenRouter
+        | ProviderKind::Cerebras => ProviderDeploymentKind::Hosted,
+    }
+}
+
+const fn default_credential_field_name(provider: ProviderKind) -> Option<&'static str> {
+    match provider {
+        ProviderKind::Anthropic => Some("anthropic_api_key"),
+        ProviderKind::OpenAI => Some("openai_api_key"),
+        ProviderKind::OpenRouter => Some("openrouter_api_key"),
+        ProviderKind::Cerebras => Some("cerebras_api_key"),
+        // OpenAiCompatible typically doesn't require credentials (but can be overridden in settings).
+        ProviderKind::OpenAiCompatible => None,
+    }
+}
+
+fn default_base_url_for(provider: ProviderKind, creds: &CredentialBundle) -> String {
+    match provider {
+        ProviderKind::Anthropic => "https://api.anthropic.com".to_string(),
+        ProviderKind::OpenAI => "https://api.openai.com/v1".to_string(),
+        ProviderKind::OpenRouter => "https://openrouter.ai/api/v1".to_string(),
+        ProviderKind::Cerebras => "https://api.cerebras.ai/v1".to_string(),
+        ProviderKind::OpenAiCompatible => normalize_ollama_chat_base_url(
+            creds
+                .ollama_base_url
+                .as_deref()
+                .unwrap_or("http://localhost:11434"),
+        ),
+    }
+}
+
+fn normalize_ollama_chat_base_url(base_url: &str) -> String {
+    let trimmed = base_url.trim_end_matches('/');
+    if trimmed.ends_with("/v1") {
+        trimmed.to_string()
+    } else {
+        format!("{trimmed}/v1")
+    }
+}
+
+// ── Ollama helpers (may be unused if no special Ollama-detection logic) ──
+
+/// Get the Ollama root base URL from an endpoint or credentials.
+#[allow(dead_code)]
+fn ollama_root_base_url(endpoint: &ProviderEndpointConfig, creds: &CredentialBundle) -> String {
+    let base = endpoint.base_url.as_deref().unwrap_or_else(|| {
+        creds
+            .ollama_base_url
+            .as_deref()
+            .unwrap_or("http://localhost:11434")
+    });
+    base.trim_end_matches("/v1")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+fn resolve_provider_key(
+    provider: ProviderKind,
+    endpoint: &ProviderEndpointConfig,
+    creds: &CredentialBundle,
+) -> Result<CredentialGuard<String>, BuildError> {
+    if endpoint.allows_anonymous_access() {
+        return Ok(CredentialGuard::new(String::new()));
+    }
+
+    if let Some(field_name) = endpoint.credential_field_name.as_deref() {
+        return credential_by_name(creds, field_name).ok_or(BuildError::MissingApiKey { provider });
+    }
+
+    api_key_for(provider, creds)
+}
+
+fn credential_by_name(
+    creds: &CredentialBundle,
+    field_name: &str,
+) -> Option<CredentialGuard<String>> {
+    match field_name {
+        "anthropic_api_key" => creds.anthropic_api_key.clone(),
+        "openai_api_key" => creds.openai_api_key.clone(),
+        "openrouter_api_key" => creds.openrouter_api_key.clone(),
+        "cerebras_api_key" => creds.cerebras_api_key.clone(),
+        "github_token" => creds.github_token.clone(),
+        _ => None,
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -332,6 +549,7 @@ fn api_key_for(
 mod tests {
     use super::*;
     use crate::domain::credentials::CredentialGuard;
+    use std::collections::HashMap;
 
     fn make_creds(provider: ProviderKind) -> CredentialBundle {
         let mut creds = CredentialBundle::default();
@@ -348,8 +566,8 @@ mod tests {
             ProviderKind::Cerebras => {
                 creds.cerebras_api_key = Some(CredentialGuard::new("csk-test".to_string()));
             }
-            ProviderKind::Ollama => {
-                // no key required
+            ProviderKind::OpenAiCompatible => {
+                // no key required for local OpenAI-compatible servers
             }
         }
         creds
@@ -397,7 +615,7 @@ mod tests {
     fn infer_ollama_prefix() {
         assert_eq!(
             infer_provider("ollama/llama3").unwrap(),
-            ProviderKind::Ollama
+            ProviderKind::OpenAiCompatible
         );
     }
 
@@ -485,9 +703,9 @@ mod tests {
 
     #[test]
     fn build_ollama_provider() {
-        let creds = make_creds(ProviderKind::Ollama);
+        let creds = make_creds(ProviderKind::OpenAiCompatible);
         let config = AgentConfig {
-            provider: ProviderKind::Ollama,
+            provider: ProviderKind::OpenAiCompatible,
             model: "ollama/llama3".to_string(),
             ..AgentConfig::default()
         };
@@ -525,6 +743,106 @@ mod tests {
             err,
             BuildError::MissingApiKey {
                 provider: ProviderKind::OpenAI
+            }
+        ));
+    }
+
+    #[test]
+    fn build_provider_with_settings_uses_local_openai_compatible_endpoint() {
+        let settings = PersistentSettings {
+            providers: HashMap::from([(
+                ProviderKind::OpenAI,
+                ProviderEndpointConfig {
+                    enabled: true,
+                    protocol: ProviderProtocolKind::OpenAiCompatible,
+                    base_url: Some("http://localhost:1234/v1".to_string()),
+                    default_model: Some("qwen2.5-coder".to_string()),
+                    credential_field_name: None,
+                    deployment: ProviderDeploymentKind::Local,
+                },
+            )]),
+            ..PersistentSettings::default()
+        };
+        let config = AgentConfig {
+            provider: ProviderKind::OpenAI,
+            model: String::new(),
+            ..AgentConfig::default()
+        };
+
+        let provider =
+            build_provider_with_settings(&config, &settings, &CredentialBundle::default()).unwrap();
+
+        assert!(matches!(provider, ProviderBox::OpenAICompat(_)));
+        if let ProviderBox::OpenAICompat(model) = provider {
+            assert_eq!(model.base_url(), "http://localhost:1234/v1");
+            assert_eq!(model.model_name(), "qwen2.5-coder");
+        }
+    }
+
+    #[test]
+    fn build_provider_with_settings_uses_named_credential_reference() {
+        let settings = PersistentSettings {
+            providers: HashMap::from([(
+                ProviderKind::OpenAI,
+                ProviderEndpointConfig {
+                    enabled: true,
+                    protocol: ProviderProtocolKind::OpenAiCompatible,
+                    base_url: Some("https://gateway.example/v1".to_string()),
+                    default_model: Some("gpt-4.1-mini".to_string()),
+                    credential_field_name: Some("github_token".to_string()),
+                    deployment: ProviderDeploymentKind::Hosted,
+                },
+            )]),
+            ..PersistentSettings::default()
+        };
+        let creds = CredentialBundle {
+            github_token: Some(CredentialGuard::new("ghp-test".to_string())),
+            ..CredentialBundle::default()
+        };
+        let config = AgentConfig {
+            provider: ProviderKind::OpenAI,
+            model: String::new(),
+            ..AgentConfig::default()
+        };
+
+        let provider = build_provider_with_settings(&config, &settings, &creds).unwrap();
+
+        assert!(matches!(provider, ProviderBox::OpenAICompat(_)));
+        if let ProviderBox::OpenAICompat(model) = provider {
+            assert_eq!(model.base_url(), "https://gateway.example/v1");
+            assert_eq!(model.model_name(), "gpt-4.1-mini");
+        }
+    }
+
+    #[test]
+    fn disabled_provider_endpoint_errors() {
+        let settings = PersistentSettings {
+            providers: HashMap::from([(
+                ProviderKind::Anthropic,
+                ProviderEndpointConfig {
+                    enabled: false,
+                    protocol: ProviderProtocolKind::Native,
+                    base_url: None,
+                    default_model: None,
+                    credential_field_name: Some("anthropic_api_key".to_string()),
+                    deployment: ProviderDeploymentKind::Hosted,
+                },
+            )]),
+            ..PersistentSettings::default()
+        };
+        let config = AgentConfig {
+            provider: ProviderKind::Anthropic,
+            model: "claude-sonnet-4-20250514".to_string(),
+            ..AgentConfig::default()
+        };
+
+        let err = build_provider_with_settings(&config, &settings, &CredentialBundle::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            BuildError::ProviderDisabled {
+                provider: ProviderKind::Anthropic
             }
         ));
     }
