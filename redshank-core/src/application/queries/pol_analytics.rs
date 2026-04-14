@@ -12,7 +12,7 @@ use crate::domain::errors::DomainError;
 use crate::domain::observation::ObservationDelta;
 use crate::ports::observation_store::ObservationStore;
 
-/// Query for analyzing entity PoL activity.
+/// Query for analyzing entity `PoL` activity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolAnalyticsQuery {
     /// Entity ID to analyze (or empty to analyze all).
@@ -41,7 +41,7 @@ impl<'a, S: ObservationStore> PolAnalyticsHandler<'a, S> {
 
     /// Execute the analytics query.
     ///
-    /// Returns compact PoL analytics lines, one per entity, ordered by change frequency.
+    /// Returns compact `PoL` analytics lines, one per entity, ordered by change frequency.
     ///
     /// # Errors
     ///
@@ -120,7 +120,9 @@ impl EntityStats {
 }
 
 fn format_analytics_line(stats: &EntityStats, period_days: i64) -> String {
-    let freq_per_day = stats.change_count as f64 / period_days.max(1) as f64;
+    let change_count_f64 = f64::from(u32::try_from(stats.change_count).unwrap_or(u32::MAX));
+    let period_days_f64 = f64::from(i32::try_from(period_days.max(1)).unwrap_or(i32::MAX));
+    let freq_per_day = change_count_f64 / period_days_f64;
 
     // Simple trend indicator: if most changes are in the last 25% of the period.
     let recent_bound =
