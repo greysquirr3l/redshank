@@ -7,6 +7,8 @@
 use std::sync::Mutex;
 
 #[cfg(feature = "runtime")]
+use chrono::{DateTime, Utc};
+#[cfg(feature = "runtime")]
 use rusqlite::{Connection, params};
 
 #[cfg(feature = "runtime")]
@@ -17,6 +19,8 @@ use crate::domain::auth::{AuthContext, Permission, Role, SecurityError, StaticPo
 use crate::domain::errors::DomainError;
 #[cfg(feature = "runtime")]
 use crate::domain::events::DomainEvent;
+#[cfg(feature = "runtime")]
+use crate::domain::observation::EntityObservation;
 #[cfg(feature = "runtime")]
 use crate::domain::session::SessionId;
 
@@ -44,6 +48,21 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     result      TEXT NOT NULL,
     created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
+
+CREATE TABLE IF NOT EXISTS observations (
+    id           TEXT PRIMARY KEY,
+    entity_id    TEXT NOT NULL,
+    source_id    TEXT NOT NULL,
+    observed_at  INTEGER NOT NULL,
+    payload_hash TEXT NOT NULL,
+    payload      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_observations_entity_source_ts
+    ON observations(entity_id, source_id, observed_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_observations_entity_ts
+    ON observations(entity_id, observed_at DESC);
 ";
 
 /// SQLite-backed session store.
@@ -372,6 +391,198 @@ impl SqliteSessionStore {
         events
     }
 
+    /// Persist an entity observation for temporal analysis.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, serialization fails,
+    /// or the database write fails.
+    pub fn append_observation(
+        &self,
+        auth: &AuthContext,
+        observation: &EntityObservation,
+    ) -> Result<(), DomainError> {
+        use crate::domain::auth::can_write_session;
+        can_write_session(auth, &self.policy)?;
+
+        let payload = serde_json::to_string(observation)
+            .map_err(|e| DomainError::Other(format!("serialize observation: {e}")))?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+
+        let write_result = conn
+            .execute(
+                "INSERT OR REPLACE INTO observations \
+                (id, entity_id, source_id, observed_at, payload_hash, payload) \
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    observation.id.to_string(),
+                    observation.entity_id,
+                    observation.source_id,
+                    observation.observed_at.timestamp(),
+                    observation.payload_hash,
+                    payload,
+                ],
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite append_observation: {e}")));
+        drop(conn);
+        write_result?;
+
+        Ok(())
+    }
+
+    /// Return the most recent observation for an entity/source pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, query fails, or
+    /// deserialization fails.
+    pub fn latest_observation(
+        &self,
+        auth: &AuthContext,
+        entity_id: &str,
+        source_id: &str,
+    ) -> Result<Option<EntityObservation>, DomainError> {
+        use crate::domain::auth::can_read_session;
+        can_read_session(auth, &self.policy)?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+        let payload: Option<String> = conn
+            .query_row(
+                "SELECT payload FROM observations \
+                WHERE entity_id = ?1 AND source_id = ?2 \
+                ORDER BY observed_at DESC LIMIT 1",
+                params![entity_id, source_id],
+                |row| row.get(0),
+            )
+            .ok();
+        drop(conn);
+
+        match payload {
+            Some(json) => {
+                let observation: EntityObservation = serde_json::from_str(&json)
+                    .map_err(|e| DomainError::Other(format!("deserialize observation: {e}")))?;
+                Ok(Some(observation))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// List recent observations for an entity, newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, query fails, or
+    /// deserialization fails.
+    pub fn list_observations_since(
+        &self,
+        auth: &AuthContext,
+        entity_id: &str,
+        since: DateTime<Utc>,
+        max_items: usize,
+    ) -> Result<Vec<EntityObservation>, DomainError> {
+        use crate::domain::auth::can_read_session;
+        can_read_session(auth, &self.policy)?;
+
+        if max_items == 0 {
+            return Ok(Vec::new());
+        }
+
+        let limit = i64::try_from(max_items)
+            .map_err(|_| DomainError::Other("max_items exceeds i64 range".to_owned()))?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT payload FROM observations \
+                WHERE entity_id = ?1 AND observed_at >= ?2 \
+                ORDER BY observed_at DESC \
+                LIMIT ?3",
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite prepare: {e}")))?;
+
+        let rows: Result<Vec<String>, DomainError> = stmt
+            .query_map(params![entity_id, since.timestamp(), limit], |row| {
+                row.get(0)
+            })
+            .map_err(|e| DomainError::Other(format!("sqlite query: {e}")))?
+            .map(|r| r.map_err(|e| DomainError::Other(format!("sqlite row: {e}"))))
+            .collect();
+        drop(stmt);
+        drop(conn);
+
+        rows?
+            .into_iter()
+            .map(|json| {
+                serde_json::from_str::<EntityObservation>(&json)
+                    .map_err(|e| DomainError::Other(format!("deserialize observation: {e}")))
+            })
+            .collect()
+    }
+
+    /// List all observations across all entities since a timestamp, newest first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if authorization fails, query fails, or
+    /// deserialization fails.
+    pub fn list_recent_observations(
+        &self,
+        auth: &AuthContext,
+        since: DateTime<Utc>,
+        max_items: usize,
+    ) -> Result<Vec<EntityObservation>, DomainError> {
+        use crate::domain::auth::can_read_session;
+        can_read_session(auth, &self.policy)?;
+
+        if max_items == 0 {
+            return Ok(Vec::new());
+        }
+
+        let limit = i64::try_from(max_items)
+            .map_err(|_| DomainError::Other("max_items exceeds i64 range".to_owned()))?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT payload FROM observations \
+                WHERE observed_at >= ?1 \
+                ORDER BY observed_at DESC \
+                LIMIT ?2",
+            )
+            .map_err(|e| DomainError::Other(format!("sqlite prepare: {e}")))?;
+
+        let rows: Result<Vec<String>, DomainError> = stmt
+            .query_map(params![since.timestamp(), limit], |row| row.get(0))
+            .map_err(|e| DomainError::Other(format!("sqlite query: {e}")))?
+            .map(|r| r.map_err(|e| DomainError::Other(format!("sqlite row: {e}"))))
+            .collect();
+        drop(stmt);
+        drop(conn);
+
+        rows?
+            .into_iter()
+            .map(|json| {
+                serde_json::from_str::<EntityObservation>(&json)
+                    .map_err(|e| DomainError::Other(format!("deserialize observation: {e}")))
+            })
+            .collect()
+    }
+
     /// Check if an idempotency key has been used (within 24h).
     ///
     /// # Errors
@@ -430,6 +641,32 @@ impl SqliteSessionStore {
         drop(conn);
         Ok(mode)
     }
+
+    /// Delete observations older than the specified duration.
+    ///
+    /// Useful for implementing retention policies (e.g., keep 90 days).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the database write fails.
+    pub fn cleanup_old_observations(&self, days_to_keep: i64) -> Result<usize, DomainError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| DomainError::Other(e.to_string()))?;
+
+        let cutoff_timestamp = chrono::Utc::now().timestamp() - (days_to_keep * 86400);
+
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM observations WHERE observed_at < ?1",
+                params![cutoff_timestamp],
+            )
+            .map_err(|e| DomainError::Other(format!("cleanup observations: {e}")))?;
+        drop(conn);
+
+        Ok(rows_affected)
+    }
 }
 
 // ── SessionStore port implementation ────────────────────────────────────────
@@ -476,6 +713,14 @@ impl crate::ports::session_store::SessionStore for SqliteSessionStore {
         std::future::ready(Self::append_event(self, auth, session_id, &event))
     }
 
+    fn list_events(
+        &self,
+        auth: &AuthContext,
+        session_id: SessionId,
+    ) -> impl std::future::Future<Output = Result<Vec<DomainEvent>, DomainError>> + Send {
+        std::future::ready(Self::list_events(self, auth, session_id))
+    }
+
     fn check_idempotency_key(
         &self,
         key: &uuid::Uuid,
@@ -492,6 +737,48 @@ impl crate::ports::session_store::SessionStore for SqliteSessionStore {
     }
 }
 
+#[cfg(feature = "runtime")]
+impl crate::ports::observation_store::ObservationStore for SqliteSessionStore {
+    fn append_observation(
+        &self,
+        auth: &AuthContext,
+        observation: &EntityObservation,
+    ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send {
+        std::future::ready(Self::append_observation(self, auth, observation))
+    }
+
+    fn latest_observation(
+        &self,
+        auth: &AuthContext,
+        entity_id: &str,
+        source_id: &str,
+    ) -> impl std::future::Future<Output = Result<Option<EntityObservation>, DomainError>> + Send
+    {
+        std::future::ready(Self::latest_observation(self, auth, entity_id, source_id))
+    }
+
+    fn list_observations_since(
+        &self,
+        auth: &AuthContext,
+        entity_id: &str,
+        since: DateTime<Utc>,
+        max_items: usize,
+    ) -> impl std::future::Future<Output = Result<Vec<EntityObservation>, DomainError>> + Send {
+        std::future::ready(Self::list_observations_since(
+            self, auth, entity_id, since, max_items,
+        ))
+    }
+
+    fn list_recent_observations(
+        &self,
+        auth: &AuthContext,
+        since: DateTime<Utc>,
+        max_items: usize,
+    ) -> impl std::future::Future<Output = Result<Vec<EntityObservation>, DomainError>> + Send {
+        std::future::ready(Self::list_recent_observations(self, auth, since, max_items))
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -502,6 +789,7 @@ mod tests {
     use crate::domain::agent::{AgentConfig, AgentSession};
     use crate::domain::auth::{AuthContext, UserId};
     use crate::domain::events::DomainEvent;
+    use crate::domain::observation::{EntityObservation, ObservationDelta};
 
     fn system_auth() -> AuthContext {
         AuthContext::system()
@@ -633,6 +921,44 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert!(matches!(events[0], DomainEvent::AgentStarted { .. }));
         assert!(matches!(events[1], DomainEvent::ToolCalled { .. }));
+    }
+
+    #[test]
+    fn append_and_query_observations() {
+        let store = make_store();
+        let auth = system_auth();
+
+        let first = EntityObservation::new(
+            "ethereum:0xabc".to_owned(),
+            "blockchain_explorer".to_owned(),
+            chrono::Utc::now() - chrono::Duration::hours(2),
+            "1111aaaa".to_owned(),
+            ObservationDelta::New,
+        );
+        let second = EntityObservation::new(
+            "ethereum:0xabc".to_owned(),
+            "blockchain_explorer".to_owned(),
+            chrono::Utc::now() - chrono::Duration::hours(1),
+            "2222bbbb".to_owned(),
+            ObservationDelta::Changed {
+                previous_hash: "1111aaaa".to_owned(),
+            },
+        );
+
+        store.append_observation(&auth, &first).unwrap();
+        store.append_observation(&auth, &second).unwrap();
+
+        let latest = store
+            .latest_observation(&auth, "ethereum:0xabc", "blockchain_explorer")
+            .unwrap()
+            .expect("expected latest observation");
+        assert_eq!(latest.payload_hash, "2222bbbb");
+
+        let since = chrono::Utc::now() - chrono::Duration::hours(3);
+        let observations = store
+            .list_observations_since(&auth, "ethereum:0xabc", since, 8)
+            .unwrap();
+        assert_eq!(observations.len(), 2);
     }
 
     #[test]
