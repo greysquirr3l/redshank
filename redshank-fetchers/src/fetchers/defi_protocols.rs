@@ -2,6 +2,10 @@
 
 use crate::domain::{FetchError, FetchOutput};
 use crate::{build_client, write_ndjson};
+use chrono::Utc;
+use redshank_core::domain::observation::{EntityObservation, ObservationDelta};
+use std::fs::OpenOptions;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
 const COMPOUND_API_BASE: &str = "https://api.compound.finance/api/v2/account";
@@ -108,6 +112,72 @@ pub fn parse_aave_positions(json: &serde_json::Value) -> Vec<DefiPosition> {
         .collect()
 }
 
+fn snapshot_payload_hash(positions: &[DefiPosition]) -> Result<String, FetchError> {
+    let payload = serde_json::to_vec(positions)
+        .map_err(|err| FetchError::Parse(format!("serialize defi positions hash: {err}")))?;
+    let mut hasher = crc32fast::Hasher::new();
+    hasher.update(&payload);
+    Ok(format!("{:08x}", hasher.finalize()))
+}
+
+fn classify_delta(previous: Option<&EntityObservation>, payload_hash: &str) -> ObservationDelta {
+    match previous {
+        None => ObservationDelta::New,
+        Some(prev) if prev.payload_hash == payload_hash => ObservationDelta::Unchanged,
+        Some(prev) => ObservationDelta::Changed {
+            previous_hash: prev.payload_hash.clone(),
+        },
+    }
+}
+
+fn read_latest_observation(
+    path: &Path,
+    entity_id: &str,
+) -> Result<Option<EntityObservation>, FetchError> {
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let file = std::fs::File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut latest: Option<EntityObservation> = None;
+
+    for line_result in reader.lines() {
+        let line = line_result?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let observation: EntityObservation = serde_json::from_str(&line).map_err(|err| {
+            FetchError::Parse(format!(
+                "parse observation line from {}: {err}",
+                path.display()
+            ))
+        })?;
+        if observation.entity_id != entity_id || observation.source_id != "defi_protocols" {
+            continue;
+        }
+
+        let should_replace = latest
+            .as_ref()
+            .is_none_or(|current| observation.observed_at > current.observed_at);
+        if should_replace {
+            latest = Some(observation);
+        }
+    }
+
+    Ok(latest)
+}
+
+fn append_observation(path: &Path, observation: &EntityObservation) -> Result<(), FetchError> {
+    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    serde_json::to_writer(&mut file, observation)
+        .map_err(|err| FetchError::Parse(format!("serialize observation: {err}")))?;
+    file.write_all(b"\n")?;
+    file.flush()?;
+    Ok(())
+}
+
 /// Fetch Compound account positions for an address.
 ///
 /// # Errors
@@ -139,6 +209,30 @@ pub async fn fetch_compound_positions(
         .cloned()
         .unwrap_or_default();
     let output_path = output_dir.join("defi_protocols.ndjson");
+    let observation_path = output_dir.join("defi_protocols_observations.ndjson");
+
+    // Emit PoL observation for this address's DeFi positions snapshot.
+    let entity_id = format!("defi:compound:{}", address.to_ascii_lowercase());
+    let positions_str = serde_json::to_string(&records)
+        .map_err(|err| FetchError::Parse(format!("serialize positions: {err}")))?;
+    let payload_hash = snapshot_payload_hash(&[]).map(|_| {
+        format!("{:08x}", {
+            let mut h = crc32fast::Hasher::new();
+            h.update(positions_str.as_bytes());
+            h.finalize()
+        })
+    })?;
+    let previous = read_latest_observation(&observation_path, &entity_id)?;
+    let delta = classify_delta(previous.as_ref(), &payload_hash);
+    let observation = EntityObservation::new(
+        entity_id,
+        "defi_protocols".to_owned(),
+        Utc::now(),
+        payload_hash,
+        delta,
+    );
+    append_observation(&observation_path, &observation)?;
+
     let count = write_ndjson(&output_path, &records)?;
 
     Ok(FetchOutput {
