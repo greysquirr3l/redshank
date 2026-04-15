@@ -209,12 +209,14 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
     };
 
     let footer_line = Line::from(vec![
-        Span::raw(format!(" {status} │ nodes: {nodes} │ edges: {edges} │ stygian: ")),
+        Span::raw(format!(
+            " {status} │ nodes: {nodes} │ edges: {edges} │ stygian: "
+        )),
         Span::styled(health_glyph, Style::default().fg(health_color)),
         Span::raw(" │ /help for commands "),
     ]);
-    let footer = Paragraph::new(footer_line)
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
+    let footer =
+        Paragraph::new(footer_line).style(Style::default().fg(Color::White).bg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
 

@@ -20,8 +20,8 @@ pub use client::{
 };
 pub use domain::{FetchConfig, FetchError, FetchOutput};
 pub use fallback::{
-    detect_stygian_availability, select_execution_mode, FetchExecutionMode, StygianAvailability,
-    StygianProbeConfig, StygianUnavailableReason,
+    FetchExecutionMode, StygianAvailability, StygianProbeConfig, StygianUnavailableReason,
+    detect_stygian_availability, select_execution_mode,
 };
 
 // ── Shared CLI argument parsing ─────────────────────────────
