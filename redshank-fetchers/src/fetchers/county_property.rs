@@ -6,6 +6,7 @@
 //! Pipeline configs stored as TOML, loaded via `include_str!`.
 
 use crate::domain::{FetchError, FetchOutput};
+use crate::fallback::{FetchExecutionMode, StygianAvailability, select_execution_mode};
 use crate::{build_client, rate_limit_delay, write_ndjson};
 use std::path::Path;
 
@@ -153,6 +154,19 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<CountyPropertyPipeline, S
     })
 }
 
+/// Select the fetch execution mode for a county property portal.
+///
+/// Counties with a JSON API (`has_json_api = true`) always use native HTTP.
+/// Counties that require browser scraping are routed through stygian when available.
+#[must_use]
+pub const fn execution_mode_for_county(
+    availability: &StygianAvailability,
+    has_json_api: bool,
+) -> FetchExecutionMode {
+    // JSON-API counties are never JS-heavy.
+    select_execution_mode(!has_json_api, availability)
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -197,5 +211,27 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0]["name"], "ACME HOLDINGS LLC");
         assert_eq!(records[0]["doc_type"], "DEED");
+    }
+
+    #[test]
+    fn county_property_non_api_county_selects_fallback_when_available() {
+        use crate::fallback::{FetchExecutionMode, StygianAvailability};
+        let availability = StygianAvailability::Available {
+            endpoint_url: "http://127.0.0.1:8787/health".into(),
+        };
+        // Miami-Dade has no JSON API — must use stygian fallback when available.
+        let availability_mode = execution_mode_for_county(&availability, false);
+        assert_eq!(availability_mode, FetchExecutionMode::StygianMcpFallback);
+    }
+
+    #[test]
+    fn county_property_api_county_always_uses_native_http() {
+        use crate::fallback::{FetchExecutionMode, StygianAvailability};
+        let availability = StygianAvailability::Available {
+            endpoint_url: "http://127.0.0.1:8787/health".into(),
+        };
+        // NYC ACRIS has a JSON API — native HTTP even when stygian is available.
+        let mode = execution_mode_for_county(&availability, true);
+        assert_eq!(mode, FetchExecutionMode::NativeHttp);
     }
 }

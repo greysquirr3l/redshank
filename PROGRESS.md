@@ -173,6 +173,19 @@
 
 ---
 
+## Phase 14 — Stygian Fallback Hardening
+
+> Depends on: Phase 12 all complete, T12-stygian-integration, T26-readme-and-agents-md.
+
+| Task | Status | Notes |
+| --- | --- | --- |
+| T47 — stygian capability detection and fallback policy | `[x]` | Added compile-time + runtime stygian-mcp availability probe and shared execution mode policy with fail-soft behavior for JS-heavy sources when fallback is unavailable. |
+| T48 — wire JS-heavy fetchers to optional stygian fallback | `[x]` | Added `execution_mode_for_state_sos`, `execution_mode_for_county`, and `execution_mode_for_profile` in respective fetcher modules, all delegating to T47 policy layer. Added `FetcherHealth` enum + `▲`/`▼`/`?` glyph to TUI domain; footer renders colored stygian health indicator; engine pushes `AppEvent::FetcherHealthChanged`. |
+| T50 — investigate stygian Scrape Exchange integration | `[ ]` | Scrape Exchange (`stygian-graph` feature `scrape-exchange`) is a REST+WebSocket data marketplace. Evaluate as a cache-first lookup layer: call `ScrapeExchangeClient::query(uploader, platform, entity)` before live scraping; publish results via `ScrapeExchangeAdapter` (`DataSinkPort`); optionally consume real-time records via `ScrapeExchangeFeed` WebSocket. Needs `SCRAPE_EXCHANGE_KEY_ID` + `SCRAPE_EXCHANGE_KEY_SECRET` credentials and a platform/entity naming convention mapped to redshank source types. Docs: <https://greysquirr3l.github.io/stygian/graph/scrape-exchange.html> |
+| T49 — document stygian-mcp fallback operations and licensing boundaries | `[x]` | Added `docs/src/architecture/stygian-fallback.md` covering decision flow, feature flag, runtime probe config, TUI health indicator, setup (local + production), troubleshooting matrix, and licensing-boundary rationale. Updated `docs/src/SUMMARY.md`, `docs/src/getting-started/configuration.md`, and `README.md` with stygian setup section and probe config reference. |
+
+---
+
 ## Accumulated Learnings
 
 > Subagents append discoveries here after each task.
@@ -190,3 +203,6 @@
 - T44: Consolidate provider enum variants early (e.g., `ProviderKind::Ollama` → `ProviderKind::OpenAiCompatible`) to avoid cascading find-and-replace across 7+ files. Use `is_some_and()` instead of `map_or(false, ...)` to satisfy clippy. View models must expose only `bool has_credential`, never secret values. Stub handlers with TODO(T44) in TDD phase to allow implementation iteration before moving to T45.
 - T45: Use an `ActiveScreen` enum discriminant in `handle_key_with_command` to dispatch per-screen; keep `KeyCode` imports local to each handler function (not module-level) so test modules need an explicit import. Provider static metadata (`ProviderKind` display info) belongs in the renderer — use const slices to drive both list and detail without heap allocations. Always add match arms for new `UiCommand` variants in the CLI entry point or you'll get a non-exhaustive-patterns error.
 - T46: `PersistentSettings` field for provider config is `providers`, not `provider_endpoints`. `Role` has four variants: `Owner`, `Operator`, `Reader`, `Service` — `Service` lacks `ReadConfiguration`/`ConfigureProviders`/`ConfigureSources` and is the right choice for access-denied tests. `AuthContext` constructors are `system()` (Service role) and `owner(user_id, token)` — there is no `new()`. Always read the domain type's field names from source before writing test fixtures.
+- T47: For optional integrations, separate compile-time gates from runtime health probes and test them independently by injecting a compile-gate flag in internal probe helpers; this keeps behavior deterministic on end-user machines.
+- T48: Thin wiring functions (`execution_mode_for_*`) in each fetcher module keep the policy decision in one place (T47 `select_execution_mode`) and the routing call at the source layer. TUI health indicators driven by `AppEvent` keep rendering decoupled from the engine probe timing; `FetcherHealth::glyph()` returning a `&'static str` is cleaner than a `char` because ratatui `Span` takes `Into<String>`.
+- T49: Clippy `missing_const_for_fn` propagates to callers of a non-const function — making `select_execution_mode` `const fn` required all three `execution_mode_for_*` wrappers to become `const fn` as well. Docs belong near the code they describe: a dedicated architecture page for a cross-cutting concern (stygian fallback) is more maintainable than inlining it in configuration or README.

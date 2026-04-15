@@ -158,6 +158,9 @@ fn handle_app_event(state: &mut AppState, ev: AppEvent) {
         AppEvent::WikiChanged | AppEvent::Tick => {
             // Triggers a redraw on next animation frame.
         }
+        AppEvent::FetcherHealthChanged(health) => {
+            state.fetcher_health = health;
+        }
         AppEvent::Key(key) => {
             handle_key(state, key);
         }
