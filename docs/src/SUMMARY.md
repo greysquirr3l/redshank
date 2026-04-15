@@ -35,6 +35,7 @@
 - [Security Model](./architecture/security.md)
 - [Agent Engine](./architecture/engine.md)
 - [Wiki Graph](./architecture/wiki-graph.md)
+- [Stygian Fallback](./architecture/stygian-fallback.md)
 
 # Development
 

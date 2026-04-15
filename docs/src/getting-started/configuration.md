@@ -91,3 +91,27 @@ cp settings.example.json .redshank/settings.json
 ```
 
 `default_reasoning_effort` accepts `low`, `medium`, or `high`. Per-provider model names override the global `default_model` fallback for that provider only.
+
+## Stygian fallback probe
+
+When the `stygian` feature is enabled (built with `--features redshank-fetchers/stygian`),
+the engine probes the stygian-mcp server at startup. Configure the probe in `settings.json`:
+
+```json
+{
+  "stygian": {
+    "endpoint_url": "http://127.0.0.1:8787/health",
+    "timeout_ms": 1500,
+    "retries": 1
+  }
+}
+```
+
+All three fields are optional; the values shown are the defaults. Omit the `stygian` block
+entirely if you accept the defaults.
+
+The current stygian availability is reflected in the TUI footer: `▲` (green) = available,
+`▼` (red) = down, `?` (gray) = probe not yet run.
+
+See [Stygian Fallback](../architecture/stygian-fallback.md) for setup instructions,
+troubleshooting, and licensing-boundary rationale.

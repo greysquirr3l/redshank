@@ -134,7 +134,7 @@ fn body_looks_healthy(body: &str) -> bool {
 
 /// Select fetch execution mode based on source type and stygian availability.
 #[must_use]
-pub fn select_execution_mode(
+pub const fn select_execution_mode(
     is_js_heavy_source: bool,
     availability: &StygianAvailability,
 ) -> FetchExecutionMode {
@@ -149,7 +149,7 @@ pub fn select_execution_mode(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
     use std::io::{Read, Write};
@@ -220,7 +220,12 @@ mod tests {
         let availability = detect_stygian_availability_with_compile_gate(&cfg, true)
             .await
             .unwrap();
-        assert_eq!(availability, StygianAvailability::Available { endpoint_url: endpoint });
+        assert_eq!(
+            availability,
+            StygianAvailability::Available {
+                endpoint_url: endpoint
+            }
+        );
     }
 
     #[test]

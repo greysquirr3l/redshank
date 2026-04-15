@@ -130,11 +130,11 @@ pub async fn fetch_mastodon_profile(
 
 /// Select the fetch execution mode for a social profile target.
 ///
-/// Platforms where `requires_browser` is `true` (LinkedIn, Twitter/X) are
-/// routed through stygian when available. Mastodon (ActivityPub JSON) is
+/// Platforms where `requires_browser` is `true` (`LinkedIn`, `Twitter/X`) are
+/// routed through stygian when available. Mastodon (`ActivityPub` JSON) is
 /// always native HTTP.
 #[must_use]
-pub fn execution_mode_for_profile(
+pub const fn execution_mode_for_profile(
     requires_browser: bool,
     availability: &StygianAvailability,
 ) -> FetchExecutionMode {

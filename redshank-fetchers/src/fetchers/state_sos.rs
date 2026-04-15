@@ -90,7 +90,9 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<StateSosPipeline, String>
 ///
 /// All state SOS portals are JS-heavy; this delegates to the T47 policy layer.
 #[must_use]
-pub fn execution_mode_for_state_sos(availability: &StygianAvailability) -> FetchExecutionMode {
+pub const fn execution_mode_for_state_sos(
+    availability: &StygianAvailability,
+) -> FetchExecutionMode {
     select_execution_mode(STATE_SOS_IS_JS_HEAVY, availability)
 }
 

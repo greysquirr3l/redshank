@@ -213,11 +213,49 @@ cargo clippy --workspace -- -D warnings
 
 ```bash
 # Build with stygian web automation
-cargo build -p redshank-core --features stygian
+cargo build --workspace --features redshank-fetchers/stygian
 
 # Build with Coraline MCP code navigation tools
 cargo build -p redshank-core --features coraline
 ```
+
+### Stygian Setup (JS-heavy sources)
+
+Several fetchers — state Secretary of State portals, county property systems,
+and social media profiles — require a real browser to extract content. These
+route through [stygian-mcp](https://github.com/stygian-labs/stygian) when it is
+running, and **fail-soft** (return empty results with a warning) when it is not.
+
+1. Install stygian-mcp:
+
+   ```bash
+   cargo install stygian-mcp --locked
+   ```
+
+2. Start it on the default port:
+
+   ```bash
+   stygian-mcp --port 8787
+   ```
+
+3. Build redshank with the feature enabled and confirm the TUI footer shows
+   `stygian: ▲`.
+
+The health probe hits `http://127.0.0.1:8787/health` by default. Override via
+`settings.json`:
+
+```json
+{
+  "stygian": {
+    "endpoint_url": "http://10.0.0.42:8787/health",
+    "timeout_ms": 3000,
+    "retries": 2
+  }
+}
+```
+
+See the [Stygian Fallback architecture doc](docs/src/architecture/stygian-fallback.md)
+for full setup, troubleshooting, and licensing-boundary rationale.
 
 ### Workspace Layout
 

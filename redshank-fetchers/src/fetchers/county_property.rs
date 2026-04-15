@@ -159,7 +159,7 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<CountyPropertyPipeline, S
 /// Counties with a JSON API (`has_json_api = true`) always use native HTTP.
 /// Counties that require browser scraping are routed through stygian when available.
 #[must_use]
-pub fn execution_mode_for_county(
+pub const fn execution_mode_for_county(
     availability: &StygianAvailability,
     has_json_api: bool,
 ) -> FetchExecutionMode {
