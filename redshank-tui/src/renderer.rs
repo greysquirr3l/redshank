@@ -7,7 +7,7 @@
 //! └──────────────── Footer ────────────────┘
 //! ```
 
-use crate::domain::{ActiveScreen, AppState, ChatRole, WorkbenchTab};
+use crate::domain::{ActiveScreen, AppState, ChatRole, FetcherHealth, WorkbenchTab};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -201,9 +201,20 @@ fn render_footer(frame: &mut Frame, area: Rect, state: &AppState) {
     let status = state.activity.status_text();
     let nodes = state.wiki_nodes.len();
     let edges = state.wiki_edges.len();
-    let footer_text = format!(" {status} │ nodes: {nodes} │ edges: {edges} │ /help for commands ");
-    let footer =
-        Paragraph::new(footer_text).style(Style::default().fg(Color::White).bg(Color::DarkGray));
+    let health_glyph = state.fetcher_health.glyph();
+    let health_color = match state.fetcher_health {
+        FetcherHealth::Up => Color::Green,
+        FetcherHealth::Down => Color::Red,
+        FetcherHealth::Unknown => Color::DarkGray,
+    };
+
+    let footer_line = Line::from(vec![
+        Span::raw(format!(" {status} │ nodes: {nodes} │ edges: {edges} │ stygian: ")),
+        Span::styled(health_glyph, Style::default().fg(health_color)),
+        Span::raw(" │ /help for commands "),
+    ]);
+    let footer = Paragraph::new(footer_line)
+        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
 

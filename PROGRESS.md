@@ -180,7 +180,7 @@
 | Task | Status | Notes |
 | --- | --- | --- |
 | T47 — stygian capability detection and fallback policy | `[x]` | Added compile-time + runtime stygian-mcp availability probe and shared execution mode policy with fail-soft behavior for JS-heavy sources when fallback is unavailable. |
-| T48 — wire JS-heavy fetchers to optional stygian fallback | `[ ]` | Route selected fetchers through stygian fallback when available; keep graceful non-stygian behavior. |
+| T48 — wire JS-heavy fetchers to optional stygian fallback | `[x]` | Added `execution_mode_for_state_sos`, `execution_mode_for_county`, and `execution_mode_for_profile` in respective fetcher modules, all delegating to T47 policy layer. Added `FetcherHealth` enum + `▲`/`▼`/`?` glyph to TUI domain; footer renders colored stygian health indicator; engine pushes `AppEvent::FetcherHealthChanged`. |
 | T49 — document stygian-mcp fallback operations and licensing boundaries | `[ ]` | Operator docs for setup, troubleshooting, and why MCP boundary is used. |
 
 ---
@@ -203,3 +203,4 @@
 - T45: Use an `ActiveScreen` enum discriminant in `handle_key_with_command` to dispatch per-screen; keep `KeyCode` imports local to each handler function (not module-level) so test modules need an explicit import. Provider static metadata (`ProviderKind` display info) belongs in the renderer — use const slices to drive both list and detail without heap allocations. Always add match arms for new `UiCommand` variants in the CLI entry point or you'll get a non-exhaustive-patterns error.
 - T46: `PersistentSettings` field for provider config is `providers`, not `provider_endpoints`. `Role` has four variants: `Owner`, `Operator`, `Reader`, `Service` — `Service` lacks `ReadConfiguration`/`ConfigureProviders`/`ConfigureSources` and is the right choice for access-denied tests. `AuthContext` constructors are `system()` (Service role) and `owner(user_id, token)` — there is no `new()`. Always read the domain type's field names from source before writing test fixtures.
 - T47: For optional integrations, separate compile-time gates from runtime health probes and test them independently by injecting a compile-gate flag in internal probe helpers; this keeps behavior deterministic on end-user machines.
+- T48: Thin wiring functions (`execution_mode_for_*`) in each fetcher module keep the policy decision in one place (T47 `select_execution_mode`) and the routing call at the source layer. TUI health indicators driven by `AppEvent` keep rendering decoupled from the engine probe timing; `FetcherHealth::glyph()` returning a `&'static str` is cleaner than a `char` because ratatui `Span` takes `Into<String>`.
