@@ -173,6 +173,18 @@
 
 ---
 
+## Phase 14 — Stygian Fallback Hardening
+
+> Depends on: Phase 12 all complete, T12-stygian-integration, T26-readme-and-agents-md.
+
+| Task | Status | Notes |
+| --- | --- | --- |
+| T47 — stygian capability detection and fallback policy | `[x]` | Added compile-time + runtime stygian-mcp availability probe and shared execution mode policy with fail-soft behavior for JS-heavy sources when fallback is unavailable. |
+| T48 — wire JS-heavy fetchers to optional stygian fallback | `[ ]` | Route selected fetchers through stygian fallback when available; keep graceful non-stygian behavior. |
+| T49 — document stygian-mcp fallback operations and licensing boundaries | `[ ]` | Operator docs for setup, troubleshooting, and why MCP boundary is used. |
+
+---
+
 ## Accumulated Learnings
 
 > Subagents append discoveries here after each task.
@@ -190,3 +202,4 @@
 - T44: Consolidate provider enum variants early (e.g., `ProviderKind::Ollama` → `ProviderKind::OpenAiCompatible`) to avoid cascading find-and-replace across 7+ files. Use `is_some_and()` instead of `map_or(false, ...)` to satisfy clippy. View models must expose only `bool has_credential`, never secret values. Stub handlers with TODO(T44) in TDD phase to allow implementation iteration before moving to T45.
 - T45: Use an `ActiveScreen` enum discriminant in `handle_key_with_command` to dispatch per-screen; keep `KeyCode` imports local to each handler function (not module-level) so test modules need an explicit import. Provider static metadata (`ProviderKind` display info) belongs in the renderer — use const slices to drive both list and detail without heap allocations. Always add match arms for new `UiCommand` variants in the CLI entry point or you'll get a non-exhaustive-patterns error.
 - T46: `PersistentSettings` field for provider config is `providers`, not `provider_endpoints`. `Role` has four variants: `Owner`, `Operator`, `Reader`, `Service` — `Service` lacks `ReadConfiguration`/`ConfigureProviders`/`ConfigureSources` and is the right choice for access-denied tests. `AuthContext` constructors are `system()` (Service role) and `owner(user_id, token)` — there is no `new()`. Always read the domain type's field names from source before writing test fixtures.
+- T47: For optional integrations, separate compile-time gates from runtime health probes and test them independently by injecting a compile-gate flag in internal probe helpers; this keeps behavior deterministic on end-user machines.

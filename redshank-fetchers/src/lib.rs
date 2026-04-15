@@ -11,6 +11,7 @@
 
 pub mod client;
 pub mod domain;
+pub mod fallback;
 pub mod fetchers;
 
 // Re-export commonly used types.
@@ -18,6 +19,10 @@ pub use client::{
     build_client, build_client_from_config, build_client_with_key, rate_limit_delay, write_ndjson,
 };
 pub use domain::{FetchConfig, FetchError, FetchOutput};
+pub use fallback::{
+    detect_stygian_availability, select_execution_mode, FetchExecutionMode, StygianAvailability,
+    StygianProbeConfig, StygianUnavailableReason,
+};
 
 // ── Shared CLI argument parsing ─────────────────────────────
 

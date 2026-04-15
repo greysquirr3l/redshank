@@ -11,6 +11,10 @@ readme = "../README.md"
 keywords = ["osint", "data", "fetcher", "investigation", "agent"]
 categories = ["command-line-utilities", "web-programming"]
 
+[features]
+default = []
+stygian = ["redshank-core/stygian"]
+
 [dependencies]
 redshank-core = { workspace = true, features = ["runtime"] }
 serde = { workspace = true }

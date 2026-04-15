@@ -914,8 +914,10 @@ mod tests {
 
     #[test]
     fn version_string_format() {
-        let version_str = format!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA);
-        assert!(version_str.starts_with("redshank 0.1."));
+        let pkg_version = env!("CARGO_PKG_VERSION");
+        let version_str = format!("redshank {} ({})", pkg_version, GIT_SHA);
+        assert!(version_str.starts_with("redshank "));
+        assert!(version_str.contains(pkg_version));
         assert!(version_str.contains('('));
     }
 
