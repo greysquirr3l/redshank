@@ -46,6 +46,13 @@ pub trait SessionStore: Send + Sync {
         event: DomainEvent,
     ) -> impl std::future::Future<Output = Result<(), DomainError>> + Send;
 
+    /// List domain events for a session in ascending sequence order.
+    fn list_events(
+        &self,
+        auth: &AuthContext,
+        session_id: SessionId,
+    ) -> impl std::future::Future<Output = Result<Vec<DomainEvent>, DomainError>> + Send;
+
     /// Check if an idempotency key has been used.
     fn check_idempotency_key(
         &self,

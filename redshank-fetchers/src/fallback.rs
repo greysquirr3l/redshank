@@ -10,7 +10,8 @@ pub struct StygianProbeConfig {
     pub endpoint_url: String,
     /// Request timeout in milliseconds.
     pub timeout_ms: u64,
-    /// Number of retries after the initial attempt.
+    /// Number of additional attempts after the first, applied to both transport
+    /// errors and unhealthy responses.
     pub retries: u8,
 }
 
@@ -43,6 +44,10 @@ pub enum StygianUnavailableReason {
 }
 
 /// Availability state for stygian MCP fallback.
+///
+/// This enum only has two states: `Available` and `Unavailable`. The
+/// "probe not yet run" concept is represented separately by
+/// [`redshank_tui::domain::FetcherHealth::Unknown`] at the TUI layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StygianAvailability {
     /// Fallback is available and endpoint is healthy.
@@ -88,6 +93,7 @@ async fn detect_stygian_availability_with_compile_gate(
         .build()
         .map_err(FetchError::Http)?;
 
+    let mut last_unhealthy: Option<(u16, String)> = None;
     let mut last_error: Option<String> = None;
     let attempts = u16::from(config.retries) + 1;
     for _ in 0..attempts {
@@ -102,18 +108,23 @@ async fn detect_stygian_availability_with_compile_gate(
                     });
                 }
 
-                return Ok(StygianAvailability::Unavailable(
-                    StygianUnavailableReason::EndpointUnhealthy {
-                        endpoint_url: config.endpoint_url.clone(),
-                        status: status.as_u16(),
-                        body,
-                    },
-                ));
+                // Unhealthy response — record it and retry (may be transient).
+                last_unhealthy = Some((status.as_u16(), body));
             }
             Err(err) => {
                 last_error = Some(err.to_string());
             }
         }
+    }
+
+    if let Some((status, body)) = last_unhealthy {
+        return Ok(StygianAvailability::Unavailable(
+            StygianUnavailableReason::EndpointUnhealthy {
+                endpoint_url: config.endpoint_url.clone(),
+                status,
+                body,
+            },
+        ));
     }
 
     Ok(StygianAvailability::Unavailable(

@@ -241,18 +241,9 @@ running, and **fail-soft** (return empty results with a warning) when it is not.
 3. Build redshank with the feature enabled and confirm the TUI footer shows
    `stygian: ▲`.
 
-The health probe hits `http://127.0.0.1:8787/health` by default. Override via
-`settings.json`:
-
-```json
-{
-  "stygian": {
-    "endpoint_url": "http://10.0.0.42:8787/health",
-    "timeout_ms": 3000,
-    "retries": 2
-  }
-}
-```
+The health probe hits `http://127.0.0.1:8787/health` by default. Run stygian-mcp
+on that host and port. Configuration of the probe endpoint via `settings.json`
+is planned for a future release.
 
 See the [Stygian Fallback architecture doc](docs/src/architecture/stygian-fallback.md)
 for full setup, troubleshooting, and licensing-boundary rationale.

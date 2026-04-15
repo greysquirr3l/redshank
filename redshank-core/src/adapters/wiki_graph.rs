@@ -5,6 +5,8 @@
 //! and builds a `petgraph::DiGraph`.
 
 #[cfg(feature = "runtime")]
+use chrono::{DateTime, Utc};
+#[cfg(feature = "runtime")]
 use std::collections::HashMap;
 #[cfg(feature = "runtime")]
 use std::path::{Path, PathBuf};
@@ -58,12 +60,18 @@ pub struct WikiNode {
     pub category: WikiCategory,
     pub title: String,
     pub rel_path: PathBuf,
+    pub first_seen: Option<DateTime<Utc>>,
+    pub last_seen: Option<DateTime<Utc>>,
+    pub observation_count: u32,
 }
 
 #[cfg(feature = "runtime")]
 #[derive(Debug, Clone)]
 pub struct WikiEdge {
     pub ref_text: String,
+    pub first_seen: Option<DateTime<Utc>>,
+    pub last_seen: Option<DateTime<Utc>>,
+    pub evidence_sources: Vec<String>,
 }
 
 // ── Index parsing ───────────────────────────────────────────────────────────
@@ -478,6 +486,9 @@ impl WikiGraphModel {
                     title.clone()
                 },
                 rel_path: rel_path.clone(),
+                first_seen: None,
+                last_seen: None,
+                observation_count: 0,
             });
 
             self.node_set.insert(name.clone(), idx);
@@ -511,6 +522,9 @@ impl WikiGraphModel {
                                 target_idx,
                                 WikiEdge {
                                     ref_text: ref_text.clone(),
+                                    first_seen: None,
+                                    last_seen: None,
+                                    evidence_sources: Vec::new(),
                                 },
                             );
                         }

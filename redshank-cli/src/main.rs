@@ -15,9 +15,10 @@ use redshank_core::adapters::persistence::sqlite::SqliteSessionStore;
 use redshank_core::adapters::providers::builder::{
     build_provider_with_settings, infer_provider, list_models_with_settings,
 };
-use redshank_core::adapters::tool_defs::tool_definitions;
 use redshank_core::adapters::tools::WorkspaceTools;
-use redshank_core::application::services::engine::RLMEngine;
+use redshank_core::application::commands::run_investigation::{
+    IdempotencyKey, RunInvestigationCommand, RunInvestigationHandler,
+};
 use redshank_core::application::services::session_runtime::SessionRuntime;
 use redshank_core::domain::agent::{AgentConfig, ProviderKind, ReasoningEffort};
 use redshank_core::domain::auth::{AuthContext, UserId};
@@ -299,6 +300,20 @@ async fn run_tui_command_loop(
     runtime_tx: mpsc::Sender<redshank_tui::domain::AppEvent>,
     mut command_rx: mpsc::UnboundedReceiver<redshank_tui::domain::UiCommand>,
 ) {
+    // Probe stygian availability once at startup and push the result to the TUI footer.
+    let probe_cfg = redshank_fetchers::StygianProbeConfig::default();
+    let fetcher_health = match redshank_fetchers::detect_stygian_availability(&probe_cfg).await {
+        Ok(redshank_fetchers::StygianAvailability::Available { .. }) => {
+            redshank_tui::domain::FetcherHealth::Up
+        }
+        _ => redshank_tui::domain::FetcherHealth::Down,
+    };
+    let _ = runtime_tx
+        .send(redshank_tui::domain::AppEvent::FetcherHealthChanged(
+            fetcher_health,
+        ))
+        .await;
+
     let mut active_model = initial_model;
     let mut active_reasoning = initial_reasoning;
     while let Some(cmd) = command_rx.recv().await {
@@ -452,10 +467,21 @@ async fn solve_objective(
         .with_command_timeout(config.command_timeout.as_secs())
         .with_max_file_chars(config.max_file_chars);
     let replay_log = FileReplayLogger::new(replay_log_path(workspace)?);
-    let tool_defs = tool_definitions(config.recursive);
-    let engine = RLMEngine::new(config, provider, tools, replay_log);
-    engine
-        .solve(objective, &tool_defs)
+    let db_path = workspace
+        .join(".redshank")
+        .join("sessions.db")
+        .to_string_lossy()
+        .into_owned();
+    let store = SqliteSessionStore::open(&db_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let cmd = RunInvestigationCommand {
+        idempotency_key: IdempotencyKey::new(),
+        session_id: SessionId::new(),
+        objective: objective.to_owned(),
+        config,
+        auth: AuthContext::system(),
+    };
+    RunInvestigationHandler::new(store)
+        .handle(cmd, provider, tools, replay_log)
         .await
         .map_err(Into::into)
 }
@@ -480,10 +506,21 @@ async fn solve_objective_with_events(
         tx,
     };
     let replay_log = FileReplayLogger::new(replay_log_path(workspace)?);
-    let tool_defs = tool_definitions(config.recursive);
-    let engine = RLMEngine::new(config, provider, tools, replay_log);
-    engine
-        .solve(objective, &tool_defs)
+    let db_path = workspace
+        .join(".redshank")
+        .join("sessions.db")
+        .to_string_lossy()
+        .into_owned();
+    let store = SqliteSessionStore::open(&db_path).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let cmd = RunInvestigationCommand {
+        idempotency_key: IdempotencyKey::new(),
+        session_id: SessionId::new(),
+        objective: objective.to_owned(),
+        config,
+        auth: AuthContext::system(),
+    };
+    RunInvestigationHandler::new(store)
+        .handle(cmd, provider, tools, replay_log)
         .await
         .map_err(Into::into)
 }

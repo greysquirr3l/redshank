@@ -53,7 +53,8 @@ network connection. No stale connection errors; no silent DNS hits.
 
 ## Runtime probing
 
-On startup the engine calls `detect_stygian_availability(&StygianProbeConfig)`.
+At TUI startup, the CLI calls `detect_stygian_availability(&StygianProbeConfig)`
+and emits `AppEvent::FetcherHealthChanged` before the command loop begins.
 The probe config drives the health check:
 
 | Field | Default | Purpose |
@@ -122,25 +123,10 @@ User=stygian
 WantedBy=multi-user.target
 ```
 
-Point redshank at a non-default host with `REDSHANK_STYGIAN_ENDPOINT`:
-
-```bash
-export REDSHANK_STYGIAN_ENDPOINT=http://10.0.0.42:8787/health
-```
-
-> **Note:** The endpoint URL must include the `/health` path.
-
-### Override probe config in settings.json
-
-```json
-{
-  "stygian": {
-    "endpoint_url": "http://10.0.0.42:8787/health",
-    "timeout_ms": 3000,
-    "retries": 2
-  }
-}
-```
+Redshank currently probes `http://127.0.0.1:8787/health` by default. Run
+stygian-mcp on that host/port, or build a custom binary that sets a different
+`StygianProbeConfig`. Environment-variable and `settings.json` overrides for
+the probe endpoint are planned for a future release.
 
 ## Troubleshooting
 
