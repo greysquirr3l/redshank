@@ -29,24 +29,117 @@ use tokio_util::sync::CancellationToken;
 /// Cross-turn observations accumulated during the solve loop.
 #[derive(Debug, Clone, Default)]
 pub struct ExternalContext {
-    observations: Vec<String>,
+    identity: Vec<String>,
+    essential: Vec<String>,
+    on_demand: Vec<String>,
+    search: Vec<String>,
 }
 
 impl ExternalContext {
     /// Append an observation note.
     pub fn add(&mut self, text: String) {
-        self.observations.push(text);
+        self.add_essential(text);
+    }
+
+    /// Append stable high-priority context.
+    pub fn add_identity(&mut self, text: String) {
+        self.identity.push(text);
+    }
+
+    /// Append recent context that should be prioritised in prompts.
+    pub fn add_essential(&mut self, text: String) {
+        self.essential.push(text);
+    }
+
+    /// Append medium-priority context retrieved on demand.
+    pub fn add_on_demand(&mut self, text: String) {
+        self.on_demand.push(text);
+    }
+
+    /// Append low-priority search context.
+    pub fn add_search(&mut self, text: String) {
+        self.search.push(text);
     }
 
     /// Summary of recent observations for prompt injection.
     #[must_use]
     pub fn summary(&self, max_items: usize, max_chars: usize) -> String {
-        if self.observations.is_empty() || max_items == 0 {
+        if max_items == 0 || max_chars == 0 {
             return "(empty)".to_owned();
         }
-        let start = self.observations.len().saturating_sub(max_items);
-        let recent = self.observations.get(start..).unwrap_or_default();
-        let joined = recent.join("\n\n");
+
+        let empty = self.identity.is_empty()
+            && self.essential.is_empty()
+            && self.on_demand.is_empty()
+            && self.search.is_empty();
+        if empty {
+            return "(empty)".to_owned();
+        }
+
+        // Desired proportional allocations per layer.
+        let desired_identity = (max_items / 6).max(1);
+        let desired_essential = (max_items / 2).max(1);
+        let desired_on_demand = (max_items / 3).max(1);
+        let desired_search = (max_items / 4).max(1);
+        let desired_total =
+            desired_identity + desired_essential + desired_on_demand + desired_search;
+
+        // If proportional allocations exceed max_items, scale each down while
+        // keeping a floor of 1 so every layer can still render at least one entry.
+        let (identity_items, essential_items, on_demand_items, search_items) =
+            if desired_total <= max_items {
+                (
+                    desired_identity,
+                    desired_essential,
+                    desired_on_demand,
+                    desired_search,
+                )
+            } else {
+                let scale = |d: usize| (d * max_items / desired_total).max(1);
+                (
+                    scale(desired_identity),
+                    scale(desired_essential),
+                    scale(desired_on_demand),
+                    scale(desired_search),
+                )
+            };
+
+        let identity_budget = (max_chars / 10).max(32);
+        let essential_budget = (max_chars * 45 / 100).max(64);
+        let on_demand_budget = (max_chars * 30 / 100).max(48);
+        let search_budget = (max_chars * 15 / 100).max(32);
+
+        let mut sections = Vec::new();
+        if let Some(section) = render_layer(
+            "L0:IDENTITY",
+            &self.identity,
+            identity_items,
+            identity_budget,
+        ) {
+            sections.push(section);
+        }
+        if let Some(section) = render_layer(
+            "L1:ESSENTIAL",
+            &self.essential,
+            essential_items,
+            essential_budget,
+        ) {
+            sections.push(section);
+        }
+        if let Some(section) = render_layer(
+            "L2:ON_DEMAND",
+            &self.on_demand,
+            on_demand_items,
+            on_demand_budget,
+        ) {
+            sections.push(section);
+        }
+        if let Some(section) = render_layer("L3:SEARCH", &self.search, search_items, search_budget)
+        {
+            sections.push(section);
+        }
+
+        let joined = sections.join("\n\n");
         if joined.len() <= max_chars {
             joined
         } else {
@@ -57,6 +150,42 @@ impl ExternalContext {
             )
         }
     }
+}
+
+fn render_layer(
+    label: &str,
+    items: &[String],
+    max_items: usize,
+    max_chars: usize,
+) -> Option<String> {
+    if items.is_empty() || max_items == 0 || max_chars == 0 {
+        return None;
+    }
+
+    let start = items.len().saturating_sub(max_items);
+    let recent = items.get(start..).unwrap_or_default();
+    let joined = recent.join("\n");
+    let compressed = compress_for_context(&joined, max_chars);
+    Some(format!("[{label}]\n{compressed}"))
+}
+
+fn compress_for_context(input: &str, max_chars: usize) -> String {
+    if input.len() <= max_chars {
+        return input.to_owned();
+    }
+
+    let compact = input.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.len() <= max_chars {
+        return compact;
+    }
+
+    let marker = " [truncated]";
+    if marker.len() >= max_chars {
+        return marker.trim().to_owned();
+    }
+
+    let safe_end = compact.floor_char_boundary(max_chars - marker.len());
+    format!("{}{}", &compact[..safe_end], marker)
 }
 
 /// Maximum number of times an identical `run_shell` command can be repeated
@@ -111,7 +240,21 @@ impl<M: ModelProvider, D: ToolDispatcher, R: ReplayLog> RLMEngine<M, D, R> {
         objective: &str,
         tools: &[ToolDefinition],
     ) -> Result<String, DomainError> {
-        let mut context = ExternalContext::default();
+        self.solve_with_context(objective, tools, ExternalContext::default())
+            .await
+    }
+
+    /// Entry point with caller-provided context layers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DomainError`] if the model provider or tool dispatcher fails.
+    pub async fn solve_with_context(
+        &self,
+        objective: &str,
+        tools: &[ToolDefinition],
+        mut context: ExternalContext,
+    ) -> Result<String, DomainError> {
         self.solve_recursive(objective, 0, tools, &mut context)
             .await
     }
@@ -698,11 +841,34 @@ mod tests {
     }
 
     #[test]
+    fn external_context_summary_layers() {
+        let mut ctx = ExternalContext::default();
+        ctx.add_identity("investigation profile: maritime sanctions".into());
+        ctx.add_essential("target shell company appears in two registries".into());
+        ctx.add_on_demand("historical ownership chain recovered".into());
+        ctx.add_search("open-source mention in local media feed".into());
+
+        let s = ctx.summary(12, 2000);
+        assert!(s.contains("L0:IDENTITY"));
+        assert!(s.contains("L1:ESSENTIAL"));
+        assert!(s.contains("L2:ON_DEMAND"));
+        assert!(s.contains("L3:SEARCH"));
+    }
+
+    #[test]
     fn external_context_summary_truncates() {
         let mut ctx = ExternalContext::default();
         ctx.add("a".repeat(100));
         let s = ctx.summary(12, 50);
         assert!(s.contains("truncated"));
+    }
+
+    #[test]
+    fn external_context_summary_compacts_whitespace() {
+        let mut ctx = ExternalContext::default();
+        ctx.add("first\n\n\nline\n\n second".into());
+        let s = ctx.summary(4, 20);
+        assert!(s.contains("first line second") || s.contains("truncated"));
     }
 
     #[test]

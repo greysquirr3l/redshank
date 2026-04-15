@@ -1,8 +1,17 @@
 //! Exchange proof-of-reserves and compliance report parsing.
 
 use crate::domain::{FetchError, FetchOutput};
+use crate::fetchers::pol_sidecar;
 use crate::{build_client, write_ndjson};
+use chrono::Utc;
+use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
+
+// Re-export pol_sidecar helpers so other fetchers can import from a canonical location.
+// The helpers should be moved here in future refactoring to avoid duplication.
+pub use crate::fetchers::pol_sidecar::{
+    append_observation, classify_delta, read_latest_observation, snapshot_payload_hash,
+};
 
 /// A normalized exchange transparency report.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -134,6 +143,26 @@ pub async fn fetch_exchange_transparency(
         FetchError::Parse("could not parse exchange transparency page".to_string())
     })?;
     let output_path = output_dir.join("exchange_transparency.ndjson");
+    let observation_path = output_dir.join("exchange_transparency_observations.ndjson");
+
+    // Emit PoL observation for this exchange's transparency report.
+    let entity_id = format!("exchange:{}", report.exchange.to_ascii_lowercase());
+    let payload_hash = pol_sidecar::snapshot_payload_hash(&report)?;
+    let previous = pol_sidecar::read_latest_observation(
+        &observation_path,
+        &entity_id,
+        "exchange_transparency",
+    )?;
+    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
+    let observation = EntityObservation::new(
+        entity_id,
+        "exchange_transparency".to_owned(),
+        Utc::now(),
+        payload_hash,
+        delta,
+    );
+    pol_sidecar::append_observation(&observation_path, &observation)?;
+
     let records =
         vec![serde_json::to_value(report).map_err(|err| FetchError::Parse(err.to_string()))?];
     let count = write_ndjson(&output_path, &records)?;

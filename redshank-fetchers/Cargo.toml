@@ -21,6 +21,8 @@ reqwest = { workspace = true }
 tracing = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 zip = { workspace = true }
+chrono = { workspace = true }
+crc32fast = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

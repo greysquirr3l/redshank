@@ -48,6 +48,7 @@ pub mod irs_990_xml;
 pub mod blockchain_explorer;
 pub mod defi_protocols;
 pub mod exchange_transparency;
+pub(crate) mod pol_sidecar;
 pub mod tornado_screening;
 
 // ── T40: Environmental and permits intelligence fetchers ────────────────────
