@@ -61,20 +61,15 @@ impl<'a, S: ObservationStore> PolAnalyticsHandler<'a, S> {
             std::collections::HashMap::new();
 
         for obs in observations {
+            // Apply entity_id filter if specified in the query.
             if query
                 .entity_id
                 .as_deref()
                 .is_some_and(|id| obs.entity_id != id)
             {
                 continue;
-            }            // Apply entity_id filter if specified in the query.
-            if query
-                .entity_id
-                .as_deref()
-                .is_some_and(|id| obs.entity_id != id)
-            {
-                continue;
-            }            let is_change = matches!(
+            }
+            let is_change = matches!(
                 obs.delta,
                 ObservationDelta::New
                     | ObservationDelta::Changed { .. }
@@ -141,8 +136,7 @@ fn format_analytics_line(stats: &EntityStats, period_days: i64, since: DateTime<
     // (i.e., after the 75th-percentile bound), consider the entity accelerating.
     // Bound = since + (3/4 of the period), so activity after that is "accelerating".
     let recent_bound = since
-        + chrono::Duration::days((period_days * 3 / 4).max(1))
-            .max(chrono::Duration::seconds(1));
+        + chrono::Duration::days((period_days * 3 / 4).max(1)).max(chrono::Duration::seconds(1));
     let trend = if stats.last_ts > recent_bound {
         "accelerating"
     } else {
