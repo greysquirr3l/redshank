@@ -302,6 +302,20 @@ async fn run_tui_command_loop(
     runtime_tx: mpsc::Sender<redshank_tui::domain::AppEvent>,
     mut command_rx: mpsc::UnboundedReceiver<redshank_tui::domain::UiCommand>,
 ) {
+    // Probe stygian availability once at startup and push the result to the TUI footer.
+    let probe_cfg = redshank_fetchers::StygianProbeConfig::default();
+    let fetcher_health = match redshank_fetchers::detect_stygian_availability(&probe_cfg).await {
+        Ok(redshank_fetchers::StygianAvailability::Available { .. }) => {
+            redshank_tui::domain::FetcherHealth::Up
+        }
+        _ => redshank_tui::domain::FetcherHealth::Down,
+    };
+    let _ = runtime_tx
+        .send(redshank_tui::domain::AppEvent::FetcherHealthChanged(
+            fetcher_health,
+        ))
+        .await;
+
     let mut active_model = initial_model;
     let mut active_reasoning = initial_reasoning;
     while let Some(cmd) = command_rx.recv().await {
@@ -952,8 +966,10 @@ mod tests {
 
     #[test]
     fn version_string_format() {
-        let version_str = format!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA);
+        let pkg_version = env!("CARGO_PKG_VERSION");
+        let version_str = format!("redshank {pkg_version} ({GIT_SHA})");
         assert!(version_str.starts_with("redshank "));
+        assert!(version_str.contains(pkg_version));
         assert!(version_str.contains('('));
     }
 

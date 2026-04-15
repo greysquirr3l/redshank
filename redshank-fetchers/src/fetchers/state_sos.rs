@@ -6,6 +6,11 @@
 //! Supported states: Delaware, Wyoming, Nevada, Florida.
 //! Pipeline configs stored as TOML, loaded via `include_str!`.
 
+use crate::fallback::{FetchExecutionMode, StygianAvailability, select_execution_mode};
+
+/// All state SOS portals are JS-heavy (no public API — browser required).
+const STATE_SOS_IS_JS_HEAVY: bool = true;
+
 /// State SOS pipeline configuration TOML for Delaware ICIS.
 pub const PIPELINE_DE: &str = include_str!("../../pipelines/state_sos/delaware.toml");
 
@@ -81,10 +86,21 @@ pub fn parse_pipeline_config(toml_str: &str) -> Result<StateSosPipeline, String>
     })
 }
 
+/// Select the fetch execution mode for a state SOS portal.
+///
+/// All state SOS portals are JS-heavy; this delegates to the T47 policy layer.
+#[must_use]
+pub const fn execution_mode_for_state_sos(
+    availability: &StygianAvailability,
+) -> FetchExecutionMode {
+    select_execution_mode(STATE_SOS_IS_JS_HEAVY, availability)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::fallback::{FetchExecutionMode, StygianAvailability};
 
     #[test]
     fn state_sos_pipeline_config_loads_and_validates() {
@@ -101,5 +117,23 @@ mod tests {
             assert!(!config.portal_url.is_empty());
             assert!(!config.detail_fields.is_empty());
         }
+    }
+
+    #[test]
+    fn state_sos_selects_fallback_mode_when_stygian_available() {
+        let availability = StygianAvailability::Available {
+            endpoint_url: "http://127.0.0.1:8787/health".into(),
+        };
+        let mode = execution_mode_for_state_sos(&availability);
+        assert_eq!(mode, FetchExecutionMode::StygianMcpFallback);
+    }
+
+    #[test]
+    fn state_sos_selects_fail_soft_when_stygian_unavailable() {
+        let availability = StygianAvailability::Unavailable(
+            crate::fallback::StygianUnavailableReason::FeatureDisabled,
+        );
+        let mode = execution_mode_for_state_sos(&availability);
+        assert_eq!(mode, FetchExecutionMode::FailSoft);
     }
 }

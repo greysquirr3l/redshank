@@ -58,6 +58,8 @@ pub struct AppState {
     pub agent_running: bool,
     /// Should quit.
     pub should_quit: bool,
+    /// Stygian MCP fallback health indicator.
+    pub fetcher_health: FetcherHealth,
     /// Active workbench tab.
     pub workbench_tab: WorkbenchTab,
     /// Selected provider index in workbench.
@@ -83,6 +85,7 @@ impl Default for AppState {
             wiki_edges: Vec::new(),
             agent_running: false,
             should_quit: false,
+            fetcher_health: FetcherHealth::Unknown,
             workbench_tab: WorkbenchTab::Providers,
             workbench_provider_idx: 0,
             workbench_source_idx: 0,
@@ -112,6 +115,32 @@ pub struct SessionInfo {
     pub id: String,
     pub label: String,
     pub event_count: usize,
+}
+
+// ── Fetcher / Stygian Health ────────────────────────────────────────────────
+
+/// Stygian MCP fallback availability, as reported by the engine at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum FetcherHealth {
+    /// Availability not yet probed.
+    #[default]
+    Unknown,
+    /// Stygian MCP endpoint is reachable and healthy.
+    Up,
+    /// Stygian MCP endpoint is unreachable or disabled.
+    Down,
+}
+
+impl FetcherHealth {
+    /// Single Unicode character summarising health for compact display.
+    #[must_use]
+    pub const fn glyph(self) -> &'static str {
+        match self {
+            Self::Unknown => "?",
+            Self::Up => "▲",
+            Self::Down => "▼",
+        }
+    }
 }
 
 // ── Activity Indicator ───────────────────────────────────────────────────────
@@ -212,6 +241,8 @@ pub enum AppEvent {
     AgentComplete(String),
     /// Wiki graph changed (re-render canvas).
     WikiChanged,
+    /// Stygian MCP health changed.
+    FetcherHealthChanged(FetcherHealth),
     /// Quit requested.
     Quit,
 }

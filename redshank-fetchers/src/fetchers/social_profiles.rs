@@ -8,6 +8,7 @@
 //! Pipeline config stored in `pipelines/social_profiles/config.toml`.
 
 use crate::domain::{FetchError, FetchOutput};
+use crate::fallback::{FetchExecutionMode, StygianAvailability, select_execution_mode};
 use crate::{build_client, write_ndjson};
 use std::path::Path;
 
@@ -127,10 +128,24 @@ pub async fn fetch_mastodon_profile(
     })
 }
 
+/// Select the fetch execution mode for a social profile target.
+///
+/// Platforms where `requires_browser` is `true` (`LinkedIn`, `Twitter/X`) are
+/// routed through stygian when available. Mastodon (`ActivityPub` JSON) is
+/// always native HTTP.
+#[must_use]
+pub const fn execution_mode_for_profile(
+    requires_browser: bool,
+    availability: &StygianAvailability,
+) -> FetchExecutionMode {
+    select_execution_mode(requires_browser, availability)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::fallback::{FetchExecutionMode, StygianAvailability};
 
     #[test]
     fn social_profiles_pipeline_config_validates() {
@@ -145,5 +160,40 @@ mod tests {
         let mastodon = &targets[2];
         assert_eq!(mastodon.platform, "Mastodon");
         assert!(!mastodon.requires_browser);
+    }
+
+    #[test]
+    fn social_profiles_js_targets_route_to_fallback_when_available() {
+        let availability = StygianAvailability::Available {
+            endpoint_url: "http://127.0.0.1:8787/health".into(),
+        };
+        // LinkedIn requires_browser = true → StygianMcpFallback
+        assert_eq!(
+            execution_mode_for_profile(true, &availability),
+            FetchExecutionMode::StygianMcpFallback
+        );
+    }
+
+    #[test]
+    fn social_profiles_native_targets_always_use_native_http() {
+        let availability = StygianAvailability::Available {
+            endpoint_url: "http://127.0.0.1:8787/health".into(),
+        };
+        // Mastodon requires_browser = false → NativeHttp even when stygian is available
+        assert_eq!(
+            execution_mode_for_profile(false, &availability),
+            FetchExecutionMode::NativeHttp
+        );
+    }
+
+    #[test]
+    fn social_profiles_js_targets_fail_soft_when_stygian_unavailable() {
+        let availability = StygianAvailability::Unavailable(
+            crate::fallback::StygianUnavailableReason::FeatureDisabled,
+        );
+        assert_eq!(
+            execution_mode_for_profile(true, &availability),
+            FetchExecutionMode::FailSoft
+        );
     }
 }
