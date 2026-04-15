@@ -420,11 +420,11 @@ impl SqliteSessionStore {
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     observation.id.to_string(),
-                    observation.entity_id.as_str(),
-                    observation.source_id.as_str(),
+                    &observation.entity_id,
+                    &observation.source_id,
                     observation.observed_at.timestamp(),
-                    observation.payload_hash.as_str(),
-                    payload,
+                    &observation.payload_hash,
+                    &payload,
                 ],
             )
             .map_err(|e| DomainError::Other(format!("sqlite append_observation: {e}")));
@@ -457,12 +457,13 @@ impl SqliteSessionStore {
             "SELECT payload FROM observations \
             WHERE entity_id = ?1 AND source_id = ?2 \
             ORDER BY observed_at DESC LIMIT 1",
-            params![entity_id, source_id],
+            [entity_id, source_id],
             |row| row.get(0),
         ) {
             Ok(p) => Some(p),
             Err(rusqlite::Error::QueryReturnedNoRows) => None,
             Err(e) => {
+                drop(conn);
                 return Err(DomainError::Other(format!(
                     "sqlite latest_observation: {e}"
                 )));

@@ -26,9 +26,7 @@ const MAX_TAIL_BYTES: u64 = 65_536;
 /// # Errors
 ///
 /// Returns [`FetchError::Parse`] if `payload` cannot be serialised.
-pub fn snapshot_payload_hash<T: serde::Serialize>(
-    payload: &T,
-) -> Result<String, FetchError> {
+pub fn snapshot_payload_hash<T: serde::Serialize>(payload: &T) -> Result<String, FetchError> {
     let bytes = serde_json::to_vec(payload)
         .map_err(|e| FetchError::Parse(format!("serialize hash payload: {e}")))?;
     let mut hasher = crc32fast::Hasher::new();
@@ -137,10 +135,7 @@ pub fn read_latest_observation(
 /// # Errors
 ///
 /// Returns [`FetchError`] on I/O or serialisation failures.
-pub fn append_observation(
-    path: &Path,
-    observation: &EntityObservation,
-) -> Result<(), FetchError> {
+pub fn append_observation(path: &Path, observation: &EntityObservation) -> Result<(), FetchError> {
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     let line = serde_json::to_string(observation)
         .map_err(|e| FetchError::Parse(format!("serialize observation: {e}")))?;

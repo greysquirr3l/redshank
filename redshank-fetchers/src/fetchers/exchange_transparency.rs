@@ -7,6 +7,12 @@ use chrono::Utc;
 use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
 
+// Re-export pol_sidecar helpers so other fetchers can import from a canonical location.
+// The helpers should be moved here in future refactoring to avoid duplication.
+pub use crate::fetchers::pol_sidecar::{
+    append_observation, classify_delta, read_latest_observation, snapshot_payload_hash,
+};
+
 /// A normalized exchange transparency report.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct ExchangeTransparencyReport {
