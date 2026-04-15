@@ -754,7 +754,11 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
         let mut line = String::new();
         io::stdin().read_line(&mut line)?;
         let trimmed = line.trim().to_string();
-        Ok(if trimmed.is_empty() { None } else { Some(trimmed) })
+        Ok(if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        })
     };
 
     for group in groups() {
@@ -782,13 +786,16 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
     println!();
     // Remind operators about fields listed in ALL_CREDENTIAL_FIELDS.
     let total = ALL_CREDENTIAL_FIELDS.len();
-    let set_count = ALL_CREDENTIAL_FIELDS.iter().filter(|f| {
-        if f.field_name == "ollama_base_url" {
-            bundle.ollama_base_url.is_some()
-        } else {
-            bundle.has_field(f.field_name)
-        }
-    }).count();
+    let set_count = ALL_CREDENTIAL_FIELDS
+        .iter()
+        .filter(|f| {
+            if f.field_name == "ollama_base_url" {
+                bundle.ollama_base_url.is_some()
+            } else {
+                bundle.has_field(f.field_name)
+            }
+        })
+        .count();
     println!("{set_count}/{total} credentials configured.");
 
     if !bundle.has_any() {

@@ -316,7 +316,7 @@ pub fn apply_input(bundle: &mut CredentialBundle, field_name: &str, value: Strin
         "github_token" => bundle.github_token = Some(CredentialGuard::new(value)),
         "fec_api_key" => bundle.fec_api_key = Some(CredentialGuard::new(value)),
         "opencorporates_api_key" => {
-            bundle.opencorporates_api_key = Some(CredentialGuard::new(value))
+            bundle.opencorporates_api_key = Some(CredentialGuard::new(value));
         }
         "uk_companies_house_api_key" => {
             bundle.uk_companies_house_api_key = Some(CredentialGuard::new(value));
@@ -384,7 +384,7 @@ mod tests {
         }
     }
 
-    /// The canonical set of CredentialBundle field names is fully covered by
+    /// The canonical set of `CredentialBundle` field names is fully covered by
     /// `ALL_CREDENTIAL_FIELDS`.  If a new field is added to `CredentialBundle`
     /// without a matching entry here, this test fails.
     #[test]
