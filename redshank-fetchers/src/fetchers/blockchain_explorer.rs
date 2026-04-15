@@ -139,11 +139,11 @@ fn derive_observed_at(snapshot: &AddressSnapshot) -> DateTime<Utc> {
         .unwrap_or_else(Utc::now)
 }
 
-/// Note: large sidecars (>64 KB) will trigger a full file scan after the tail-scan
-/// to avoid false negatives. Consider consulting the SQLite ObservationStore instead
-/// for repeated queries to avoid O(n) scans on every fetch.
-
 /// Parse a Bitcoin transaction list response.
+///
+/// Note: large sidecars (>64 KB) will trigger a full file scan after the tail-scan
+/// to avoid false negatives. For repeated queries, consult the `SQLite` `ObservationStore`
+/// instead to avoid O(n) scans on every fetch.
 #[must_use]
 pub fn parse_bitcoin_transactions(json: &serde_json::Value) -> Vec<BlockchainTransaction> {
     json.as_array()
