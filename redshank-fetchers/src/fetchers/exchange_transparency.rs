@@ -1,11 +1,10 @@
 //! Exchange proof-of-reserves and compliance report parsing.
 
 use crate::domain::{FetchError, FetchOutput};
+use crate::fetchers::pol_sidecar;
 use crate::{build_client, write_ndjson};
 use chrono::Utc;
-use redshank_core::domain::observation::{EntityObservation, ObservationDelta};
-use std::fs::OpenOptions;
-use std::io::Write;
+use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
 
 /// A normalized exchange transparency report.
@@ -113,73 +112,6 @@ pub fn parse_aml_report(json: &serde_json::Value) -> Option<ExchangeTransparency
     })
 }
 
-fn snapshot_payload_hash(report: &ExchangeTransparencyReport) -> Result<String, FetchError> {
-    let payload = serde_json::to_vec(report)
-        .map_err(|err| FetchError::Parse(format!("serialize report hash: {err}")))?;
-    let mut hasher = crc32fast::Hasher::new();
-    hasher.update(&payload);
-    Ok(format!("{:08x}", hasher.finalize()))
-}
-
-fn classify_delta(previous: Option<&EntityObservation>, payload_hash: &str) -> ObservationDelta {
-    match previous {
-        None => ObservationDelta::New,
-        Some(prev) if prev.payload_hash == payload_hash => ObservationDelta::Unchanged,
-        Some(prev) => ObservationDelta::Changed {
-            previous_hash: prev.payload_hash.clone(),
-        },
-    }
-}
-
-fn read_latest_observation(
-    path: &Path,
-    entity_id: &str,
-) -> Result<Option<EntityObservation>, FetchError> {
-    use std::io::BufRead;
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let file = std::fs::File::open(path)?;
-    let reader = std::io::BufReader::new(file);
-    let mut latest: Option<EntityObservation> = None;
-
-    for line_result in reader.lines() {
-        let line = line_result?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let observation: EntityObservation = serde_json::from_str(&line).map_err(|err| {
-            FetchError::Parse(format!(
-                "parse observation line from {}: {err}",
-                path.display()
-            ))
-        })?;
-        if observation.entity_id != entity_id || observation.source_id != "exchange_transparency" {
-            continue;
-        }
-
-        let should_replace = latest
-            .as_ref()
-            .is_none_or(|current| observation.observed_at > current.observed_at);
-        if should_replace {
-            latest = Some(observation);
-        }
-    }
-
-    Ok(latest)
-}
-
-fn append_observation(path: &Path, observation: &EntityObservation) -> Result<(), FetchError> {
-    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-    serde_json::to_writer(&mut file, observation)
-        .map_err(|err| FetchError::Parse(format!("serialize observation: {err}")))?;
-    file.write_all(b"\n")?;
-    file.flush()?;
-    Ok(())
-}
-
 /// Fetch and persist an exchange transparency page.
 ///
 /// # Errors
@@ -209,9 +141,13 @@ pub async fn fetch_exchange_transparency(
 
     // Emit PoL observation for this exchange's transparency report.
     let entity_id = format!("exchange:{}", report.exchange.to_ascii_lowercase());
-    let payload_hash = snapshot_payload_hash(&report)?;
-    let previous = read_latest_observation(&observation_path, &entity_id)?;
-    let delta = classify_delta(previous.as_ref(), &payload_hash);
+    let payload_hash = pol_sidecar::snapshot_payload_hash(&report)?;
+    let previous = pol_sidecar::read_latest_observation(
+        &observation_path,
+        &entity_id,
+        "exchange_transparency",
+    )?;
+    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
     let observation = EntityObservation::new(
         entity_id,
         "exchange_transparency".to_owned(),
@@ -219,7 +155,7 @@ pub async fn fetch_exchange_transparency(
         payload_hash,
         delta,
     );
-    append_observation(&observation_path, &observation)?;
+    pol_sidecar::append_observation(&observation_path, &observation)?;
 
     let records =
         vec![serde_json::to_value(report).map_err(|err| FetchError::Parse(err.to_string()))?];

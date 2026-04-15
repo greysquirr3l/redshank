@@ -1,11 +1,10 @@
 //! Multi-chain blockchain explorer parsing and fetch helpers.
 
 use crate::domain::{FetchError, FetchOutput};
+use crate::fetchers::pol_sidecar;
 use crate::{build_client, write_ndjson};
 use chrono::{DateTime, TimeZone, Utc};
-use redshank_core::domain::observation::{EntityObservation, ObservationDelta};
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
 
 const ETHERSCAN_BASE: &str = "https://api.etherscan.io/api";
@@ -122,14 +121,6 @@ fn canonical_entity_id(chain: &str, address: &str) -> String {
     )
 }
 
-fn snapshot_payload_hash(snapshot: &AddressSnapshot) -> Result<String, FetchError> {
-    let payload = serde_json::to_vec(snapshot)
-        .map_err(|err| FetchError::Parse(format!("serialize snapshot hash payload: {err}")))?;
-    let mut hasher = crc32fast::Hasher::new();
-    hasher.update(&payload);
-    Ok(format!("{:08x}", hasher.finalize()))
-}
-
 fn timestamp_to_utc(ts: u64) -> Option<DateTime<Utc>> {
     let secs = i64::try_from(ts).ok()?;
     Utc.timestamp_opt(secs, 0).single()
@@ -146,65 +137,6 @@ fn derive_observed_at(snapshot: &AddressSnapshot) -> DateTime<Utc> {
         .or_else(|| snapshot.last_active.and_then(timestamp_to_utc))
         .or_else(|| snapshot.first_seen.and_then(timestamp_to_utc))
         .unwrap_or_else(Utc::now)
-}
-
-fn classify_delta(previous: Option<&EntityObservation>, payload_hash: &str) -> ObservationDelta {
-    match previous {
-        None => ObservationDelta::New,
-        Some(prev) if prev.payload_hash == payload_hash => ObservationDelta::Unchanged,
-        Some(prev) => ObservationDelta::Changed {
-            previous_hash: prev.payload_hash.clone(),
-        },
-    }
-}
-
-fn read_latest_observation(
-    path: &Path,
-    entity_id: &str,
-    source_id: &str,
-) -> Result<Option<EntityObservation>, FetchError> {
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let file = std::fs::File::open(path)?;
-    let reader = BufReader::new(file);
-    let mut latest: Option<EntityObservation> = None;
-
-    for line_result in reader.lines() {
-        let line = line_result?;
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let observation: EntityObservation = serde_json::from_str(&line).map_err(|err| {
-            FetchError::Parse(format!(
-                "parse observation line from {}: {err}",
-                path.display()
-            ))
-        })?;
-        if observation.entity_id != entity_id || observation.source_id != source_id {
-            continue;
-        }
-
-        let should_replace = latest
-            .as_ref()
-            .is_none_or(|current| observation.observed_at > current.observed_at);
-        if should_replace {
-            latest = Some(observation);
-        }
-    }
-
-    Ok(latest)
-}
-
-fn append_observation(path: &Path, observation: &EntityObservation) -> Result<(), FetchError> {
-    let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-    serde_json::to_writer(&mut file, observation)
-        .map_err(|err| FetchError::Parse(format!("serialize observation: {err}")))?;
-    file.write_all(b"\n")?;
-    file.flush()?;
-    Ok(())
 }
 
 /// Parse a Bitcoin transaction list response.
@@ -360,9 +292,9 @@ pub async fn fetch_address_snapshot(
     let observation_path = output_dir.join("blockchain_explorer_observations.ndjson");
 
     let entity_id = canonical_entity_id(chain, address);
-    let payload_hash = snapshot_payload_hash(&snapshot)?;
-    let previous = read_latest_observation(&observation_path, &entity_id, SOURCE_ID)?;
-    let delta = classify_delta(previous.as_ref(), &payload_hash);
+    let payload_hash = pol_sidecar::snapshot_payload_hash(&snapshot)?;
+    let previous = pol_sidecar::read_latest_observation(&observation_path, &entity_id, SOURCE_ID)?;
+    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
     let observation = EntityObservation::new(
         entity_id,
         SOURCE_ID.to_owned(),
@@ -370,7 +302,7 @@ pub async fn fetch_address_snapshot(
         payload_hash,
         delta,
     );
-    append_observation(&observation_path, &observation)?;
+    pol_sidecar::append_observation(&observation_path, &observation)?;
 
     let records =
         vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
@@ -388,6 +320,8 @@ pub async fn fetch_address_snapshot(
 #[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
+    use crate::fetchers::pol_sidecar;
+    use redshank_core::domain::observation::ObservationDelta;
 
     #[test]
     fn blockchain_explorer_parses_ethereum_address_balance_fixture() {
@@ -449,15 +383,15 @@ mod tests {
         );
 
         assert!(matches!(
-            classify_delta(None, "aaaa0001"),
+            pol_sidecar::classify_delta(None, "aaaa0001"),
             ObservationDelta::New
         ));
         assert!(matches!(
-            classify_delta(Some(&previous), "aaaa0001"),
+            pol_sidecar::classify_delta(Some(&previous), "aaaa0001"),
             ObservationDelta::Unchanged
         ));
 
-        let changed = classify_delta(Some(&previous), "bbbb0002");
+        let changed = pol_sidecar::classify_delta(Some(&previous), "bbbb0002");
         assert!(matches!(changed, ObservationDelta::Changed { .. }));
     }
 
@@ -484,10 +418,10 @@ mod tests {
             },
         );
 
-        append_observation(&path, &older).unwrap();
-        append_observation(&path, &newer).unwrap();
+        pol_sidecar::append_observation(&path, &older).unwrap();
+        pol_sidecar::append_observation(&path, &newer).unwrap();
 
-        let latest = read_latest_observation(&path, entity, SOURCE_ID).unwrap();
+        let latest = pol_sidecar::read_latest_observation(&path, entity, SOURCE_ID).unwrap();
         assert!(latest.is_some());
         assert_eq!(
             latest

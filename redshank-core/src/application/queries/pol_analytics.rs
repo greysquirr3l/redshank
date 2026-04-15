@@ -61,6 +61,13 @@ impl<'a, S: ObservationStore> PolAnalyticsHandler<'a, S> {
             std::collections::HashMap::new();
 
         for obs in observations {
+            if query
+                .entity_id
+                .as_deref()
+                .is_some_and(|id| obs.entity_id != id)
+            {
+                continue;
+            }
             let is_change = matches!(
                 obs.delta,
                 ObservationDelta::New
@@ -85,7 +92,7 @@ impl<'a, S: ObservationStore> PolAnalyticsHandler<'a, S> {
 
         let mut lines: Vec<String> = entity_stats
             .values()
-            .map(|stats| format_analytics_line(stats, period_days))
+            .map(|stats| format_analytics_line(stats, period_days, query.since))
             .collect();
 
         // Sort by change count, descending.
@@ -119,14 +126,15 @@ impl EntityStats {
     }
 }
 
-fn format_analytics_line(stats: &EntityStats, period_days: i64) -> String {
+fn format_analytics_line(stats: &EntityStats, period_days: i64, since: DateTime<Utc>) -> String {
     let change_count_f64 = f64::from(u32::try_from(stats.change_count).unwrap_or(u32::MAX));
     let period_days_f64 = f64::from(i32::try_from(period_days.max(1)).unwrap_or(i32::MAX));
     let freq_per_day = change_count_f64 / period_days_f64;
 
-    // Simple trend indicator: if most changes are in the last 25% of the period.
+    // Trend indicator: if most recent change falls in the last 25% of the window
+    // (i.e., after the 75th-percentile bound), consider the entity accelerating.
     let recent_bound =
-        stats.first_ts + chrono::Duration::days(period_days / 4).max(chrono::Duration::seconds(1));
+        since + chrono::Duration::days(period_days * 3 / 4).max(chrono::Duration::seconds(1));
     let trend = if stats.last_ts > recent_bound {
         "accelerating"
     } else {
@@ -161,7 +169,7 @@ mod tests {
             last_ts: Utc::now(),
         };
 
-        let line = format_analytics_line(&stats, 7);
+        let line = format_analytics_line(&stats, 7, Utc::now() - chrono::Duration::days(7));
         assert!(line.contains("entity=ethereum:0xabc"));
         assert!(line.contains("changes=14"));
         assert!(line.contains("freq=2.00/day"));
@@ -180,12 +188,12 @@ mod tests {
             last_ts: now - chrono::Duration::hours(1),
         };
 
-        let line = format_analytics_line(&stats, 14);
+        let line = format_analytics_line(&stats, 14, start);
         assert!(line.contains("trend=accelerating"));
 
         // Last change long ago -> stable
         stats.last_ts = start + chrono::Duration::days(2);
-        let line = format_analytics_line(&stats, 14);
+        let line = format_analytics_line(&stats, 14, start);
         assert!(line.contains("trend=stable"));
     }
 }

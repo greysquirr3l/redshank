@@ -76,10 +76,33 @@ impl ExternalContext {
             return "(empty)".to_owned();
         }
 
-        let identity_items = (max_items / 6).max(1);
-        let essential_items = (max_items / 2).max(1);
-        let on_demand_items = (max_items / 3).max(1);
-        let search_items = (max_items / 4).max(1);
+        // Desired proportional allocations per layer.
+        let desired_identity = (max_items / 6).max(1);
+        let desired_essential = (max_items / 2).max(1);
+        let desired_on_demand = (max_items / 3).max(1);
+        let desired_search = (max_items / 4).max(1);
+        let desired_total =
+            desired_identity + desired_essential + desired_on_demand + desired_search;
+
+        // If proportional allocations exceed max_items, scale each down while
+        // keeping a floor of 1 so every layer can still render at least one entry.
+        let (identity_items, essential_items, on_demand_items, search_items) =
+            if desired_total <= max_items {
+                (
+                    desired_identity,
+                    desired_essential,
+                    desired_on_demand,
+                    desired_search,
+                )
+            } else {
+                let scale = |d: usize| (d * max_items / desired_total).max(1);
+                (
+                    scale(desired_identity),
+                    scale(desired_essential),
+                    scale(desired_on_demand),
+                    scale(desired_search),
+                )
+            };
 
         let identity_budget = (max_chars / 10).max(32);
         let essential_budget = (max_chars * 45 / 100).max(64);
