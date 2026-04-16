@@ -7,7 +7,7 @@
 
 mod setup;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
@@ -81,15 +81,20 @@ impl ToolDispatcher for EventingWorkspaceTools {
 #[command(name = "redshank", version, about, long_about = None)]
 struct Cli {
     /// Workspace directory (default: current directory).
-    #[arg(long, global = true, env = "REDSHANK_WORKSPACE")]
+    #[arg(short = 'w', long, global = true, env = "REDSHANK_WORKSPACE")]
     workspace: Option<PathBuf>,
 
     /// Model to use (e.g. "claude-sonnet-4-20250514").
-    #[arg(long, global = true, default_value = "claude-sonnet-4-20250514")]
+    #[arg(
+        short = 'm',
+        long,
+        global = true,
+        default_value = "claude-sonnet-4-20250514"
+    )]
     model: String,
 
     /// Reasoning effort level.
-    #[arg(long, global = true, default_value = "medium")]
+    #[arg(short = 'r', long, global = true, default_value = "medium")]
     reasoning: String,
 
     /// Disable TUI (headless mode).
@@ -123,8 +128,8 @@ enum Commands {
     },
     /// Fetch data from a specific source.
     Fetch {
-        /// Data source name (e.g. "sec-edgar", "fec", "ofac-sdn").
-        source: String,
+        /// Data source name.
+        source: FetchSource,
         /// Output directory for fetched data.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -138,9 +143,22 @@ enum Commands {
         action: SessionAction,
     },
     /// Interactive credential setup.
-    Configure,
+    #[command(alias = "setup")]
+    Configure {
+        #[command(subcommand)]
+        action: Option<ConfigureAction>,
+    },
     /// Print version info.
     Version,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum FetchSource {
+    #[value(
+        name = "uk_corporate_intelligence",
+        alias = "uk-corporate-intelligence"
+    )]
+    UkCorporateIntelligence,
 }
 
 #[derive(Subcommand, Debug)]
@@ -157,6 +175,12 @@ enum SessionAction {
         /// Session ID to resume.
         id: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigureAction {
+    /// Run the interactive credential setup wizard.
+    Credentials,
 }
 
 fn init_logging() {
@@ -209,9 +233,9 @@ async fn main() -> anyhow::Result<()> {
             source,
             output,
             query,
-        } => cmd_fetch(&workspace, &source, output.as_deref(), query.as_deref()).await,
+        } => cmd_fetch(&workspace, source, output.as_deref(), query.as_deref()).await,
         Commands::Session { action } => cmd_session(action, &workspace).await,
-        Commands::Configure => cmd_configure(&workspace),
+        Commands::Configure { .. } => cmd_configure(&workspace),
         Commands::Version => {
             println!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA,);
             Ok(())
@@ -653,16 +677,16 @@ fn summarize_tool_result(content: &str, is_error: bool) -> String {
 
 async fn cmd_fetch(
     workspace: &Path,
-    source: &str,
+    source: FetchSource,
     output: Option<&std::path::Path>,
     query: Option<&str>,
 ) -> anyhow::Result<()> {
-    tracing::info!(source, ?output, query, "fetching data");
+    tracing::info!(source = ?source, ?output, query, "fetching data");
     let output_dir = output.unwrap_or_else(|| std::path::Path::new("."));
     let query = query.ok_or_else(|| anyhow::anyhow!("--query is required for fetch"))?;
 
     match source {
-        "uk_corporate_intelligence" | "uk-corporate-intelligence" => {
+        FetchSource::UkCorporateIntelligence => {
             let credentials = resolve_credentials(workspace, None);
             let companies_house_api_key = required_secret(
                 credentials.uk_companies_house_api_key.as_ref(),
@@ -685,7 +709,6 @@ async fn cmd_fetch(
             println!("{}", result.output_path.display());
             Ok(())
         }
-        _ => anyhow::bail!("fetch dispatch not yet wired — source: {source}"),
     }
 }
 
@@ -848,7 +871,7 @@ mod tests {
         let cli = Cli::try_parse_from([
             "redshank",
             "fetch",
-            "sec-edgar",
+            "uk_corporate_intelligence",
             "--query",
             "ACME",
             "--output",
@@ -861,7 +884,7 @@ mod tests {
                 query,
                 output,
             } => {
-                assert_eq!(source, "sec-edgar");
+                assert!(matches!(source, FetchSource::UkCorporateIntelligence));
                 assert_eq!(query.as_deref(), Some("ACME"));
                 assert_eq!(output, Some(PathBuf::from("/tmp/out")));
             }
@@ -883,7 +906,26 @@ mod tests {
         assert!(matches!(
             cli.command,
             Commands::Fetch { source, query, .. }
-                if source == "uk_corporate_intelligence"
+                if matches!(source, FetchSource::UkCorporateIntelligence)
+                    && query.as_deref() == Some("Acme Holdings")
+        ));
+    }
+
+    #[test]
+    fn cli_parses_fetch_kebab_case_alias() {
+        let cli = Cli::try_parse_from([
+            "redshank",
+            "fetch",
+            "uk-corporate-intelligence",
+            "--query",
+            "Acme Holdings",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Commands::Fetch { source, query, .. }
+                if matches!(source, FetchSource::UkCorporateIntelligence)
                     && query.as_deref() == Some("Acme Holdings")
         ));
     }
@@ -953,9 +995,66 @@ mod tests {
     }
 
     #[test]
+    fn cli_parses_short_global_flags() {
+        let cli = Cli::try_parse_from([
+            "redshank",
+            "-m",
+            "gpt-4o",
+            "-r",
+            "high",
+            "-w",
+            "/tmp/workspace",
+            "version",
+        ])
+        .unwrap();
+        assert_eq!(cli.model, "gpt-4o");
+        assert_eq!(cli.reasoning, "high");
+        assert_eq!(cli.workspace, Some(PathBuf::from("/tmp/workspace")));
+    }
+
+    #[test]
     fn cli_parses_configure() {
         let cli = Cli::try_parse_from(["redshank", "configure"]).unwrap();
-        assert!(matches!(cli.command, Commands::Configure));
+        assert!(matches!(cli.command, Commands::Configure { action: None }));
+    }
+
+    #[test]
+    fn cli_parses_setup_alias() {
+        let cli = Cli::try_parse_from(["redshank", "setup"]).unwrap();
+        assert!(matches!(cli.command, Commands::Configure { action: None }));
+    }
+
+    #[test]
+    fn cli_parses_configure_credentials_alias() {
+        let cli = Cli::try_parse_from(["redshank", "configure", "credentials"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Configure {
+                action: Some(ConfigureAction::Credentials)
+            }
+        ));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_session_subcommand() {
+        let err = Cli::try_parse_from(["redshank", "session", "show", "abc-123"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        assert!(err.to_string().contains("show"));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_configure_subcommand() {
+        let err = Cli::try_parse_from(["redshank", "configure", "get", "foo"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        assert!(err.to_string().contains("get"));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_fetch_source() {
+        let err =
+            Cli::try_parse_from(["redshank", "fetch", "sec-edgar", "--query", "ACME"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+        assert!(err.to_string().contains("sec-edgar"));
     }
 
     #[test]

@@ -25,8 +25,8 @@ The binary lands at `target/release/redshank`.
 ## Quickstart
 
 ```bash
-# 1. Set your API key
-export ANTHROPIC_API_KEY="sk-ant-..."
+# 1. Run the interactive credential wizard
+redshank setup
 
 # 2. Launch the TUI
 redshank tui
@@ -34,6 +34,8 @@ redshank tui
 # 3. Or run a one-shot investigation from the command line
 redshank run "Who are the top donors to PACs linked to defense contractors with active SAM.gov registrations?"
 ```
+
+`redshank configure` and `redshank configure credentials` invoke the same setup wizard.
 
 ## Features
 
@@ -157,7 +159,7 @@ Launch with `redshank tui` (or `redshank tui --session <id>` to resume).
 | Command | Effect |
 | --- | --- |
 | `/model <name>` | Switch model (add `--save` to persist) |
-| `/model` | List available models |
+| `/model` or `/model list` | List available models |
 | `/reasoning <off\|low\|medium\|high>` | Set reasoning effort |
 | `/status` | Show current model, effort, and session info |
 | `/clear` | Clear the chat log |
@@ -180,9 +182,10 @@ redshank [OPTIONS] <COMMAND>
 Commands:
   run        Run an investigation with a given objective
   tui        Launch the interactive TUI
-  fetch      Run a data fetcher directly
+  fetch      Run a supported data fetcher directly
   session    List, resume, or delete sessions
-  configure  Interactive credential and settings setup
+  configure  Interactive credential setup
+  setup      Alias for configure
   version    Print version and build info
 
 Global Options:
@@ -193,6 +196,8 @@ Global Options:
       --max-depth <N>       Maximum recursion depth for subtasks
       --demo                Demo mode (use mock model)
 ```
+
+    `redshank fetch` currently supports `uk_corporate_intelligence` and its kebab-case alias `uk-corporate-intelligence`.
 
 ## Development
 

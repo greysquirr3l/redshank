@@ -37,10 +37,10 @@ HIBP (breach exposure) → GitHub profile → WHOIS/RDAP → Wayback Machine →
 
 ## Multi-depth investigations
 
-Use `--depth` to allow the agent to spin up child agents for subtasks:
+Use `--max-depth` to allow the agent to spin up child agents for subtasks:
 
 ```bash
-redshank run --depth 3 "Map the full ownership network behind the top 10 SAM.gov contractors in the defense sector"
+redshank run --max-depth 3 "Map the full ownership network behind the top 10 SAM.gov contractors in the defense sector"
 ```
 
 Each child invocation gets its own step budget and writes its findings back to the shared wiki.
