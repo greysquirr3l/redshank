@@ -121,8 +121,7 @@ pub async fn run_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
         .stderr(std::process::Stdio::null());
     #[cfg(unix)]
     cmd.process_group(0);
-    let child = match cmd.spawn()
-    {
+    let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
             let _ = std::fs::remove_file(&out_path);
