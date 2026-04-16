@@ -47,7 +47,7 @@ pub enum StygianUnavailableReason {
 ///
 /// This enum only has two states: `Available` and `Unavailable`. The
 /// "probe not yet run" concept is represented separately by
-/// [`redshank_tui::domain::FetcherHealth::Unknown`] at the TUI layer.
+/// `FetcherHealth::Unknown` at the TUI layer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StygianAvailability {
     /// Fallback is available and endpoint is healthy.
