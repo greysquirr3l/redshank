@@ -120,10 +120,11 @@ pub async fn fetch_irs_1023_document(
     }
 
     let body = resp.text().await?;
-    let application = parse_irs_1023_application(&body)
-        .ok_or_else(|| FetchError::Parse("could not parse IRS exemption application".to_string()))?;
-    let records = vec![serde_json::to_value(application)
-        .map_err(|err| FetchError::Parse(err.to_string()))?];
+    let application = parse_irs_1023_application(&body).ok_or_else(|| {
+        FetchError::Parse("could not parse IRS exemption application".to_string())
+    })?;
+    let records =
+        vec![serde_json::to_value(application).map_err(|err| FetchError::Parse(err.to_string()))?];
     let output_path = output_dir.join("irs_1023.ndjson");
     let count = write_ndjson(&output_path, &records)?;
 
@@ -160,7 +161,10 @@ mod tests {
     fn irs_1023_parses_exemption_application_fixture() {
         let application = parse_irs_1023_application(application_fixture()).unwrap();
 
-        assert_eq!(application.organization_name.as_deref(), Some("Community Justice Lab"));
+        assert_eq!(
+            application.organization_name.as_deref(),
+            Some("Community Justice Lab")
+        );
         assert_eq!(application.ein.as_deref(), Some("521234567"));
         assert_eq!(application.form_type.as_deref(), Some("1023"));
         assert_eq!(application.board_members.len(), 2);
@@ -170,18 +174,22 @@ mod tests {
     fn irs_1023_extracts_narrative_and_planned_activities() {
         let application = parse_irs_1023_application(application_fixture()).unwrap();
 
-        assert!(application
-            .organizational_narrative
-            .as_deref()
-            .unwrap()
-            .contains("public defenders"));
+        assert!(
+            application
+                .organizational_narrative
+                .as_deref()
+                .unwrap()
+                .contains("public defenders")
+        );
         assert_eq!(application.planned_activities.len(), 2);
         assert_eq!(
             application.planned_activities[0].heading.as_deref(),
             Some("Legal Clinics")
         );
-        assert!(application.planned_activities[1]
-            .description
-            .contains("court debt"));
+        assert!(
+            application.planned_activities[1]
+                .description
+                .contains("court debt")
+        );
     }
 }

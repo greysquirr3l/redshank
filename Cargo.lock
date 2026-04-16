@@ -2820,7 +2820,7 @@ dependencies = [
 
 [[package]]
 name = "redshank-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2839,7 +2839,7 @@ dependencies = [
 
 [[package]]
 name = "redshank-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64",
  "chrono",
@@ -2862,7 +2862,7 @@ dependencies = [
 
 [[package]]
 name = "redshank-fetchers"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "clap",
@@ -2880,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "redshank-tui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crossterm",
  "ratatui",

@@ -16,7 +16,14 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    match fetch_address_snapshot(&args.chain, &args.address, args.api_key.as_deref(), &args.output).await {
+    match fetch_address_snapshot(
+        &args.chain,
+        &args.address,
+        args.api_key.as_deref(),
+        &args.output,
+    )
+    .await
+    {
         Ok(result) => println!("{}", result.output_path.display()),
         Err(err) => {
             eprintln!("fetch-blockchain-explorer failed: {err}");

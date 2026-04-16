@@ -402,10 +402,16 @@ pub fn merge_uk_company_records(
             entry.company_name.clone_from(&company.company_name);
         }
         if entry.registered_office_address.is_none() {
-            entry.registered_office_address.clone_from(&company.registered_address);
+            entry
+                .registered_office_address
+                .clone_from(&company.registered_address);
         }
-        entry.opencorporates_status.clone_from(&company.current_status);
-        entry.opencorporates_url.clone_from(&company.opencorporates_url);
+        entry
+            .opencorporates_status
+            .clone_from(&company.current_status);
+        entry
+            .opencorporates_url
+            .clone_from(&company.opencorporates_url);
         entry.opencorporates_officers.clone_from(&company.officers);
         if !entry
             .registry_sources

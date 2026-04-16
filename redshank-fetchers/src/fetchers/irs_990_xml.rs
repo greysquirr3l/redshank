@@ -155,7 +155,8 @@ fn collect_related_organizations(text: &str) -> Vec<RelatedOrganization> {
     collect_blocks(text, "RelatedOrganizationDetail")
         .into_iter()
         .filter_map(|block| {
-            let name = extract_first_tag(block, &["BusinessNameLine1Txt", "NameBusinessNameLine1Txt"])?;
+            let name =
+                extract_first_tag(block, &["BusinessNameLine1Txt", "NameBusinessNameLine1Txt"])?;
             Some(RelatedOrganization {
                 name,
                 relationship: extract_first_tag(
@@ -200,7 +201,10 @@ pub fn parse_irs_990_xml(ein: &str, xml: &str) -> Option<Irs990XmlRecord> {
         organization_name: extract_first_tag(xml, &["BusinessNameLine1Txt"]),
         summary: Irs990Summary {
             total_revenue: parse_amount(xml, &["CYTotalRevenueAmt", "TotalRevenueCurrentYearAmt"]),
-            total_expenses: parse_amount(xml, &["CYTotalExpensesAmt", "TotalExpensesCurrentYearAmt"]),
+            total_expenses: parse_amount(
+                xml,
+                &["CYTotalExpensesAmt", "TotalExpensesCurrentYearAmt"],
+            ),
             revenue_minus_expenses: parse_amount(
                 xml,
                 &["RevenueLessExpensesAmt", "CYRevenuesLessExpensesAmt"],

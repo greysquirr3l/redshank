@@ -80,9 +80,18 @@ mod provider_kind_tests {
 
     #[test]
     fn infer_provider_kind_from_model_name() {
-        assert_eq!(ProviderKind::from_model_name("claude-opus"), Some(ProviderKind::Anthropic));
-        assert_eq!(ProviderKind::from_model_name("gpt-4"), Some(ProviderKind::OpenAI));
-        assert_eq!(ProviderKind::from_model_name("ollama/llama2"), Some(ProviderKind::OpenAiCompatible));
+        assert_eq!(
+            ProviderKind::from_model_name("claude-opus"),
+            Some(ProviderKind::Anthropic)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("gpt-4"),
+            Some(ProviderKind::OpenAI)
+        );
+        assert_eq!(
+            ProviderKind::from_model_name("ollama/llama2"),
+            Some(ProviderKind::OpenAiCompatible)
+        );
     }
 }
 

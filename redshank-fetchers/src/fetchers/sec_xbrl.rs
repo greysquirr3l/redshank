@@ -682,7 +682,10 @@ mod tests {
         assert_eq!(annual.financials.net_income, Some(96_995_000_000.0));
         assert_eq!(annual.financials.total_assets, Some(352_583_000_000.0));
         assert_eq!(annual.financials.total_liabilities, Some(290_437_000_000.0));
-        assert_eq!(annual.financials.stockholders_equity, Some(62_146_000_000.0));
+        assert_eq!(
+            annual.financials.stockholders_equity,
+            Some(62_146_000_000.0)
+        );
     }
 
     #[test]
