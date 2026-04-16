@@ -331,7 +331,16 @@ impl FileCredentialStore {
         let Ok(contents) = std::fs::read_to_string(&self.credentials_path) else {
             return CredentialBundle::default();
         };
-        serde_json::from_str(&contents).unwrap_or_default()
+        match serde_json::from_str(&contents) {
+            Ok(bundle) => bundle,
+            Err(e) => {
+                tracing::warn!(
+                    "failed to parse credentials from {}: {e}; using defaults",
+                    self.credentials_path.display()
+                );
+                CredentialBundle::default()
+            }
+        }
     }
 
     /// Save credentials to JSON and set file permissions to `0o600`.

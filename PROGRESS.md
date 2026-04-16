@@ -170,6 +170,7 @@
 | T44 — configuration queries and commands: merge catalog, settings, and credentials for UI use | `[x]` | CQRS layer for UI-ready configuration views and safe non-secret config updates. Query handlers return `ConfiguredSourceView` and `ConfiguredProviderView`. Command handlers stub I/O with TODO(T44). All 539 tests passing. |
 | T45 — TUI configuration workbench: providers, data sources, and guided setup | `[x]` | Dedicated TUI settings surface for provider and scraper configuration. |
 | T46 — configuration handler implementation: real persistence behind provider and source query/command handlers | `[x]` | Replaced TODO stubs in `GetConfiguredProviders`, `GetConfiguredSources`, `UpdateProviderConfiguration`, `UpdateSourceConfiguration` with real `SettingsStore` + `FileCredentialStore` I/O via a new `WorkspaceConfig` port and `WorkspaceConfigStore` adapter. |
+| T51 — credential setup helper: guided onboarding tool for all required API keys | `[x]` | Added `redshank-cli/src/setup.rs` with `ALL_CREDENTIAL_FIELDS` static slice (25 fields, 11 groups), `apply_input()`, and group helpers. Rewrote `cmd_configure` in `main.rs` to iterate the definitions data-driven — shows `[set]` indicators for already-configured fields, groups output by category with sign-up URLs, prints a `N/25 credentials configured` summary. 8 unit tests enforce uniqueness, completeness (`no_bundle_field_left_behind`), and round-trip correctness. |
 
 ---
 

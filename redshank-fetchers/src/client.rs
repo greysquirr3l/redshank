@@ -30,7 +30,10 @@ pub fn build_client() -> Result<reqwest::Client, FetchError> {
 /// # Errors
 ///
 /// Returns `Err` if the header name or value is invalid, or the client cannot be constructed.
-pub fn build_client_with_key(header_name: &str, header_value: &str) -> Result<reqwest::Client, FetchError> {
+pub fn build_client_with_key(
+    header_name: &str,
+    header_value: &str,
+) -> Result<reqwest::Client, FetchError> {
     let mut headers = HeaderMap::new();
     let name: HeaderName = header_name
         .parse()

@@ -219,8 +219,20 @@ impl BrowserSearchFallback {
             tokio::time::sleep(Duration::from_millis(extra_wait_ms)).await;
         }
 
-        let title = page.title().await.unwrap_or_default();
-        let content = page.content().await.unwrap_or_default();
+        let title = match page.title().await {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::warn!("failed to extract page title from {url}: {e}");
+                String::new()
+            }
+        };
+        let content = match page.content().await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("failed to extract page content from {url}: {e}");
+                String::new()
+            }
+        };
         handle.release().await;
 
         Ok(BrowserSearchResult {

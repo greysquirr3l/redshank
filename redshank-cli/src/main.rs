@@ -1,11 +1,15 @@
 // Transitive dependency version conflicts are outside our control.
 #![allow(clippy::multiple_crate_versions)]
+// Index slicing in tests is safe: test data is controlled and assertions validate bounds.
+#![allow(clippy::indexing_slicing)]
 //! Redshank CLI — thin entry point.
 //!
 //! Constructs commands from CLI args and dispatches them to core handlers.
 //! Zero business logic in this layer.
 
-use clap::{Parser, Subcommand};
+mod setup;
+
+use clap::{Parser, Subcommand, ValueEnum};
 use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
@@ -22,7 +26,7 @@ use redshank_core::application::commands::run_investigation::{
 use redshank_core::application::services::session_runtime::SessionRuntime;
 use redshank_core::domain::agent::{AgentConfig, ProviderKind, ReasoningEffort};
 use redshank_core::domain::auth::{AuthContext, UserId};
-use redshank_core::domain::credentials::{CredentialBundle, CredentialGuard};
+use redshank_core::domain::credentials::CredentialGuard;
 use redshank_core::domain::errors::DomainError;
 use redshank_core::domain::session::{SessionId, ToolResult};
 use redshank_core::ports::tool_dispatcher::ToolDispatcher;
@@ -79,15 +83,20 @@ impl ToolDispatcher for EventingWorkspaceTools {
 #[command(name = "redshank", version, about, long_about = None)]
 struct Cli {
     /// Workspace directory (default: current directory).
-    #[arg(long, global = true, env = "REDSHANK_WORKSPACE")]
+    #[arg(short = 'w', long, global = true, env = "REDSHANK_WORKSPACE")]
     workspace: Option<PathBuf>,
 
     /// Model to use (e.g. "claude-sonnet-4-20250514").
-    #[arg(long, global = true, default_value = "claude-sonnet-4-20250514")]
+    #[arg(
+        short = 'm',
+        long,
+        global = true,
+        default_value = "claude-sonnet-4-20250514"
+    )]
     model: String,
 
     /// Reasoning effort level.
-    #[arg(long, global = true, default_value = "medium")]
+    #[arg(short = 'r', long, global = true, default_value = "medium")]
     reasoning: String,
 
     /// Disable TUI (headless mode).
@@ -121,8 +130,8 @@ enum Commands {
     },
     /// Fetch data from a specific source.
     Fetch {
-        /// Data source name (e.g. "sec-edgar", "fec", "ofac-sdn").
-        source: String,
+        /// Data source name.
+        source: FetchSource,
         /// Output directory for fetched data.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -136,9 +145,22 @@ enum Commands {
         action: SessionAction,
     },
     /// Interactive credential setup.
-    Configure,
+    #[command(alias = "setup")]
+    Configure {
+        #[command(subcommand)]
+        action: Option<ConfigureAction>,
+    },
     /// Print version info.
     Version,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum FetchSource {
+    #[value(
+        name = "uk_corporate_intelligence",
+        alias = "uk-corporate-intelligence"
+    )]
+    UkCorporateIntelligence,
 }
 
 #[derive(Subcommand, Debug)]
@@ -155,6 +177,12 @@ enum SessionAction {
         /// Session ID to resume.
         id: String,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigureAction {
+    /// Run the interactive credential setup wizard.
+    Credentials,
 }
 
 fn init_logging() {
@@ -207,9 +235,9 @@ async fn main() -> anyhow::Result<()> {
             source,
             output,
             query,
-        } => cmd_fetch(&workspace, &source, output.as_deref(), query.as_deref()).await,
+        } => cmd_fetch(&workspace, source, output.as_deref(), query.as_deref()).await,
         Commands::Session { action } => cmd_session(action, &workspace).await,
-        Commands::Configure => cmd_configure(&workspace),
+        Commands::Configure { .. } => cmd_configure(&workspace),
         Commands::Version => {
             println!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA,);
             Ok(())
@@ -651,16 +679,16 @@ fn summarize_tool_result(content: &str, is_error: bool) -> String {
 
 async fn cmd_fetch(
     workspace: &Path,
-    source: &str,
+    source: FetchSource,
     output: Option<&std::path::Path>,
     query: Option<&str>,
 ) -> anyhow::Result<()> {
-    tracing::info!(source, ?output, query, "fetching data");
+    tracing::info!(source = ?source, ?output, query, "fetching data");
     let output_dir = output.unwrap_or_else(|| std::path::Path::new("."));
     let query = query.ok_or_else(|| anyhow::anyhow!("--query is required for fetch"))?;
 
     match source {
-        "uk_corporate_intelligence" | "uk-corporate-intelligence" => {
+        FetchSource::UkCorporateIntelligence => {
             let credentials = resolve_credentials(workspace, None);
             let companies_house_api_key = required_secret(
                 credentials.uk_companies_house_api_key.as_ref(),
@@ -683,7 +711,6 @@ async fn cmd_fetch(
             println!("{}", result.output_path.display());
             Ok(())
         }
-        _ => anyhow::bail!("fetch dispatch not yet wired — source: {source}"),
     }
 }
 
@@ -750,20 +777,19 @@ async fn cmd_session(action: SessionAction, workspace: &std::path::Path) -> anyh
 }
 
 fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
+    use setup::{ALL_CREDENTIAL_FIELDS, apply_input, fields_for_group, groups};
+
+    let creds_path = workspace.join(".redshank").join("credentials.json");
     println!("Redshank — interactive credential setup");
-    println!(
-        "Credentials are saved to: {}",
-        workspace
-            .join(".redshank")
-            .join("credentials.json")
-            .display()
-    );
-    println!("Leave a value empty to skip it.\n");
+    println!("Credentials will be saved to: {}", creds_path.display());
+    println!("Leave any field empty to keep its current value.\n");
 
-    let mut bundle = CredentialBundle::default();
+    // Load existing credentials so we can show [set] indicators.
+    let mut bundle = FileCredentialStore::workspace(workspace).load();
+    let original_bundle = bundle.clone();
 
-    let prompt = |label: &str| -> anyhow::Result<Option<String>> {
-        eprint!("{label}: ");
+    let prompt_plain = |label: &str, env_var: &str| -> anyhow::Result<Option<String>> {
+        eprint!("{label} ({env_var}): ");
         io::stderr().flush().ok();
         let mut line = String::new();
         io::stdin().read_line(&mut line)?;
@@ -775,35 +801,69 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
         })
     };
 
-    if let Some(k) = prompt("Anthropic API key (ANTHROPIC_API_KEY)")? {
-        bundle.anthropic_api_key = Some(CredentialGuard::new(k));
-    }
-    if let Some(k) = prompt("OpenAI API key (OPENAI_API_KEY)")? {
-        bundle.openai_api_key = Some(CredentialGuard::new(k));
-    }
-    if let Some(k) = prompt("OpenRouter API key (OPENROUTER_API_KEY)")? {
-        bundle.openrouter_api_key = Some(CredentialGuard::new(k));
-    }
-    if let Some(k) = prompt("Exa API key (EXA_API_KEY)")? {
-        bundle.exa_api_key = Some(CredentialGuard::new(k));
-    }
-    if let Some(k) = prompt("GitHub token (GITHUB_TOKEN)")? {
-        bundle.github_token = Some(CredentialGuard::new(k));
-    }
-    if let Some(k) = prompt("Have I Been Pwned key (HIBP_API_KEY)")? {
-        bundle.hibp_api_key = Some(CredentialGuard::new(k));
-    }
-    if let Some(url) = prompt("Ollama base URL (default: http://localhost:11434)")? {
-        bundle.ollama_base_url = Some(url);
+    let prompt_secret = |label: &str, env_var: &str| -> anyhow::Result<Option<String>> {
+        let value = rpassword::prompt_password(format!("{label} ({env_var}): "))?;
+        let trimmed = value.trim().to_string();
+        Ok(if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        })
+    };
+
+    for group in groups() {
+        println!("\n── {group} ──");
+        let fields = fields_for_group(group);
+        for field in &fields {
+            let already_set = if field.field_name == "ollama_base_url" {
+                bundle.ollama_base_url.is_some()
+            } else {
+                bundle.has_field(field.field_name)
+            };
+            let indicator = if already_set { " [set]" } else { "" };
+            let req = if field.is_required { " *required*" } else { "" };
+            let secret_hint = if field.is_secret { " (secret)" } else { "" };
+            eprintln!(
+                "  {}{}{}{}  <{}>",
+                field.label, indicator, req, secret_hint, field.signup_url
+            );
+            let value = if field.is_secret {
+                prompt_secret(field.label, field.env_var)?
+            } else {
+                prompt_plain(field.label, field.env_var)?
+            };
+            if let Some(value) = value {
+                apply_input(&mut bundle, field.field_name, value);
+            }
+        }
     }
 
-    if !bundle.has_any() {
-        println!("No credentials provided — nothing saved.");
+    println!();
+    // Remind operators about fields listed in ALL_CREDENTIAL_FIELDS.
+    let total = ALL_CREDENTIAL_FIELDS.len();
+    let set_count = ALL_CREDENTIAL_FIELDS
+        .iter()
+        .filter(|f| {
+            if f.field_name == "ollama_base_url" {
+                bundle
+                    .ollama_base_url
+                    .as_deref()
+                    .is_some_and(|s| !s.trim().is_empty())
+            } else {
+                bundle.has_field(f.field_name)
+            }
+        })
+        .count();
+    println!("{set_count}/{total} credentials configured.");
+
+    // Only save if something actually changed.
+    if bundle == original_bundle {
+        println!("No changes — nothing saved.");
         return Ok(());
     }
 
     FileCredentialStore::workspace(workspace).save(&bundle)?;
-    println!("\nCredentials saved successfully (0600 permissions).");
+    println!("Credentials saved successfully (0600 permissions).");
     Ok(())
 }
 
@@ -833,7 +893,7 @@ mod tests {
         let cli = Cli::try_parse_from([
             "redshank",
             "fetch",
-            "sec-edgar",
+            "uk_corporate_intelligence",
             "--query",
             "ACME",
             "--output",
@@ -846,7 +906,7 @@ mod tests {
                 query,
                 output,
             } => {
-                assert_eq!(source, "sec-edgar");
+                assert!(matches!(source, FetchSource::UkCorporateIntelligence));
                 assert_eq!(query.as_deref(), Some("ACME"));
                 assert_eq!(output, Some(PathBuf::from("/tmp/out")));
             }
@@ -868,7 +928,26 @@ mod tests {
         assert!(matches!(
             cli.command,
             Commands::Fetch { source, query, .. }
-                if source == "uk_corporate_intelligence"
+                if matches!(source, FetchSource::UkCorporateIntelligence)
+                    && query.as_deref() == Some("Acme Holdings")
+        ));
+    }
+
+    #[test]
+    fn cli_parses_fetch_kebab_case_alias() {
+        let cli = Cli::try_parse_from([
+            "redshank",
+            "fetch",
+            "uk-corporate-intelligence",
+            "--query",
+            "Acme Holdings",
+        ])
+        .unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Commands::Fetch { source, query, .. }
+                if matches!(source, FetchSource::UkCorporateIntelligence)
                     && query.as_deref() == Some("Acme Holdings")
         ));
     }
@@ -938,9 +1017,66 @@ mod tests {
     }
 
     #[test]
+    fn cli_parses_short_global_flags() {
+        let cli = Cli::try_parse_from([
+            "redshank",
+            "-m",
+            "gpt-4o",
+            "-r",
+            "high",
+            "-w",
+            "/tmp/workspace",
+            "version",
+        ])
+        .unwrap();
+        assert_eq!(cli.model, "gpt-4o");
+        assert_eq!(cli.reasoning, "high");
+        assert_eq!(cli.workspace, Some(PathBuf::from("/tmp/workspace")));
+    }
+
+    #[test]
     fn cli_parses_configure() {
         let cli = Cli::try_parse_from(["redshank", "configure"]).unwrap();
-        assert!(matches!(cli.command, Commands::Configure));
+        assert!(matches!(cli.command, Commands::Configure { action: None }));
+    }
+
+    #[test]
+    fn cli_parses_setup_alias() {
+        let cli = Cli::try_parse_from(["redshank", "setup"]).unwrap();
+        assert!(matches!(cli.command, Commands::Configure { action: None }));
+    }
+
+    #[test]
+    fn cli_parses_configure_credentials_alias() {
+        let cli = Cli::try_parse_from(["redshank", "configure", "credentials"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Configure {
+                action: Some(ConfigureAction::Credentials)
+            }
+        ));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_session_subcommand() {
+        let err = Cli::try_parse_from(["redshank", "session", "show", "abc-123"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        assert!(err.to_string().contains("show"));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_configure_subcommand() {
+        let err = Cli::try_parse_from(["redshank", "configure", "get", "foo"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidSubcommand);
+        assert!(err.to_string().contains("get"));
+    }
+
+    #[test]
+    fn cli_rejects_unknown_fetch_source() {
+        let err =
+            Cli::try_parse_from(["redshank", "fetch", "sec-edgar", "--query", "ACME"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+        assert!(err.to_string().contains("sec-edgar"));
     }
 
     #[test]

@@ -317,7 +317,7 @@ fn handle_slash_command_with_command(state: &mut AppState, cmd: SlashCommand) ->
                 content: [
                     "Commands:",
                     "  /model <name> [--save]  Switch model",
-                    "  /model list             List available models",
+                    "  /model [list]           List available models",
                     "  /reasoning <level>      Set reasoning (off|low|medium|high)",
                     "  /status                 Show current session info",
                     "  /config                 Open configuration workbench",

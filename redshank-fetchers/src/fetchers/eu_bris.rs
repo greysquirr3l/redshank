@@ -75,16 +75,26 @@ pub fn parse_bris_search(document: &str) -> Vec<BrisCompany> {
 /// Returns `Err` if the request fails.
 pub async fn fetch_eu_bris(query: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
-    let resp = client.get(BRIS_PORTAL).query(&[("query", query)]).send().await?;
+    let resp = client
+        .get(BRIS_PORTAL)
+        .query(&[("query", query)])
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(FetchError::ApiError { status: status.as_u16(), body });
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
     }
 
     let body = resp.text().await?;
     let output_path = output_dir.join("eu_bris.ndjson");
-    let count = write_ndjson(&output_path, &[serde_json::json!({"query": query, "body": body})])?;
+    let count = write_ndjson(
+        &output_path,
+        &[serde_json::json!({"query": query, "body": body})],
+    )?;
 
     Ok(FetchOutput {
         records_written: count,

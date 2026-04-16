@@ -27,6 +27,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
+rpassword = { workspace = true }
 
 [dev-dependencies]
 portable-pty = "0.9"

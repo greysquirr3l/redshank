@@ -54,7 +54,7 @@ impl<T: PartialEq> PartialEq for CredentialGuard<T> {
 impl<T: Eq + PartialEq> Eq for CredentialGuard<T> {}
 
 /// Bundle of API keys and credentials resolved from multiple sources.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct CredentialBundle {
     /// `OpenAI` API key.
     pub openai_api_key: Option<CredentialGuard<String>>,

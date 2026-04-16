@@ -87,10 +87,12 @@ pub fn parse_state_permit(document: &str) -> Option<StateEnvPermit> {
         .iter()
         .enumerate()
         .filter_map(|(index, date)| {
-            violation_desc.get(index).map(|description| PermitViolation {
-                date: date.clone(),
-                description: description.clone(),
-            })
+            violation_desc
+                .get(index)
+                .map(|description| PermitViolation {
+                    date: date.clone(),
+                    description: description.clone(),
+                })
         })
         .collect();
 
@@ -104,9 +106,9 @@ pub fn parse_state_permit(document: &str) -> Option<StateEnvPermit> {
 }
 
 /// Fetch a state environmental permit page.
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `Err` if the request fails or the document cannot be written.
 pub async fn fetch_state_permit(url: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
@@ -114,11 +116,17 @@ pub async fn fetch_state_permit(url: &str, output_dir: &Path) -> Result<FetchOut
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(FetchError::ApiError { status: status.as_u16(), body });
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
     }
     let body = resp.text().await?;
     let output_path = output_dir.join("state_env_permits.ndjson");
-    let count = write_ndjson(&output_path, &[serde_json::json!({"url": url, "body": body})])?;
+    let count = write_ndjson(
+        &output_path,
+        &[serde_json::json!({"url": url, "body": body})],
+    )?;
     Ok(FetchOutput {
         records_written: count,
         output_path,
@@ -155,8 +163,10 @@ mod tests {
         assert_eq!(permit.permit_limits[0].name, "NOx");
         assert_eq!(permit.permit_limits[1].value, "8.5 tons/year");
         assert_eq!(permit.violation_history.len(), 1);
-        assert!(permit.violation_history[0]
-            .description
-            .contains("VOC threshold"));
+        assert!(
+            permit.violation_history[0]
+                .description
+                .contains("VOC threshold")
+        );
     }
 }

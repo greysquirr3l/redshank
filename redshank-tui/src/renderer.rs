@@ -58,6 +58,9 @@ fn render_header(frame: &mut Frame, area: Rect, state: &AppState) {
     frame.render_widget(header, area);
 }
 
+/// Render the main app body.
+/// Index slicing is safe here: `Layout::split()` always returns a vector with exactly
+/// as many elements as there are constraints, so indexing into the result is guaranteed.
 #[allow(clippy::indexing_slicing)]
 fn render_body(frame: &mut Frame, area: Rect, state: &AppState) {
     match state.active_screen {
@@ -66,6 +69,8 @@ fn render_body(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 }
 
+/// Render the three-pane chat layout (sidebar, chat, graph).
+/// Index slicing is safe: `Layout::split()` is guaranteed to produce 3 rects from 3 constraints.
 #[allow(clippy::indexing_slicing)]
 fn render_chat_layout(frame: &mut Frame, area: Rect, state: &AppState) {
     // Three panes: Sidebar(20%) | Chat(55%) | Graph(25%)

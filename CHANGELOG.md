@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-15
+
+### Added
+
+- **`rpassword` integration** — `redshank configure` now uses `rpassword::prompt_password` for all fields marked `is_secret: true`, preventing API keys and tokens from echoing to the terminal during interactive setup.
+- **`PartialEq` / `Eq` derives on `CredentialBundle`** — Required for change-detection in the configure workflow; also useful for testing.
+
+### Changed
+
+- **No-op save prevention** — `redshank configure` now compares the post-input bundle against the original (loaded from disk). If nothing changed, it prints "No changes — nothing saved." instead of rewriting `credentials.json` with an unchanged bundle.
+- **`ollama_base_url` set-detection** — Both the per-field `[set]` indicator and the summary credential counter now use `.as_deref().is_some_and(|s| !s.trim().is_empty())` to reject empty or whitespace-only values that would previously be counted as configured.
+- **`no_bundle_field_left_behind` test** — Refactored to derive the expected field list from `ALL_CREDENTIAL_FIELDS` as the canonical source instead of a hard-coded static array that could silently drift.
+
+### Fixed
+
+- **Error handling audit** — JSON serialisation failures in `anthropic.rs` and `openai_compat.rs`, config parse failures in `credential_store.rs` and `settings_store.rs`, and async I/O errors in `browser_fallback.rs` and `stygian.rs` now emit `tracing::warn!` instead of being silently swallowed.
+- **`wiki_graph.rs` regex initialisation** — Changed `unreachable!()` to `expect()` with SAFETY documentation, and added scoped `#[allow(clippy::expect_used)]` for compile-time-verified regex literals.
+- **README code-block indentation** — Removed stray 4-space indent that caused the `redshank fetch` prose line to render as a Markdown code block.
+- **Doc comment accuracy** — `ALL_CREDENTIAL_FIELDS` rustdoc correctly refers to `no_bundle_field_left_behind` as a "module-local unit test" rather than "integration test".
+
 ## [0.2.0] - 2026-04-13
 
 ### Added

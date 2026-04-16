@@ -62,20 +62,27 @@ pub fn parse_bodacc_announcement(document: &str) -> Option<BodaccAnnouncement> {
 }
 
 /// Fetch French company search results.
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `Err` if the request fails.
 pub async fn fetch_france_infogreffe(
     company_name: &str,
     output_dir: &Path,
 ) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
-    let resp = client.get(PAPPERS_SEARCH_URL).query(&[("q", company_name)]).send().await?;
+    let resp = client
+        .get(PAPPERS_SEARCH_URL)
+        .query(&[("q", company_name)])
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(FetchError::ApiError { status: status.as_u16(), body });
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
     }
 
     let json: serde_json::Value = resp.json().await?;
@@ -119,21 +126,22 @@ mod tests {
     fn france_infogreffe_fetcher_extracts_gerant_and_siege_social() {
         let company = parse_infogreffe_company(france_fixture()).unwrap();
         assert_eq!(company.gerant.as_deref(), Some("Claire Martin"));
-        assert!(company
-            .siege_social
-            .as_deref()
-            .unwrap()
-            .contains("Paris"));
+        assert!(company.siege_social.as_deref().unwrap().contains("Paris"));
     }
 
     #[test]
     fn france_bodacc_fetcher_parses_legal_announcement_fixture() {
         let announcement = parse_bodacc_announcement(bodacc_fixture()).unwrap();
-        assert_eq!(announcement.announcement_type.as_deref(), Some("Liquidation judiciaire"));
-        assert!(announcement
-            .summary
-            .as_deref()
-            .unwrap()
-            .contains("liquidation judiciaire"));
+        assert_eq!(
+            announcement.announcement_type.as_deref(),
+            Some("Liquidation judiciaire")
+        );
+        assert!(
+            announcement
+                .summary
+                .as_deref()
+                .unwrap()
+                .contains("liquidation judiciaire")
+        );
     }
 }

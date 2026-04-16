@@ -300,6 +300,9 @@ pub fn parse_slash_command(input: &str) -> Option<SlashCommand> {
 
     match *cmd {
         "/model" => {
+            if parts.len() == 1 {
+                return Some(SlashCommand::ModelList);
+            }
             let &arg1 = parts.get(1)?;
             if arg1 == "list" {
                 return Some(SlashCommand::ModelList);
@@ -371,6 +374,12 @@ mod tests {
     #[test]
     fn slash_command_parses_model_list() {
         let cmd = parse_slash_command("/model list").unwrap();
+        assert_eq!(cmd, SlashCommand::ModelList);
+    }
+
+    #[test]
+    fn slash_command_parses_bare_model_as_list() {
+        let cmd = parse_slash_command("/model").unwrap();
         assert_eq!(cmd, SlashCommand::ModelList);
     }
 

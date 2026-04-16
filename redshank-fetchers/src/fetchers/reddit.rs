@@ -281,7 +281,10 @@ pub async fn fetch_reddit_user(
         .await?;
 
     let comments_json: serde_json::Value = if comments_resp.status().is_success() {
-        comments_resp.json().await.unwrap_or_else(|_| serde_json::json!({}))
+        comments_resp
+            .json()
+            .await
+            .unwrap_or_else(|_| serde_json::json!({}))
     } else {
         serde_json::json!({})
     };

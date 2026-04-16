@@ -54,24 +54,39 @@ pub fn parse_carbon_project(json: &serde_json::Value) -> Option<CarbonProject> {
     Some(CarbonProject {
         project_name,
         project_id,
-        verification_status: json.get("verification_status").and_then(serde_json::Value::as_str).map(ToString::to_string),
-        developer: json.get("developer").and_then(serde_json::Value::as_str).map(ToString::to_string),
+        verification_status: json
+            .get("verification_status")
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
+        developer: json
+            .get("developer")
+            .and_then(serde_json::Value::as_str)
+            .map(ToString::to_string),
         retirements,
     })
 }
 
 /// Fetch a carbon registry project JSON payload.
-/// 
+///
 /// # Errors
-/// 
+///
 /// Returns `Err` if the request fails.
-pub async fn fetch_carbon_project(project_id: &str, output_dir: &Path) -> Result<FetchOutput, FetchError> {
+pub async fn fetch_carbon_project(
+    project_id: &str,
+    output_dir: &Path,
+) -> Result<FetchOutput, FetchError> {
     let client = build_client()?;
-    let resp = client.get(format!("{VERRA_BASE}/{project_id}")).send().await?;
+    let resp = client
+        .get(format!("{VERRA_BASE}/{project_id}"))
+        .send()
+        .await?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(FetchError::ApiError { status: status.as_u16(), body });
+        return Err(FetchError::ApiError {
+            status: status.as_u16(),
+            body,
+        });
     }
     let json: serde_json::Value = resp.json().await?;
     let output_path = output_dir.join("carbon_registries.ndjson");
