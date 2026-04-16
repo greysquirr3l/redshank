@@ -1,3 +1,4 @@
+#![cfg(unix)]
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::io::{Read, Write};
