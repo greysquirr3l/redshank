@@ -52,7 +52,7 @@ pub fn classify_delta(
 /// Return the most recent observation for `(entity_id, source_id)` from `path`.
 ///
 /// Uses a tail-scan (reads from EOF backwards) so the common case is O(1).
-/// Falls back to a full forward scan when the file exceeds [`MAX_TAIL_BYTES`] and
+/// Falls back to a full forward scan when the file exceeds `MAX_TAIL_BYTES` bytes and
 /// the entity is not found in the tail region.
 ///
 /// # Errors

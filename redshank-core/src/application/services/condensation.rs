@@ -112,7 +112,7 @@ impl ContextTracker {
 /// Condense old tool-result messages in-place.
 ///
 /// Finds all messages with `role == "tool"` and replaces all but the most
-/// recent [`KEEP_RECENT_TURNS`] with a short placeholder. Returns the number
+/// recent `KEEP_RECENT_TURNS` turns with a short placeholder. Returns the number
 /// of messages condensed.
 pub fn condense_tool_outputs(messages: &mut [ChatMessage]) -> usize {
     let tool_indices: Vec<usize> = messages

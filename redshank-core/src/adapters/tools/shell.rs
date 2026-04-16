@@ -59,15 +59,15 @@ pub async fn run_shell(ws: &WorkspaceTools, args: &Value) -> String {
         .unwrap_or(ws.command_timeout_secs)
         .clamp(1, 600);
 
-    let child = match Command::new("/bin/sh")
-        .arg("-c")
+    let mut cmd = Command::new("/bin/sh");
+    cmd.arg("-c")
         .arg(command)
         .current_dir(&ws.root)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .process_group(0) // start_new_session equivalent
-        .spawn()
-    {
+        .stderr(std::process::Stdio::piped());
+    #[cfg(unix)]
+    cmd.process_group(0); // start_new_session equivalent
+    let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return format!("$ {command}\n[failed to start: {e}]"),
     };
@@ -112,14 +112,16 @@ pub async fn run_shell_bg(ws: &WorkspaceTools, args: &Value) -> String {
         Err(e) => return format!("Failed to create output file: {e}"),
     };
 
-    let child = match Command::new("/bin/sh")
-        .arg("-c")
+    let out_stdio = out_file.try_clone().unwrap_or(out_file);
+    let mut cmd = Command::new("/bin/sh");
+    cmd.arg("-c")
         .arg(command)
         .current_dir(&ws.root)
-        .stdout(out_file.try_clone().unwrap_or(out_file))
-        .stderr(std::process::Stdio::null())
-        .process_group(0)
-        .spawn()
+        .stdout(out_stdio)
+        .stderr(std::process::Stdio::null());
+    #[cfg(unix)]
+    cmd.process_group(0);
+    let child = match cmd.spawn()
     {
         Ok(c) => c,
         Err(e) => {
