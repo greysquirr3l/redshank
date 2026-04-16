@@ -829,7 +829,10 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
         .iter()
         .filter(|f| {
             if f.field_name == "ollama_base_url" {
-                bundle.ollama_base_url.as_deref().is_some_and(|s| !s.trim().is_empty())
+                bundle
+                    .ollama_base_url
+                    .as_deref()
+                    .is_some_and(|s| !s.trim().is_empty())
             } else {
                 bundle.has_field(f.field_name)
             }
