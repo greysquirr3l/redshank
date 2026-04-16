@@ -115,12 +115,23 @@ pub fn parse_index(wiki_dir: &Path) -> Vec<(WikiCategory, String, PathBuf)> {
         return Vec::new();
     };
 
-    let category_re = Regex::new(r"^###\s+(.+)$")
-        .expect("category regex pattern is valid");
-    let row_re = Regex::new(
-        r"^\|\s*(?P<name>[^|]+?)\s*\|\s*[^|]*?\s*\|\s*\[(?P<link_text>[^\]]+)\]\((?P<path>[^)]+)\)\s*\|",
-    )
-    .expect("row regex pattern is valid");
+    let category_re = {
+        #[allow(clippy::expect_used)]
+        // SAFETY: This regex literal is hardcoded and verified at code review time.
+        // It cannot fail at runtime. expect() is the idiomatic way to express
+        // compile-time-validated patterns in Rust.
+        Regex::new(r"^###\s+(.+)$").expect("category regex pattern is valid")
+    };
+    let row_re = {
+        #[allow(clippy::expect_used)]
+        // SAFETY: This regex literal is hardcoded and verified at code review time.
+        // It cannot fail at runtime. expect() is the idiomatic way to express
+        // compile-time-validated patterns in Rust.
+        Regex::new(
+            r"^\|\s*(?P<name>[^|]+?)\s*\|\s*[^|]*?\s*\|\s*\[(?P<link_text>[^\]]+)\]\((?P<path>[^)]+)\)\s*\|",
+        )
+        .expect("row regex pattern is valid")
+    };
 
     let mut entries = Vec::new();
     let mut current_category = WikiCategory::Other;
@@ -171,8 +182,13 @@ pub fn extract_cross_refs(file_path: &Path) -> (String, Vec<String>) {
         .unwrap_or_default();
 
     // Find `## Cross-Reference Potential` section.
-    let bold_re = Regex::new(r"\*\*([^*]+)\*\*")
-        .expect("bold regex pattern is valid");
+    let bold_re = {
+        #[allow(clippy::expect_used)]
+        // SAFETY: This regex literal is hardcoded and verified at code review time.
+        // It cannot fail at runtime. expect() is the idiomatic way to express
+        // compile-time-validated patterns in Rust.
+        Regex::new(r"\*\*([^*]+)\*\*").expect("bold regex pattern is valid")
+    };
     let skip_prefixes = ["join", "critical", "geographic"];
 
     let mut in_section = false;
