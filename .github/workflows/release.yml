@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]*.[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       tag:
@@ -30,23 +30,21 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            archive: tar.gz
             bin: redshank
           - target: aarch64-apple-darwin
             os: macos-14
-            archive: tar.gz
             bin: redshank
           - target: x86_64-apple-darwin
             os: macos-13
-            archive: tar.gz
             bin: redshank
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            archive: zip
             bin: redshank.exe
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.tag) || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -64,14 +62,14 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "${{ env.BINARY_NAME }}"
-          tar czf "${{ env.BINARY_NAME }}-${{ matrix.target }}.tar.gz" "${{ env.BINARY_NAME }}" README.md LICENSE
+          tar czf "${{ env.BINARY_NAME }}-${{ matrix.target }}.tar.gz" "${{ env.BINARY_NAME }}" README.md
 
       - name: Stage artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Copy-Item "target\${{ matrix.target }}\release\${{ matrix.bin }}" "${{ env.BINARY_NAME }}.exe"
-          Compress-Archive -Path "${{ env.BINARY_NAME }}.exe","README.md","LICENSE" -DestinationPath "${{ env.BINARY_NAME }}-${{ matrix.target }}.zip"
+          Compress-Archive -Path "${{ env.BINARY_NAME }}.exe","README.md" -DestinationPath "${{ env.BINARY_NAME }}-${{ matrix.target }}.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -107,7 +105,12 @@ jobs:
         run: |
           cd dist
           shopt -s nullglob
-          sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+          files=( *.tar.gz *.zip )
+          if (( ${#files[@]} == 0 )); then
+            echo "No release archives found in dist/ matching *.tar.gz or *.zip" >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS.txt
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
