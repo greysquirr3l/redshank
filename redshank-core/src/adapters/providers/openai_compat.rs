@@ -166,8 +166,13 @@ impl StreamAccumulator {
                 let arguments = if json_str.is_empty() {
                     Value::Object(serde_json::Map::new())
                 } else {
-                    serde_json::from_str(&json_str)
-                        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
+                    match serde_json::from_str(&json_str) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!("failed to parse tool arguments from stream: {e}");
+                            Value::Object(serde_json::Map::new())
+                        }
+                    }
                 };
                 ToolCall {
                     id: tc.id,
@@ -250,14 +255,23 @@ fn build_request_body(
                     .tool_calls
                     .iter()
                     .map(|tc| {
-                        serde_json::json!({
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.name,
-                                "arguments": serde_json::to_string(&tc.arguments).unwrap_or_default(),
-                            }
-                        })
+                        {
+                            let arguments = match serde_json::to_string(&tc.arguments) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    tracing::warn!("failed to serialize tool arguments: {e}");
+                                    String::new()
+                                }
+                            };
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": arguments,
+                                }
+                            })
+                        }
                     })
                     .collect();
                 serde_json::json!({

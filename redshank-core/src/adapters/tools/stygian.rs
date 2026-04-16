@@ -77,8 +77,20 @@ impl StygianIntegration {
             .await
             .map_err(|e| format!("navigate: {e}"))?;
 
-        let title = page.title().await.unwrap_or_default();
-        let text = page.content().await.unwrap_or_default();
+        let title = match page.title().await {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::warn!("failed to extract page title from {url}: {e}");
+                String::new()
+            }
+        };
+        let text = match page.content().await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("failed to extract page content from {url}: {e}");
+                String::new()
+            }
+        };
 
         handle.release().await;
 
@@ -159,7 +171,13 @@ pub async fn fetch_url_smart(
         "pages": pages,
         "total": pages.len(),
     });
-    let json_str = serde_json::to_string_pretty(&output).unwrap_or_default();
+    let json_str = match serde_json::to_string_pretty(&output) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("failed to serialize stygian output: {e}");
+            String::new()
+        }
+    };
     WorkspaceTools::clip(&json_str, ws.max_file_chars)
 }
 

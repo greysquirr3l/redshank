@@ -155,7 +155,13 @@ impl StreamAccumulator {
             ContentBlock::ToolUse { id, name, input } => {
                 // If the initial block has a complete input, serialize it
                 let initial_json = if input.as_object().is_some_and(|m| !m.is_empty()) {
-                    vec![serde_json::to_string(&input).unwrap_or_default()]
+                    match serde_json::to_string(&input) {
+                        Ok(s) => vec![s],
+                        Err(e) => {
+                            tracing::warn!("failed to serialize tool input: {e}");
+                            vec![]
+                        }
+                    }
                 } else {
                     vec![]
                 };
@@ -211,8 +217,13 @@ impl StreamAccumulator {
                 let arguments = if json_str.is_empty() {
                     Value::Object(serde_json::Map::new())
                 } else {
-                    serde_json::from_str(&json_str)
-                        .unwrap_or_else(|_| Value::Object(serde_json::Map::new()))
+                    match serde_json::from_str(&json_str) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!("failed to parse tool arguments from SSE: {e}");
+                            Value::Object(serde_json::Map::new())
+                        }
+                    }
                 };
                 ToolCall {
                     id: tc.id,

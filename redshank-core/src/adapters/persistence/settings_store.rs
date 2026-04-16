@@ -33,7 +33,16 @@ impl SettingsStore {
         let Ok(contents) = std::fs::read_to_string(&self.settings_path) else {
             return PersistentSettings::default();
         };
-        serde_json::from_str(&contents).unwrap_or_default()
+        match serde_json::from_str(&contents) {
+            Ok(settings) => settings,
+            Err(e) => {
+                tracing::warn!(
+                    "failed to parse settings from {}: {e}; using defaults",
+                    self.settings_path.display()
+                );
+                PersistentSettings::default()
+            }
+        }
     }
 
     /// Save settings to disk as pretty-printed JSON.

@@ -116,11 +116,11 @@ pub fn parse_index(wiki_dir: &Path) -> Vec<(WikiCategory, String, PathBuf)> {
     };
 
     let category_re = Regex::new(r"^###\s+(.+)$")
-        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
+        .expect("category regex pattern is valid");
     let row_re = Regex::new(
         r"^\|\s*(?P<name>[^|]+?)\s*\|\s*[^|]*?\s*\|\s*\[(?P<link_text>[^\]]+)\]\((?P<path>[^)]+)\)\s*\|",
     )
-    .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
+    .expect("row regex pattern is valid");
 
     let mut entries = Vec::new();
     let mut current_category = WikiCategory::Other;
@@ -172,7 +172,7 @@ pub fn extract_cross_refs(file_path: &Path) -> (String, Vec<String>) {
 
     // Find `## Cross-Reference Potential` section.
     let bold_re = Regex::new(r"\*\*([^*]+)\*\*")
-        .unwrap_or_else(|e| unreachable!("regex literal is always valid: {e}"));
+        .expect("bold regex pattern is valid");
     let skip_prefixes = ["join", "critical", "geographic"];
 
     let mut in_section = false;

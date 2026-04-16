@@ -1,5 +1,7 @@
 // Transitive dependency version conflicts are outside our control.
 #![allow(clippy::multiple_crate_versions)]
+// Index slicing in tests is safe: test data is controlled and assertions validate bounds.
+#![allow(clippy::indexing_slicing)]
 //! Redshank CLI — thin entry point.
 //!
 //! Constructs commands from CLI args and dispatches them to core handlers.
