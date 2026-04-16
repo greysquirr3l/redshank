@@ -78,3 +78,6 @@ stygian-graph = { version = "0.9", default-features = false }
 
 # Archiving
 zip = "2"
+
+# Secure password input (no terminal echo)
+rpassword = "7"
