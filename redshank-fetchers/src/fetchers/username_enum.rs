@@ -61,7 +61,7 @@ pub fn load_platforms(toml_content: &str) -> Vec<Platform> {
                     let inner = value.trim_start_matches('[').trim_end_matches(']');
                     p.success_codes = inner
                         .split(',')
-                        .filter_map(|s| s.trim().parse().ok())
+                        .filter_map(|s| s.trim().parse::<u16>().ok())
                         .collect();
                 }
                 "false_positive_patterns" => {
