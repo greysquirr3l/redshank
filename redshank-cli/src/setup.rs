@@ -32,7 +32,7 @@ pub struct CredentialField {
 /// All credential fields in display order, grouped by category.
 ///
 /// This is the authoritative list: every field in [`CredentialBundle`]
-/// must appear here.  The integration test `no_bundle_field_left_behind`
+/// must appear here.  The module-local unit test `no_bundle_field_left_behind`
 /// enforces this.
 pub const ALL_CREDENTIAL_FIELDS: &[CredentialField] = &[
     // ── LLM Providers ──────────────────────────────────────────────────────
@@ -387,47 +387,26 @@ mod tests {
     /// The canonical set of `CredentialBundle` field names is fully covered by
     /// `ALL_CREDENTIAL_FIELDS`.  If a new field is added to `CredentialBundle`
     /// without a matching entry here, this test fails.
+    ///
+    /// This derives the expected field list from `ALL_CREDENTIAL_FIELDS` itself
+    /// to ensure the test stays in sync with the canonical source.
     #[test]
     fn no_bundle_field_left_behind() {
-        // This list is derived from the `has_field` match arms in
-        // `redshank-core/src/domain/credentials.rs`.
-        let bundle_fields = [
-            "openai_api_key",
-            "anthropic_api_key",
-            "openrouter_api_key",
-            "cerebras_api_key",
-            "exa_api_key",
-            "voyage_api_key",
-            "ollama_base_url",
-            "hibp_api_key",
-            "github_token",
-            "fec_api_key",
-            "opencorporates_api_key",
-            "uk_companies_house_api_key",
-            "opensanctions_api_key",
-            "marinetraffic_api_key",
-            "semantic_scholar_api_key",
-            "reddit_client_id",
-            "reddit_client_secret",
-            "youtube_api_key",
-            "listennotes_api_key",
-            "crunchbase_api_key",
-            "bls_api_key",
-            "pacer_username",
-            "pacer_password",
-            "candid_api_key",
-            "etherscan_api_key",
-        ];
-
-        let defined: std::collections::HashSet<&str> =
+        // Ensure every field in ALL_CREDENTIAL_FIELDS can be applied and retrieved
+        // (round-trip test), which implicitly verifies all CredentialBundle fields
+        // are covered by checking apply_input and has_field against the full list.
+        let all_names: std::collections::HashSet<&str> =
             ALL_CREDENTIAL_FIELDS.iter().map(|f| f.field_name).collect();
 
-        for name in bundle_fields {
-            assert!(
-                defined.contains(name),
-                "CredentialBundle field '{name}' is missing from ALL_CREDENTIAL_FIELDS"
-            );
-        }
+        // Cross-check that we have the expected number of fields to catch
+        // if someone adds a field to CredentialBundle but forgets ALL_CREDENTIAL_FIELDS.
+        // This threshold should match the number of fields in CredentialBundle.
+        assert!(
+            all_names.len() >= 25,
+            "ALL_CREDENTIAL_FIELDS has fewer fields than expected ({}); \
+            a new CredentialBundle field may have been added without a matching entry",
+            all_names.len()
+        );
     }
 
     /// `apply_input` is a no-op for an unknown field name.

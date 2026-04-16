@@ -786,6 +786,7 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
 
     // Load existing credentials so we can show [set] indicators.
     let mut bundle = FileCredentialStore::workspace(workspace).load();
+    let original_bundle = bundle.clone();
 
     let prompt_plain = |label: &str, env_var: &str| -> anyhow::Result<Option<String>> {
         eprint!("{label} ({env_var}): ");
@@ -793,6 +794,16 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
         let mut line = String::new();
         io::stdin().read_line(&mut line)?;
         let trimmed = line.trim().to_string();
+        Ok(if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        })
+    };
+
+    let prompt_secret = |label: &str, env_var: &str| -> anyhow::Result<Option<String>> {
+        let value = rpassword::prompt_password(format!("{label} ({env_var}): "))?;
+        let trimmed = value.trim().to_string();
         Ok(if trimmed.is_empty() {
             None
         } else {
@@ -816,7 +827,12 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
                 "  {}{}{}{}  <{}>",
                 field.label, indicator, req, secret_hint, field.signup_url
             );
-            if let Some(value) = prompt_plain(field.label, field.env_var)? {
+            let value = if field.is_secret {
+                prompt_secret(field.label, field.env_var)?
+            } else {
+                prompt_plain(field.label, field.env_var)?
+            };
+            if let Some(value) = value {
                 apply_input(&mut bundle, field.field_name, value);
             }
         }
@@ -840,8 +856,9 @@ fn cmd_configure(workspace: &Path) -> anyhow::Result<()> {
         .count();
     println!("{set_count}/{total} credentials configured.");
 
-    if !bundle.has_any() {
-        println!("No credentials provided — nothing saved.");
+    // Only save if something actually changed.
+    if bundle == original_bundle {
+        println!("No changes — nothing saved.");
         return Ok(());
     }
 

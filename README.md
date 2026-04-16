@@ -197,7 +197,7 @@ Global Options:
       --demo                Demo mode (use mock model)
 ```
 
-    `redshank fetch` currently supports `uk_corporate_intelligence` and its kebab-case alias `uk-corporate-intelligence`.
+`redshank fetch` currently supports `uk_corporate_intelligence` and its kebab-case alias `uk-corporate-intelligence`.
 
 ## Development
 
