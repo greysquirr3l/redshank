@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Stygian fallback for JS-heavy sources** — `redshank-fetchers` now probes for a live stygian-graph/stygian-browser endpoint at startup. Sources that require JavaScript rendering fall back to the stygian pipeline automatically when available, with capability detection and a configurable `FallbackPolicy`.
+- **PoL entity observation timeline** — Political-sidecar fetcher (`pol_sidecar`) now emits a timestamped `ObservationTimeline` for each entity, with per-source analytics and full ingestion support in the PoL pipeline.
 - **`rpassword` integration** — `redshank configure` now uses `rpassword::prompt_password` for all fields marked `is_secret: true`, preventing API keys and tokens from echoing to the terminal during interactive setup.
 - **`PartialEq` / `Eq` derives on `CredentialBundle`** — Required for change-detection in the configure workflow; also useful for testing.
 
@@ -26,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`wiki_graph.rs` regex initialisation** — Changed `unreachable!()` to `expect()` with SAFETY documentation, and added scoped `#[allow(clippy::expect_used)]` for compile-time-verified regex literals.
 - **README code-block indentation** — Removed stray 4-space indent that caused the `redshank fetch` prose line to render as a Markdown code block.
 - **Doc comment accuracy** — `ALL_CREDENTIAL_FIELDS` rustdoc correctly refers to `no_bundle_field_left_behind` as a "module-local unit test" rather than "integration test".
+
+### CI
+
+- **Workflow normalization** — CI, release, auto-tag, CodeQL, and security-audit workflows consolidated and normalised across all matrix targets (ubuntu, macOS, Windows). Windows cross-compilation fixed: `process_group(0)` guarded behind `#[cfg(unix)]`, Unix-only `PermissionsExt` usage scoped appropriately. Private and cross-crate intra-doc links that broke the `Documentation` check replaced with plain text.
 
 ## [0.2.0] - 2026-04-13
 
