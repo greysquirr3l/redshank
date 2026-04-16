@@ -616,6 +616,7 @@ mod tests {
 
     // ── Shell timeout ───────────────────
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn run_shell_timeout_kills_process() {
         let dir = tempfile::tempdir().unwrap();
@@ -637,6 +638,7 @@ mod tests {
 
     // ── Background jobs ─────────────────
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn bg_job_lifecycle() {
         let dir = tempfile::tempdir().unwrap();
