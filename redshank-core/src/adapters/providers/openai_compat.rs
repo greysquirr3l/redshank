@@ -27,7 +27,7 @@ const OLLAMA_BASE_URL: &str = "http://localhost:11434/v1";
 
 /// Ollama can be slow on first inference (loading model).
 const OLLAMA_TIMEOUT: Duration = Duration::from_secs(500);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
+const DEFAULT_TIMEOUT: Duration = Duration::from_mins(2);
 
 // ── SSE Protocol Types ──────────────────────────────────────
 

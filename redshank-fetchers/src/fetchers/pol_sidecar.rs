@@ -148,7 +148,7 @@ pub fn append_observation(path: &Path, observation: &EntityObservation) -> Resul
 ///
 /// Implementors declare a stable [`Self::SOURCE_ID`] and gain the
 /// [`DiffableFetcher::record_observation`] provided method, which runs the full
-/// five-step PoL pipeline (hash → read previous → classify delta → build
+/// five-step `PoL` pipeline (hash → read previous → classify delta → build
 /// [`EntityObservation`] → append to sidecar).
 pub trait DiffableFetcher {
     /// Stable identifier for this data source, used as `source_id` in

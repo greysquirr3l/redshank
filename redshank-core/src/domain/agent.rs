@@ -164,7 +164,7 @@ impl Default for AgentConfig {
             max_depth: 3,
             max_steps: 200,
             max_observation_chars: 16_000,
-            command_timeout: Duration::from_secs(120),
+            command_timeout: Duration::from_mins(2),
             max_file_chars: 32_000,
             recursive: true,
             acceptance_criteria: true,

@@ -239,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Session { action } => cmd_session(action, &workspace).await,
         Commands::Configure { .. } => cmd_configure(&workspace),
         Commands::Version => {
-            println!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA,);
+            println!("redshank {} ({})", env!("CARGO_PKG_VERSION"), GIT_SHA);
             Ok(())
         }
     }

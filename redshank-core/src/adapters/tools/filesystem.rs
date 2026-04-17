@@ -234,7 +234,7 @@ fn search_walk(root: &Path, query: &str, _glob: Option<&str>, max_hits: usize) -
                     if line.to_lowercase().contains(lower_query)
                         && let Ok(rel) = path.strip_prefix(root)
                     {
-                        matches.push(format!("{}:{}:{}", rel.display(), idx + 1, line,));
+                        matches.push(format!("{}:{}:{}", rel.display(), idx + 1, line));
                     }
                 }
             }

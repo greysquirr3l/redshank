@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-17
+
+### Added
+
+- **Diffable fetcher abstraction for PoL sidecars** — Added `DiffableFetcher` to `pol_sidecar` to formalize the five-step observation pipeline (hash, lookup, delta classification, observation construction, append).
+- **Crates publishing workflow** — Added `.github/workflows/publish.yml` with ordered crates.io publishing (`redshank-core` → `redshank-fetchers`/`redshank-tui` → `redshank-cli`), index propagation wait logic, and idempotent skip-if-published behavior.
+- **Dependency review and OSSF scorecard workflows** — Added `.github/workflows/dependency-review.yml` and `.github/workflows/scorecard.yml` to strengthen supply-chain and security posture.
+
+### Changed
+
+- **Release orchestration hardening** — `auto-tag.yml` now tags only after successful CI on `main` (workflow_run), with concurrency guard and race-safe tag push behavior.
+- **Release workflow reliability** — `release.yml` now resolves tag+SHA across trigger types, verifies CI success for the release commit before build, and builds with `--locked`.
+- **Version bump for publish-ready release** — Workspace and internal dependency versions advanced to `0.2.2`.
+
+### Fixed
+
+- **PoL implementation gap closure** — `blockchain_explorer`, `defi_protocols`, and `exchange_transparency` now implement and use `DiffableFetcher::record_observation` instead of repeating inline observation logic.
+- **Clippy/warnings cleanup** — Resolved trailing comma and duration unit lints in CLI and core, plus rustdoc markdown lint fixes for `DeFi`/`PoL` terms.
+- **Tracking hygiene** — `PROGRESS.md` removed from repository tracking while remaining locally ignored.
+
 ## [0.2.1] - 2026-04-15
 
 ### Added
@@ -109,7 +129,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Credential storage permissions** — All `.json` files written `chmod 600`; keys never logged at any level.
 - **Role-based access control** — Typed `AuthContext` and `SecurityPolicy` enforced at every data-access path.
 
-[Unreleased]: https://github.com/greysquirr3l/redshank/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/greysquirr3l/redshank/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/greysquirr3l/redshank/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/greysquirr3l/redshank/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/greysquirr3l/redshank/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/greysquirr3l/redshank/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/greysquirr3l/redshank/releases/tag/v0.1.0

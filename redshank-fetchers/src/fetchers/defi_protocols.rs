@@ -7,7 +7,7 @@ use chrono::Utc;
 use std::path::Path;
 
 /// Unit type that carries the `DiffableFetcher` implementation for the
-/// DeFi protocols source.
+/// `DeFi` protocols source.
 pub struct DefiProtocolsFetcher;
 
 impl DiffableFetcher for DefiProtocolsFetcher {
