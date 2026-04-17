@@ -743,7 +743,7 @@ pub async fn hashline_edit(ws: &WorkspaceTools, args: &Value) -> String {
     }
 
     // Sort bottom-up to preserve indices
-    parsed.sort_by(|a, b| b.start.cmp(&a.start));
+    parsed.sort_by_key(|e| std::cmp::Reverse(e.start));
 
     let mut changed = 0;
     for edit in &parsed {

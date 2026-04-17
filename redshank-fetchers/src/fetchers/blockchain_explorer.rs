@@ -1,15 +1,24 @@
 //! Multi-chain blockchain explorer parsing and fetch helpers.
 
 use crate::domain::{FetchError, FetchOutput};
-use crate::fetchers::pol_sidecar;
+use crate::fetchers::pol_sidecar::DiffableFetcher;
 use crate::{build_client, write_ndjson};
 use chrono::{DateTime, TimeZone, Utc};
-use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
 
 const ETHERSCAN_BASE: &str = "https://api.etherscan.io/api";
 const BLOCKSTREAM_BASE: &str = "https://blockstream.info/api";
-const SOURCE_ID: &str = "blockchain_explorer";
+
+/// Unit type that carries the `DiffableFetcher` implementation for
+/// the blockchain explorer source.
+pub struct BlockchainExplorerFetcher;
+
+impl DiffableFetcher for BlockchainExplorerFetcher {
+    const SOURCE_ID: &'static str = "blockchain_explorer";
+}
+
+/// Stable source identifier used in [`EntityObservation`] records.
+const SOURCE_ID: &str = BlockchainExplorerFetcher::SOURCE_ID;
 
 /// A token holding associated with an address.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -296,17 +305,12 @@ pub async fn fetch_address_snapshot(
     let observation_path = output_dir.join("blockchain_explorer_observations.ndjson");
 
     let entity_id = canonical_entity_id(chain, address);
-    let payload_hash = pol_sidecar::snapshot_payload_hash(&snapshot)?;
-    let previous = pol_sidecar::read_latest_observation(&observation_path, &entity_id, SOURCE_ID)?;
-    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
-    let observation = EntityObservation::new(
-        entity_id,
-        SOURCE_ID.to_owned(),
+    BlockchainExplorerFetcher::record_observation(
+        &entity_id,
+        &observation_path,
         derive_observed_at(&snapshot),
-        payload_hash,
-        delta,
-    );
-    pol_sidecar::append_observation(&observation_path, &observation)?;
+        &snapshot,
+    )?;
 
     let records =
         vec![serde_json::to_value(snapshot).map_err(|err| FetchError::Parse(err.to_string()))?];
@@ -325,7 +329,7 @@ pub async fn fetch_address_snapshot(
 mod tests {
     use super::*;
     use crate::fetchers::pol_sidecar;
-    use redshank_core::domain::observation::ObservationDelta;
+    use redshank_core::domain::observation::{EntityObservation, ObservationDelta};
 
     #[test]
     fn blockchain_explorer_parses_ethereum_address_balance_fixture() {

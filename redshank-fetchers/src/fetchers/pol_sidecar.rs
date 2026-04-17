@@ -143,3 +143,42 @@ pub fn append_observation(path: &Path, observation: &EntityObservation) -> Resul
     file.flush()?;
     Ok(())
 }
+
+/// A fetcher that can produce a diffable snapshot for pattern-of-life tracking.
+///
+/// Implementors declare a stable [`Self::SOURCE_ID`] and gain the
+/// [`DiffableFetcher::record_observation`] provided method, which runs the full
+/// five-step PoL pipeline (hash → read previous → classify delta → build
+/// [`EntityObservation`] → append to sidecar).
+pub trait DiffableFetcher {
+    /// Stable identifier for this data source, used as `source_id` in
+    /// [`EntityObservation`] records.
+    const SOURCE_ID: &'static str;
+
+    /// Hash `payload`, read the previous observation for `entity_id` from
+    /// `observation_path`, classify the delta, append the new observation, and
+    /// return the classified [`ObservationDelta`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FetchError`] on serialisation, I/O, or UTF-8 failures.
+    fn record_observation<T: serde::Serialize>(
+        entity_id: &str,
+        observation_path: &Path,
+        observed_at: chrono::DateTime<chrono::Utc>,
+        payload: &T,
+    ) -> Result<ObservationDelta, FetchError> {
+        let payload_hash = snapshot_payload_hash(payload)?;
+        let previous = read_latest_observation(observation_path, entity_id, Self::SOURCE_ID)?;
+        let delta = classify_delta(previous.as_ref(), &payload_hash);
+        let observation = EntityObservation::new(
+            entity_id.to_owned(),
+            Self::SOURCE_ID.to_owned(),
+            observed_at,
+            payload_hash,
+            delta.clone(),
+        );
+        append_observation(observation_path, &observation)?;
+        Ok(delta)
+    }
+}

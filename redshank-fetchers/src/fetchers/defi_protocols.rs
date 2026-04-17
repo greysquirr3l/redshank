@@ -1,11 +1,18 @@
 //! `DeFi` protocol position parsing and fetch helpers.
 
 use crate::domain::{FetchError, FetchOutput};
-use crate::fetchers::pol_sidecar;
+use crate::fetchers::pol_sidecar::DiffableFetcher;
 use crate::{build_client, write_ndjson};
 use chrono::Utc;
-use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
+
+/// Unit type that carries the `DiffableFetcher` implementation for the
+/// DeFi protocols source.
+pub struct DefiProtocolsFetcher;
+
+impl DiffableFetcher for DefiProtocolsFetcher {
+    const SOURCE_ID: &'static str = "defi_protocols";
+}
 
 const COMPOUND_API_BASE: &str = "https://api.compound.finance/api/v2/account";
 
@@ -146,18 +153,7 @@ pub async fn fetch_compound_positions(
 
     // Emit PoL observation for this address's DeFi positions snapshot.
     let entity_id = format!("defi:compound:{}", address.to_ascii_lowercase());
-    let payload_hash = pol_sidecar::snapshot_payload_hash(&records)?;
-    let previous =
-        pol_sidecar::read_latest_observation(&observation_path, &entity_id, "defi_protocols")?;
-    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
-    let observation = EntityObservation::new(
-        entity_id,
-        "defi_protocols".to_owned(),
-        Utc::now(),
-        payload_hash,
-        delta,
-    );
-    pol_sidecar::append_observation(&observation_path, &observation)?;
+    DefiProtocolsFetcher::record_observation(&entity_id, &observation_path, Utc::now(), &records)?;
 
     let count = write_ndjson(&output_path, &records)?;
 

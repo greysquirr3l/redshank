@@ -1,17 +1,18 @@
 //! Exchange proof-of-reserves and compliance report parsing.
 
 use crate::domain::{FetchError, FetchOutput};
-use crate::fetchers::pol_sidecar;
+use crate::fetchers::pol_sidecar::DiffableFetcher;
 use crate::{build_client, write_ndjson};
 use chrono::Utc;
-use redshank_core::domain::observation::EntityObservation;
 use std::path::Path;
 
-// Re-export pol_sidecar helpers so other fetchers can import from a canonical location.
-// The helpers should be moved here in future refactoring to avoid duplication.
-pub use crate::fetchers::pol_sidecar::{
-    append_observation, classify_delta, read_latest_observation, snapshot_payload_hash,
-};
+/// Unit type that carries the `DiffableFetcher` implementation for the
+/// exchange transparency source.
+pub struct ExchangeTransparencyFetcher;
+
+impl DiffableFetcher for ExchangeTransparencyFetcher {
+    const SOURCE_ID: &'static str = "exchange_transparency";
+}
 
 /// A normalized exchange transparency report.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -147,21 +148,12 @@ pub async fn fetch_exchange_transparency(
 
     // Emit PoL observation for this exchange's transparency report.
     let entity_id = format!("exchange:{}", report.exchange.to_ascii_lowercase());
-    let payload_hash = pol_sidecar::snapshot_payload_hash(&report)?;
-    let previous = pol_sidecar::read_latest_observation(
-        &observation_path,
+    ExchangeTransparencyFetcher::record_observation(
         &entity_id,
-        "exchange_transparency",
-    )?;
-    let delta = pol_sidecar::classify_delta(previous.as_ref(), &payload_hash);
-    let observation = EntityObservation::new(
-        entity_id,
-        "exchange_transparency".to_owned(),
+        &observation_path,
         Utc::now(),
-        payload_hash,
-        delta,
-    );
-    pol_sidecar::append_observation(&observation_path, &observation)?;
+        &report,
+    )?;
 
     let records =
         vec![serde_json::to_value(report).map_err(|err| FetchError::Parse(err.to_string()))?];
