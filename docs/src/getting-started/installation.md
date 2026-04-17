@@ -3,7 +3,7 @@
 ## From crates.io
 
 ```bash
-cargo install redshank --locked
+cargo install redshank-cli --locked
 ```
 
 ## From source

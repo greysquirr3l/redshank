@@ -1,6 +1,8 @@
 # Data Sources Overview
 
-Redshank ships 34 data fetchers across eight categories. Each fetcher implements the `DataFetcher` trait, respects rate limits, and writes NDJSON to stdout.
+Redshank ships 90+ fetcher modules across campaign finance, contracts, corporate registries, sanctions, courts, OSINT, environmental, and media categories.
+
+The `redshank fetch` CLI dispatcher currently exposes UK corporate intelligence only; additional fetchers are available as crate modules and are being expanded into the dispatcher over time.
 
 ## Categories
 
@@ -9,7 +11,7 @@ Redshank ships 34 data fetchers across eight categories. Each fetcher implements
 | [Campaign Finance](./campaign-finance.md) | FEC, Senate lobbying, House lobbying | 3 |
 | [Government Contracts](./government-contracts.md) | USASpending, SAM.gov, FPDS, Federal Audit | 4 |
 | [Corporate Registries](./corporate-registries.md) | GLEIF, OpenCorporates, FinCEN BOI, state SOS, SEC EDGAR | 5 |
-| [Financial](./corporate-registries.md) | FDIC, PropPublica 990 filings | 2 |
+| [Financial](./corporate-registries.md) | FDIC, ProPublica 990 filings | 2 |
 | [Sanctions](./sanctions.md) | OFAC SDN, UN consolidated, EU sanctions, World Bank debarred | 4 |
 | [Courts & Leaks](./courts-leaks.md) | CourtListener/RECAP, ICIJ offshore leaks | 2 |
 | [Environmental & Reference](./environmental-reference.md) | EPA ECHO, OSHA, Census ACS, Wikidata, GDELT | 5 |
@@ -18,12 +20,11 @@ Redshank ships 34 data fetchers across eight categories. Each fetcher implements
 ## Running a fetcher directly
 
 ```bash
-redshank fetch fec --name "ACME CORP" --type committee
-redshank fetch gleif --lei "529900T8BM49AURSDO55"
-redshank fetch ofac_sdn --name "Ivan Petrov"
+redshank fetch uk_corporate_intelligence --query "Acme Holdings" --output ./out
+redshank fetch uk-corporate-intelligence --query "Acme Holdings" --output ./out
 ```
 
-Output is NDJSON — one JSON object per line — suitable for piping to `jq` or further processing.
+The CLI writes NDJSON files to the chosen output directory (one JSON object per line), suitable for ingestion with tools such as `jq`.
 
 ## Rate limits and credentials
 

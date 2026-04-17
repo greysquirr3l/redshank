@@ -8,7 +8,7 @@ Redshank is a from-scratch Rust rewrite of [OpenPlanter](https://github.com/Shin
 
 ## Key capabilities
 
-- **34 data fetchers** across government, corporate, sanctions, courts, and OSINT sources
+- **90+ fetcher modules** across government, corporate, sanctions, courts, and OSINT sources
 - **Recursive agent engine** with subtask delegation and context condensation
 - **Knowledge-graph wiki** with petgraph DAG and fuzzy entity resolution
 - **Interactive ratatui TUI** — session sidebar, chat log, and wiki-graph canvas
@@ -18,7 +18,7 @@ Redshank is a from-scratch Rust rewrite of [OpenPlanter](https://github.com/Shin
 
 ## Where to start
 
-- [Installation](./getting-started/installation.md) — build from source or install with `cargo install`
+- [Installation](./getting-started/installation.md) — build from source or install with `cargo install redshank-cli --locked`
 - [Quickstart](./getting-started/quickstart.md) — run your first investigation in five minutes
 - [CLI Reference](./usage/cli.md) — full command reference
 - [Architecture Overview](./architecture/overview.md) — hexagonal DDD, CQRS, security model

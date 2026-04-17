@@ -9,7 +9,7 @@ Redshank is a from-scratch Rust rewrite of [OpenPlanter](https://github.com/Shin
 ## Installation
 
 ```bash
-cargo install redshank --locked
+cargo install redshank-cli --locked
 ```
 
 Or build from source:
@@ -42,7 +42,7 @@ redshank run "Who are the top donors to PACs linked to defense contractors with 
 - **Recursive tool-calling engine** — The agent loop calls tools, reads results,
   and can delegate subtasks to child agent invocations with independent context
   windows. Context condensation keeps long investigations under the token limit.
-- **34 data fetchers** — Pull records from government databases, corporate
+- **90+ fetcher modules** — Pull records from government databases, corporate
   registries, sanctions lists, court systems, and OSINT sources (see
   [Data Sources](#data-sources) below).
 - **Knowledge-graph wiki** — Findings are written to interconnected Markdown
@@ -73,7 +73,7 @@ redshank run "Who are the top donors to PACs linked to defense contractors with 
 | **Campaign Finance** | FEC filings, Senate lobbying disclosures, House lobbying disclosures |
 | **Government Contracts** | USASpending, SAM.gov registrations, FPDS contract awards, federal audit clearinghouse |
 | **Corporate Registries** | GLEIF (LEI lookups), OpenCorporates, FinCEN BOI, state Secretary of State portals, SEC EDGAR |
-| **Financial** | FDIC institution search, PropPublica nonprofit 990 filings |
+| **Financial** | FDIC institution search, ProPublica nonprofit 990 filings |
 | **Sanctions** | OFAC SDN, UN consolidated sanctions, EU sanctions, World Bank debarred firms |
 | **Environmental & Safety** | EPA ECHO compliance, OSHA inspection data |
 | **Courts** | CourtListener (RECAP archive) |
