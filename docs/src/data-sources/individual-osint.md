@@ -1,5 +1,7 @@
 # Individual OSINT
 
+> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+
 ## HIBP — Have I Been Pwned
 
 Breach exposure lookup via the [HIBP API](https://haveibeenpwned.com/API/v3).

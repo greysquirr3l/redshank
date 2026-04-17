@@ -1,5 +1,7 @@
 # Environmental & Reference
 
+> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+
 ## EPA ECHO
 
 Compliance and enforcement data from the [EPA ECHO system](https://echo.epa.gov/tools/web-services).

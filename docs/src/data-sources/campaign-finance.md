@@ -1,5 +1,7 @@
 # Campaign Finance
 
+> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+
 ## FEC
 
 Fetches campaign contributions, expenditures, and committee filings from the [FEC bulk data API](https://api.open.fec.gov).

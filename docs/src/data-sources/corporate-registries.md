@@ -1,5 +1,7 @@
 # Corporate Registries
 
+> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+
 ## GLEIF
 
 Global LEI (Legal Entity Identifier) lookups via the [GLEIF API](https://www.gleif.org/en/lei-data/gleif-api).
@@ -94,9 +96,9 @@ Bank and institution data from the [FDIC BankFind Suite](https://banks.data.fdic
 redshank fetch fdic --name "First National Bank"
 ```
 
-## PropPublica Nonprofit 990
+## ProPublica Nonprofit 990
 
-IRS Form 990 filings via [PropPublica Nonprofit Explorer](https://projects.propublica.org/nonprofits/api).
+IRS Form 990 filings via [ProPublica Nonprofit Explorer](https://projects.propublica.org/nonprofits/api).
 
 ```bash
 redshank fetch propublica_990 --ein "12-3456789"

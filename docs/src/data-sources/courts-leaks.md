@@ -1,5 +1,7 @@
 # Courts & Leaks
 
+> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+
 ## CourtListener (RECAP)
 
 Federal court dockets and documents via the [CourtListener RECAP API](https://www.courtlistener.com/api/).
