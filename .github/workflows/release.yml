@@ -197,6 +197,8 @@ jobs:
     needs: [resolve-tag, verify-ci, build]
     runs-on: ubuntu-latest
     if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
+    permissions:
+      contents: write
 
     steps:
       - name: Download all artifacts
