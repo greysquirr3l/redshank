@@ -35,7 +35,10 @@ redshank tui
 redshank run "Who are the top donors to PACs linked to defense contractors with active SAM.gov registrations?"
 ```
 
-`redshank configure` and `redshank configure credentials` invoke the same setup wizard.
+`redshank setup` is the preferred entrypoint; `redshank configure` and
+`redshank configure credentials` are compatibility aliases for the same wizard.
+Secret fields are entered with hidden input, and unchanged values are detected so
+the command prints "No changes - nothing saved." instead of rewriting credentials.
 
 ## Features
 

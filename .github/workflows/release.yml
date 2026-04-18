@@ -59,9 +59,17 @@ jobs:
             fi
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             SHA="${{ github.event.workflow_run.head_sha }}"
-            TAG=$(git tag --points-at "$SHA" | grep '^v' | sort -V | tail -n 1)
+            TAG=$(git tag --points-at "$SHA" \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V | tail -n 1)
             if [[ -z "$TAG" ]]; then
-              echo "No tag found for workflow_run SHA $SHA" >&2; exit 1
+              echo "No semver tag found for workflow_run SHA $SHA; skipping release"
+              {
+                echo "should_release=false"
+                echo "tag="
+                echo "sha="
+              } >> "$GITHUB_OUTPUT"
+              exit 0
             fi
           else
             TAG="${GITHUB_REF#refs/tags/}"
@@ -78,7 +86,7 @@ jobs:
     name: Verify CI is green
     runs-on: ubuntu-latest
     needs: [resolve-tag]
-    if: ${{ needs.resolve-tag.outputs.should_release == 'true' }}
+    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
     timeout-minutes: 15
 
     steps:
@@ -132,6 +140,7 @@ jobs:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     needs: [resolve-tag, verify-ci]
+    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -190,6 +199,7 @@ jobs:
     name: Publish GitHub Release
     needs: [resolve-tag, verify-ci, build]
     runs-on: ubuntu-latest
+    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
 
     steps:
       - name: Download all artifacts
