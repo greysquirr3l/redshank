@@ -63,13 +63,21 @@ jobs:
           crate="redshank-core"
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="redshank-core") | .version')
 
-          if curl -fsSL "https://crates.io/api/v1/crates/${crate}" \
-            | jq -e --arg v "$version" '.versions[] | select(.num == $v)' >/dev/null; then
+          if CARGO_TERM_COLOR=never cargo search "$crate" --limit 1 | grep -Eq "^${crate}\\s*=\\s*\\\"${version}\\\""; then
             echo "${crate} ${version} already published; skipping"
             exit 0
           fi
 
-          cargo publish -p "${crate}" --locked
+          if ! publish_output=$(cargo publish -p "${crate}" --locked 2>&1); then
+            if echo "$publish_output" | grep -q "already exists on crates.io index"; then
+              echo "${crate} ${version} already published; skipping"
+              exit 0
+            fi
+            echo "$publish_output"
+            exit 1
+          fi
+
+          echo "$publish_output"
 
   publish-mid:
     name: Publish redshank-fetchers and redshank-tui
@@ -114,13 +122,21 @@ jobs:
           crate="${{ matrix.crate }}"
           version=$(cargo metadata --no-deps --format-version 1 | jq -r --arg c "$crate" '.packages[] | select(.name==$c) | .version')
 
-          if curl -fsSL "https://crates.io/api/v1/crates/${crate}" \
-            | jq -e --arg v "$version" '.versions[] | select(.num == $v)' >/dev/null; then
+          if CARGO_TERM_COLOR=never cargo search "$crate" --limit 1 | grep -Eq "^${crate}\\s*=\\s*\\\"${version}\\\""; then
             echo "${crate} ${version} already published; skipping"
             exit 0
           fi
 
-          cargo publish -p "${crate}" --locked
+          if ! publish_output=$(cargo publish -p "${crate}" --locked 2>&1); then
+            if echo "$publish_output" | grep -q "already exists on crates.io index"; then
+              echo "${crate} ${version} already published; skipping"
+              exit 0
+            fi
+            echo "$publish_output"
+            exit 1
+          fi
+
+          echo "$publish_output"
 
   publish-cli:
     name: Publish redshank-cli
@@ -145,10 +161,18 @@ jobs:
           crate="redshank-cli"
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="redshank-cli") | .version')
 
-          if curl -fsSL "https://crates.io/api/v1/crates/${crate}" \
-            | jq -e --arg v "$version" '.versions[] | select(.num == $v)' >/dev/null; then
+          if CARGO_TERM_COLOR=never cargo search "$crate" --limit 1 | grep -Eq "^${crate}\\s*=\\s*\\\"${version}\\\""; then
             echo "${crate} ${version} already published; skipping"
             exit 0
           fi
 
-          cargo publish -p "${crate}" --locked
+          if ! publish_output=$(cargo publish -p "${crate}" --locked 2>&1); then
+            if echo "$publish_output" | grep -q "already exists on crates.io index"; then
+              echo "${crate} ${version} already published; skipping"
+              exit 0
+            fi
+            echo "$publish_output"
+            exit 1
+          fi
+
+          echo "$publish_output"
