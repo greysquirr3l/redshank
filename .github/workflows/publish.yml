@@ -93,9 +93,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          core_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name=="redshank-core") | .version')
           for attempt in {1..20}; do
-            if cargo search redshank-core --limit 1 | grep -q '^redshank-core'; then
-              echo "redshank-core appears in crates index"
+            if CARGO_TERM_COLOR=never cargo search redshank-core --limit 1 | grep -Eq "^redshank-core\s*=\s*\"${core_version}\""; then
+              echo "redshank-core ${core_version} appears in crates index"
               exit 0
             fi
             echo "Attempt ${attempt}/20: waiting for crates.io index propagation..."
