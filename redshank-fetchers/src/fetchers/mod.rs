@@ -64,8 +64,12 @@ pub mod germany_handelsregister;
 
 // ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
 pub mod github_profile;
+pub mod gitlab_profile;
 pub mod hibp;
+pub mod reverse_address_public;
+pub mod reverse_phone_basic;
 pub mod social_profiles;
+pub mod stackexchange_profile;
 pub mod username_enum;
 pub mod uspto;
 pub mod voter_reg;

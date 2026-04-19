@@ -608,6 +608,54 @@ pub static SOURCES: &[SourceDescriptor] = &[
         enabled_by_default: true,
         access_instructions: "Public WHOIS and RDAP lookups; rate limits apply.",
     },
+    // Stack Exchange Profiles
+    SourceDescriptor {
+        id: "stackexchange_profile",
+        title: "Stack Exchange Profiles",
+        description: "Public Stack Overflow/Stack Exchange user profiles, reputation, and activity metadata.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://api.stackexchange.com/",
+        auth_requirement: AuthRequirement::Optional,
+        credential_field: None,
+        enabled_by_default: false,
+        access_instructions: "Public API available without key; optional key increases quota.",
+    },
+    // GitLab Profiles
+    SourceDescriptor {
+        id: "gitlab_profile",
+        title: "GitLab Profiles",
+        description: "GitLab public user profiles, metadata, and account discovery by search query.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://docs.gitlab.com/ee/api/users.html",
+        auth_requirement: AuthRequirement::Optional,
+        credential_field: None,
+        enabled_by_default: false,
+        access_instructions: "Public API available without token; token increases rate limits and scope.",
+    },
+    // Reverse Phone (Basic)
+    SourceDescriptor {
+        id: "reverse_phone_basic",
+        title: "Reverse Phone (Basic)",
+        description: "Best-effort phone normalization and public metadata hints without paid identity APIs.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://www.itu.int/",
+        auth_requirement: AuthRequirement::None,
+        credential_field: None,
+        enabled_by_default: false,
+        access_instructions: "No credential required; provides metadata hints only, not subscriber identity.",
+    },
+    // Reverse Address (Public)
+    SourceDescriptor {
+        id: "reverse_address_public",
+        title: "Reverse Address (Public)",
+        description: "Public geocoding and address normalization using free U.S. Census geocoder endpoints.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://geocoding.geo.census.gov/",
+        auth_requirement: AuthRequirement::None,
+        credential_field: None,
+        enabled_by_default: false,
+        access_instructions: "No credential required; public Census geocoder endpoint.",
+    },
     // ────── T27: Regulatory Enforcement ──────────────────────────────────────
 
     // CFPB - Consumer Financial Protection Bureau
