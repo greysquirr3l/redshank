@@ -2,9 +2,9 @@
 
 ![RedShank Logo](./docs/assets/img/redshank-logo.png)
 
-An autonomous recursive language-model investigation agent written in Rust.  Redshank ingests heterogeneous public datasets — campaign finance, lobbying disclosures, federal contracts, corporate registries, sanctions lists, court records, individual-person OSINT,and media intelligence — resolves entities across all of them, and surfaces non-obvious connections through evidence-backed analysis written into a live knowledge-graph wiki.
+An autonomous recursive language-model investigation agent written in Rust. Redshank ingests heterogeneous public datasets — campaign finance, lobbying disclosures, federal contracts, corporate registries, sanctions lists, court records, individual-person OSINT, and media intelligence — resolves entities across all of them, and surfaces non-obvious connections through evidence-backed analysis written into a live knowledge-graph wiki.
 
-Redshank is a from-scratch Rust rewrite of [OpenPlanter](https://github.com/ShinMegamiBoson/OpenPlanter), replacing the Python runtime with a compiled binary that has zero Python or Node.js dependency.
+Redshank is a Rust rewrite of [OpenPlanter](https://github.com/ShinMegamiBoson/OpenPlanter), replacing the Python runtime with a compiled binary that has zero Python or Node.js dependency.
 
 ## Installation
 
@@ -256,6 +256,11 @@ is planned for a future release.
 See the [Stygian Fallback architecture doc](docs/src/architecture/stygian-fallback.md)
 for full setup, troubleshooting, and licensing-boundary rationale.
 
+## Security
+
+To report vulnerabilities, please follow the private disclosure process in
+[SECURITY.md](SECURITY.md).
+
 ### Workspace Layout
 
 ```text
@@ -267,9 +272,9 @@ redshank/
 │       ├── application/ CQRS command/query handlers, engine service
 │       └── adapters/    LLM providers, tools, SQLite, wiki filesystem
 ├── redshank-tui/        ratatui terminal interface
-├── redshank-fetchers/   34 data-source fetcher libraries
+├── redshank-fetchers/   90+ data-source fetcher modules
 ├── redshank-cli/        clap CLI entry point
-└── plan.toml            Build plan (26 tasks)
+└── plan.toml            Build plan (45 tasks)
 ```
 
 ## Comparison with OpenPlanter
@@ -281,7 +286,7 @@ redshank/
 | **Graph library** | NetworkX | petgraph |
 | **HTTP client** | urllib / httpx | reqwest + stygian-browser |
 | **LLM providers** | Anthropic, OpenAI, OpenRouter, Cerebras, Ollama | Same set, native Rust clients |
-| **Data fetchers** | 12 Python scripts | 34 library modules |
+| **Data fetchers** | 12 Python scripts | 90+ library modules |
 | **Architecture** | Flat modules | Hexagonal DDD + CQRS |
 | **Security model** | File permissions | Typed AuthContext + SecurityPolicy + fail-secure |
 | **Session storage** | JSON files | SQLite with domain events |
