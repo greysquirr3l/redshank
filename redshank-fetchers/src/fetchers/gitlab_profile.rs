@@ -104,9 +104,18 @@ mod tests {
         });
 
         let mapped = map_gitlab_item(&item, "octo");
-        assert_eq!(mapped.get("query").and_then(serde_json::Value::as_str), Some("octo"));
-        assert_eq!(mapped.get("source").and_then(serde_json::Value::as_str), Some("gitlab"));
-        assert_eq!(mapped.get("id").and_then(serde_json::Value::as_i64), Some(42));
+        assert_eq!(
+            mapped.get("query").and_then(serde_json::Value::as_str),
+            Some("octo")
+        );
+        assert_eq!(
+            mapped.get("source").and_then(serde_json::Value::as_str),
+            Some("gitlab")
+        );
+        assert_eq!(
+            mapped.get("id").and_then(serde_json::Value::as_i64),
+            Some(42)
+        );
         assert_eq!(
             mapped.get("username").and_then(serde_json::Value::as_str),
             Some("octocat")

@@ -113,7 +113,10 @@ mod tests {
         });
 
         let mapped = map_stackexchange_item(&item, "jane");
-        assert_eq!(mapped.get("query").and_then(serde_json::Value::as_str), Some("jane"));
+        assert_eq!(
+            mapped.get("query").and_then(serde_json::Value::as_str),
+            Some("jane")
+        );
         assert_eq!(
             mapped.get("source").and_then(serde_json::Value::as_str),
             Some("stackexchange")
@@ -122,7 +125,10 @@ mod tests {
             mapped.get("site").and_then(serde_json::Value::as_str),
             Some("stackoverflow")
         );
-        assert_eq!(mapped.get("user_id").and_then(serde_json::Value::as_i64), Some(123));
+        assert_eq!(
+            mapped.get("user_id").and_then(serde_json::Value::as_i64),
+            Some(123)
+        );
         assert_eq!(
             mapped
                 .get("display_name")
