@@ -223,6 +223,24 @@ where
         "OPENPLANTER_ETHERSCAN_API_KEY",
         "ETHERSCAN_API_KEY"
     );
+    set_secret!(
+        twilio_account_sid,
+        "REDSHANK_TWILIO_ACCOUNT_SID",
+        "OPENPLANTER_TWILIO_ACCOUNT_SID",
+        "TWILIO_ACCOUNT_SID"
+    );
+    set_secret!(
+        twilio_auth_token,
+        "REDSHANK_TWILIO_AUTH_TOKEN",
+        "OPENPLANTER_TWILIO_AUTH_TOKEN",
+        "TWILIO_AUTH_TOKEN"
+    );
+    set_secret!(
+        truecaller_api_key,
+        "REDSHANK_TRUECALLER_API_KEY",
+        "OPENPLANTER_TRUECALLER_API_KEY",
+        "TRUECALLER_API_KEY"
+    );
 
     bundle
 }

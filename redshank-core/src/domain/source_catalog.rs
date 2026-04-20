@@ -656,6 +656,30 @@ pub static SOURCES: &[SourceDescriptor] = &[
         enabled_by_default: false,
         access_instructions: "No credential required; public Census geocoder endpoint.",
     },
+    // Reverse Phone (Twilio)
+    SourceDescriptor {
+        id: "reverse_phone_twilio",
+        title: "Reverse Phone (Twilio)",
+        description: "Phone carrier detection, line type, and validation via Twilio Lookup API.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://www.twilio.com/",
+        auth_requirement: AuthRequirement::Required,
+        credential_field: Some("TWILIO_ACCOUNT_SID"),
+        enabled_by_default: false,
+        access_instructions: "Requires Twilio account credentials (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN). Supports ~$0.01 per lookup pricing.",
+    },
+    // Reverse Phone (TrueCaller)
+    SourceDescriptor {
+        id: "reverse_phone_truecaller",
+        title: "Reverse Phone (TrueCaller)",
+        description: "Full subscriber reverse phone lookup: name, address, carrier, and line type via TrueCaller API.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://www.truecaller.com/",
+        auth_requirement: AuthRequirement::Required,
+        credential_field: Some("TRUECALLER_API_KEY"),
+        enabled_by_default: false,
+        access_instructions: "Requires TrueCaller API key (TRUECALLER_API_KEY). Full subscriber lookup with rates starting ~$.10+ per lookup.",
+    },
     // ────── T27: Regulatory Enforcement ──────────────────────────────────────
 
     // CFPB - Consumer Financial Protection Bureau

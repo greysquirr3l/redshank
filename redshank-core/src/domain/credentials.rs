@@ -106,6 +106,12 @@ pub struct CredentialBundle {
     pub candid_api_key: Option<CredentialGuard<String>>,
     /// `Etherscan`-compatible API key for EVM explorer lookups.
     pub etherscan_api_key: Option<CredentialGuard<String>>,
+    /// Twilio account SID for reverse phone lookup via carrier detection API.
+    pub twilio_account_sid: Option<CredentialGuard<String>>,
+    /// Twilio auth token for reverse phone lookup API authentication.
+    pub twilio_auth_token: Option<CredentialGuard<String>>,
+    /// TrueCaller API key for reverse phone lookup with subscriber information.
+    pub truecaller_api_key: Option<CredentialGuard<String>>,
 }
 
 impl CredentialBundle {

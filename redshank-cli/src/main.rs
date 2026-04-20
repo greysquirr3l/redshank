@@ -35,6 +35,8 @@ use redshank_fetchers::fetchers::gitlab_profile::fetch_gitlab_profile;
 use redshank_fetchers::fetchers::ofac_sdn::fetch_sdn;
 use redshank_fetchers::fetchers::reverse_address_public::fetch_reverse_address_public;
 use redshank_fetchers::fetchers::reverse_phone_basic::fetch_reverse_phone_basic;
+use redshank_fetchers::fetchers::reverse_phone_truecaller::fetch_reverse_phone_truecaller;
+use redshank_fetchers::fetchers::reverse_phone_twilio::fetch_reverse_phone_twilio;
 use redshank_fetchers::fetchers::stackexchange_profile::fetch_stackexchange_profile;
 use redshank_fetchers::fetchers::uk_corporate_intelligence::fetch_uk_corporate_intelligence;
 use std::io::{self, Write as _};
@@ -767,6 +769,33 @@ async fn dispatch_fetch(
             let q = query
                 .ok_or_else(|| anyhow::anyhow!("--query is required for reverse_address_public"))?;
             fetch_reverse_address_public(q, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "reverse_phone_twilio" => {
+            let q = query
+                .ok_or_else(|| anyhow::anyhow!("--query is required for reverse_phone_twilio"))?;
+            let account_sid = required_secret(
+                credentials.twilio_account_sid.as_ref(),
+                "TWILIO_ACCOUNT_SID",
+            )?;
+            let auth_token =
+                required_secret(credentials.twilio_auth_token.as_ref(), "TWILIO_AUTH_TOKEN")?;
+            fetch_reverse_phone_twilio(q, output_dir, &account_sid, &auth_token)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "reverse_phone_truecaller" => {
+            let q = query.ok_or_else(|| {
+                anyhow::anyhow!("--query is required for reverse_phone_truecaller")
+            })?;
+            let api_key = required_secret(
+                credentials.truecaller_api_key.as_ref(),
+                "TRUECALLER_API_KEY",
+            )?;
+            fetch_reverse_phone_truecaller(q, output_dir, &api_key)
                 .await
                 .map_err(|e| anyhow::anyhow!("{e}"))
         }

@@ -203,13 +203,15 @@ pub const KNOWN_FETCHERS: &[&str] = &[
     "un_sanctions",
     "wikidata",
     "world_bank_debarred",
-    // T21: Individual OSINT fetchers
+    // T21: 14 individual-person OSINT fetchers
     "gitlab_profile",
     "github_profile",
     "hibp",
     "linkedin_public",
     "reverse_address_public",
     "reverse_phone_basic",
+    "reverse_phone_truecaller",
+    "reverse_phone_twilio",
     "social_profiles",
     "stackexchange_profile",
     "username_enum",

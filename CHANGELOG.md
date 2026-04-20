@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-04-19
+
+### Added
+
+- **Paid-tier reverse phone lookup options** — Two new optional fetchers for subscriber lookups:
+  - `reverse_phone_twilio`: Carrier detection and line type via Twilio Lookup API (low cost, ~$0.005/lookup).
+  - `reverse_phone_truecaller`: Full subscriber information (name, address, carrier) via TrueCaller API (higher cost, ~$0.10+/lookup).
+
 ## [0.2.3] - 2026-04-19
 
 ### Added
