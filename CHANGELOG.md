@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-04-19
+
+### Added
+
+- **Individual OSINT expansion: public profiles & reverse lookups** — Four new fetchers for free/public OSINT sources:
+  - `gitlab_profile`: Search public GitLab profiles via the unauthenticated Users API.
+  - `stackexchange_profile`: Search public Stack Overflow profiles via the public Stack Exchange API.
+  - `reverse_phone_basic`: Normalize US phone numbers (free endpoint; no actual reverse lookup yet).
+  - `reverse_address_public`: Geocode and enrich US addresses via the Census geocoder.
+- **CLI dynamic fetcher dispatch** — Replaced hardcoded `FetchSource` enum with a string-based registry (`KNOWN_FETCHERS`). All fetchers now wire through the CLI via `redshank fetch <source-id> --query <query>`.
+- **Dependency Review workflow resilience** — Added HTTP pre-check guard (via GitHub SBOM API) to skip dependency review on repos where the dependency graph is disabled, preventing hard failures.
+
+### Changed
+
+- **Individual OSINT module documentation** — Updated title from "8 individual-person OSINT fetchers" to dynamic count; updated catalog entries and command snippets to reflect all new fetchers.
+- **CLI error messaging** — Unknown fetcher errors now direct users to the TUI Sources tab or documentation instead of the misleading `redshank configure` command.
+- **Response shaping test coverage** — Added unit tests for `gitlab_profile` and `stackexchange_profile` response-shaping helpers to verify JSON mapping.
+
+### Fixed
+
+- **Dependency Review workflow reliability** — Added fallback handling (`|| echo "000"`) to curl network calls to prevent transient failures from hard-failing the entire workflow.
+- **Memory optimization in reverse_address_public** — Changed from `.cloned().unwrap_or_default()` to `.map_or(&[], Vec::as_slice)` to avoid unnecessary allocations and satisfy `clippy::map_unwrap_or`.
+
 ## [0.2.2] - 2026-04-17
 
 ### Added
