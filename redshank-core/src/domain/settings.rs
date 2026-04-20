@@ -203,9 +203,10 @@ pub const KNOWN_FETCHERS: &[&str] = &[
     "un_sanctions",
     "wikidata",
     "world_bank_debarred",
-    // T21: 14 individual-person OSINT fetchers
+    // T21: 16 individual-person OSINT fetchers
     "gitlab_profile",
     "github_profile",
+    "haveibeenpwnd",
     "hibp",
     "linkedin_public",
     "reverse_address_public",

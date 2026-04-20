@@ -26,12 +26,14 @@ use redshank_core::application::commands::run_investigation::{
 use redshank_core::application::services::session_runtime::SessionRuntime;
 use redshank_core::domain::agent::{AgentConfig, ProviderKind, ReasoningEffort};
 use redshank_core::domain::auth::{AuthContext, UserId};
-use redshank_core::domain::credentials::CredentialGuard;
+use redshank_core::domain::credentials::{CredentialBundle, CredentialGuard};
 use redshank_core::domain::errors::DomainError;
 use redshank_core::domain::session::{SessionId, ToolResult};
 use redshank_core::domain::settings::KNOWN_FETCHERS;
 use redshank_core::ports::tool_dispatcher::ToolDispatcher;
 use redshank_fetchers::fetchers::gitlab_profile::fetch_gitlab_profile;
+use redshank_fetchers::fetchers::haveibeenpwnd::fetch_haveibeenpwnd;
+use redshank_fetchers::fetchers::hibp::{HibpApiKey, fetch_breaches_for_email};
 use redshank_fetchers::fetchers::ofac_sdn::fetch_sdn;
 use redshank_fetchers::fetchers::reverse_address_public::fetch_reverse_address_public;
 use redshank_fetchers::fetchers::reverse_phone_basic::fetch_reverse_phone_basic;
@@ -718,28 +720,7 @@ async fn dispatch_fetch(
     match source {
         // Fetchers requiring query + API key(s).
         "uk_corporate_intelligence" => {
-            let q = query.ok_or_else(|| {
-                anyhow::anyhow!("--query is required for uk_corporate_intelligence")
-            })?;
-            let companies_house_api_key = required_secret(
-                credentials.uk_companies_house_api_key.as_ref(),
-                "UK_COMPANIES_HOUSE_API_KEY",
-            )?;
-            let opencorporates_api_key = credentials
-                .opencorporates_api_key
-                .as_ref()
-                .map(|s| s.expose().clone());
-            fetch_uk_corporate_intelligence(
-                q,
-                &companies_house_api_key,
-                opencorporates_api_key.as_deref(),
-                output_dir,
-                500,
-                25,
-                2,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("{e}"))
+            dispatch_uk_corporate_intelligence(query, &credentials, output_dir).await
         }
 
         // Fetchers requiring only query (public APIs, no auth).
@@ -755,6 +736,24 @@ async fn dispatch_fetch(
             let q = query
                 .ok_or_else(|| anyhow::anyhow!("--query is required for stackexchange_profile"))?;
             fetch_stackexchange_profile(q, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "hibp" => {
+            let q = query.ok_or_else(|| anyhow::anyhow!("--query is required for hibp"))?;
+            let api_key = required_secret(credentials.hibp_api_key.as_ref(), "HIBP_API_KEY")?;
+            let key = HibpApiKey::new(api_key);
+            fetch_breaches_for_email(q, &key, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "haveibeenpwnd" => {
+            let q =
+                query.ok_or_else(|| anyhow::anyhow!("--query is required for haveibeenpwnd"))?;
+            let api_key = required_secret(credentials.hibp_api_key.as_ref(), "HIBP_API_KEY")?;
+            fetch_haveibeenpwnd(q, output_dir, &api_key)
                 .await
                 .map_err(|e| anyhow::anyhow!("{e}"))
         }
@@ -811,6 +810,34 @@ async fn dispatch_fetch(
              if this is a new fetcher, add a handler in dispatch_fetch()"
         )),
     }
+}
+
+async fn dispatch_uk_corporate_intelligence(
+    query: Option<&str>,
+    credentials: &CredentialBundle,
+    output_dir: &Path,
+) -> anyhow::Result<redshank_fetchers::FetchOutput> {
+    let q = query
+        .ok_or_else(|| anyhow::anyhow!("--query is required for uk_corporate_intelligence"))?;
+    let companies_house_api_key = required_secret(
+        credentials.uk_companies_house_api_key.as_ref(),
+        "UK_COMPANIES_HOUSE_API_KEY",
+    )?;
+    let opencorporates_api_key = credentials
+        .opencorporates_api_key
+        .as_ref()
+        .map(|s| s.expose().clone());
+    fetch_uk_corporate_intelligence(
+        q,
+        &companies_house_api_key,
+        opencorporates_api_key.as_deref(),
+        output_dir,
+        500,
+        25,
+        2,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 fn required_secret(value: Option<&CredentialGuard<String>>, name: &str) -> anyhow::Result<String> {

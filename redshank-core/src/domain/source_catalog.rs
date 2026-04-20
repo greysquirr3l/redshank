@@ -519,10 +519,22 @@ pub static SOURCES: &[SourceDescriptor] = &[
         description: "Have I Been Pwned breach database for compromised credentials.",
         category: SourceCategory::Osint,
         homepage_url: "https://haveibeenpwned.com/",
-        auth_requirement: AuthRequirement::Optional,
+        auth_requirement: AuthRequirement::Required,
         credential_field: Some("hibp_api_key"),
         enabled_by_default: true,
         access_instructions: "API key required for automated access.",
+    },
+    // HaveIBeenPwnd (paid HIBP API wrapper)
+    SourceDescriptor {
+        id: "haveibeenpwnd",
+        title: "HaveIBeenPwnd",
+        description: "Paid Have I Been Pwned breach metadata lookup via API key.",
+        category: SourceCategory::Osint,
+        homepage_url: "https://haveibeenpwned.com/",
+        auth_requirement: AuthRequirement::Required,
+        credential_field: Some("hibp_api_key"),
+        enabled_by_default: false,
+        access_instructions: "Requires paid HIBP API key for automated breach lookups.",
     },
     // GitHub Profile
     SourceDescriptor {

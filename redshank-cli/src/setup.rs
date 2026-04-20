@@ -183,7 +183,7 @@ pub const ALL_CREDENTIAL_FIELDS: &[CredentialField] = &[
         group: "Open-Source Intelligence",
         signup_url: "https://haveibeenpwned.com/API/Key",
         is_secret: true,
-        is_required: false,
+        is_required: true,
     },
     CredentialField {
         field_name: "github_token",
