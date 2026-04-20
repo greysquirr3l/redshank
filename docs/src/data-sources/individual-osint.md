@@ -9,7 +9,13 @@ Breach exposure lookup via the [HIBP API](https://haveibeenpwned.com/API/v3).
 **Credential:** `HIBP_API_KEY`
 
 ```bash
-redshank fetch hibp --email "user@example.com"
+redshank fetch hibp --query "user@example.com"
+```
+
+Alias source ID (same paid API flow):
+
+```bash
+redshank fetch haveibeenpwnd --query "user@example.com"
 ```
 
 ## GitHub Profiles
@@ -90,6 +96,26 @@ Best-effort phone normalization and country-code metadata hints (no paid identit
 
 ```bash
 redshank fetch reverse_phone_basic --query "+1 415 555 2671"
+```
+
+## Reverse Phone (Twilio)
+
+Carrier and line-type enrichment via the [Twilio Lookup API](https://www.twilio.com/docs/lookup/v1-api).
+
+**Credentials:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`
+
+```bash
+redshank fetch reverse_phone_twilio --query "+1 415 555 2671"
+```
+
+## Reverse Phone (Truecaller)
+
+Paid subscriber enrichment (name/address/carrier metadata) via the [Truecaller API](https://www.truecaller.com/).
+
+**Credential:** `TRUECALLER_API_KEY`
+
+```bash
+redshank fetch reverse_phone_truecaller --query "+1 415 555 2671"
 ```
 
 ## Reverse Address (Public)

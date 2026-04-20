@@ -81,7 +81,7 @@ the command prints "No changes - nothing saved." instead of rewriting credential
 | **Environmental & Safety** | EPA ECHO compliance, OSHA inspection data |
 | **Courts** | CourtListener (RECAP archive) |
 | **Leaks & Offshore** | ICIJ offshore leaks database |
-| **Individual OSINT** | HIBP breach exposure, GitHub profiles, Wayback Machine snapshots, WHOIS/RDAP history, voter registration, USPTO patent/trademark inventors, username enumeration (37 platforms), social media profiles |
+| **Individual OSINT** | HIBP breach exposure (including `haveibeenpwnd` alias; paid API key required), GitHub/GitLab/Stack Exchange/LinkedIn profiles, Wayback Machine snapshots, WHOIS/RDAP history, voter registration, USPTO patent/trademark inventors, username enumeration (37 platforms), social media profiles, reverse phone (basic, Twilio, Truecaller), reverse address normalization |
 | **Reference & Media** | Wikidata entity lookups, GDELT media monitoring, Census ACS demographics |
 | **Property** | County property/assessor records |
 
