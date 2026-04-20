@@ -1,4 +1,4 @@
-//! Reverse phone lookup via TrueCaller API.
+//! Reverse phone lookup via `TrueCaller` API.
 //!
 //! Provides full subscriber information (name, address, carrier) for phone numbers.
 //! Requires `TRUECALLER_API_KEY` credential.
@@ -9,7 +9,7 @@ use std::path::Path;
 
 const TRUECALLER_API: &str = "https://api.truecaller.com/v1/search";
 
-/// Fetch subscriber information for a phone number via TrueCaller.
+/// Fetch subscriber information for a phone number via `TrueCaller`.
 ///
 /// # Errors
 ///

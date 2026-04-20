@@ -1,0 +1,6 @@
+[advisories]
+# Use the official RustSec advisory database.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# Keep this empty by default; add temporary exceptions with comments when needed.
+ignore = []

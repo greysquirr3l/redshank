@@ -110,7 +110,7 @@ pub struct CredentialBundle {
     pub twilio_account_sid: Option<CredentialGuard<String>>,
     /// Twilio auth token for reverse phone lookup API authentication.
     pub twilio_auth_token: Option<CredentialGuard<String>>,
-    /// TrueCaller API key for reverse phone lookup with subscriber information.
+    /// `TrueCaller` API key for reverse phone lookup with subscriber information.
     pub truecaller_api_key: Option<CredentialGuard<String>>,
 }
 
