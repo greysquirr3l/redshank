@@ -74,7 +74,7 @@ pub fn infer_country_hint(e164: &str) -> Option<&'static str> {
 /// # Errors
 ///
 /// Returns `Err` when the phone value cannot be normalized or output cannot be written.
-pub async fn fetch_reverse_phone_basic(
+pub fn fetch_reverse_phone_basic(
     phone: &str,
     output_dir: &Path,
 ) -> Result<FetchOutput, FetchError> {
