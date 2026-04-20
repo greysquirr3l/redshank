@@ -9,7 +9,7 @@
 
 mod setup;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use redshank_core::adapters::persistence::credential_store::{
     FileCredentialStore, resolve_credentials,
 };
@@ -29,7 +29,13 @@ use redshank_core::domain::auth::{AuthContext, UserId};
 use redshank_core::domain::credentials::CredentialGuard;
 use redshank_core::domain::errors::DomainError;
 use redshank_core::domain::session::{SessionId, ToolResult};
+use redshank_core::domain::settings::KNOWN_FETCHERS;
 use redshank_core::ports::tool_dispatcher::ToolDispatcher;
+use redshank_fetchers::fetchers::gitlab_profile::fetch_gitlab_profile;
+use redshank_fetchers::fetchers::ofac_sdn::fetch_sdn;
+use redshank_fetchers::fetchers::reverse_address_public::fetch_reverse_address_public;
+use redshank_fetchers::fetchers::reverse_phone_basic::fetch_reverse_phone_basic;
+use redshank_fetchers::fetchers::stackexchange_profile::fetch_stackexchange_profile;
 use redshank_fetchers::fetchers::uk_corporate_intelligence::fetch_uk_corporate_intelligence;
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
@@ -131,7 +137,7 @@ enum Commands {
     /// Fetch data from a specific source.
     Fetch {
         /// Data source name.
-        source: FetchSource,
+        source: String,
         /// Output directory for fetched data.
         #[arg(long)]
         output: Option<PathBuf>,
@@ -152,15 +158,6 @@ enum Commands {
     },
     /// Print version info.
     Version,
-}
-
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum FetchSource {
-    #[value(
-        name = "uk_corporate_intelligence",
-        alias = "uk-corporate-intelligence"
-    )]
-    UkCorporateIntelligence,
 }
 
 #[derive(Subcommand, Debug)]
@@ -235,7 +232,15 @@ async fn main() -> anyhow::Result<()> {
             source,
             output,
             query,
-        } => cmd_fetch(&workspace, source, output.as_deref(), query.as_deref()).await,
+        } => {
+            cmd_fetch(
+                &workspace,
+                source.as_str(),
+                output.as_deref(),
+                query.as_deref(),
+            )
+            .await
+        }
         Commands::Session { action } => cmd_session(action, &workspace).await,
         Commands::Configure { .. } => cmd_configure(&workspace),
         Commands::Version => {
@@ -679,17 +684,41 @@ fn summarize_tool_result(content: &str, is_error: bool) -> String {
 
 async fn cmd_fetch(
     workspace: &Path,
-    source: FetchSource,
+    source: &str,
     output: Option<&std::path::Path>,
     query: Option<&str>,
 ) -> anyhow::Result<()> {
-    tracing::info!(source = ?source, ?output, query, "fetching data");
+    tracing::info!(source, ?output, query, "fetching data");
     let output_dir = output.unwrap_or_else(|| std::path::Path::new("."));
-    let query = query.ok_or_else(|| anyhow::anyhow!("--query is required for fetch"))?;
+    let canonical_source = source.replace('-', "_");
+
+    // Validate source is in KNOWN_FETCHERS.
+    if !KNOWN_FETCHERS.contains(&canonical_source.as_str()) {
+        return Err(anyhow::anyhow!(
+            "unknown fetcher: '{source}'; see the Sources tab in the TUI or the documentation for available sources"
+        ));
+    }
+
+    let result = dispatch_fetch(workspace, &canonical_source, query, output_dir).await?;
+    println!("{}", result.output_path.display());
+    Ok(())
+}
+
+/// Dispatch to fetcher handler based on source ID.
+async fn dispatch_fetch(
+    workspace: &Path,
+    source: &str,
+    query: Option<&str>,
+    output_dir: &Path,
+) -> anyhow::Result<redshank_fetchers::FetchOutput> {
+    let credentials = resolve_credentials(workspace, None);
 
     match source {
-        FetchSource::UkCorporateIntelligence => {
-            let credentials = resolve_credentials(workspace, None);
+        // Fetchers requiring query + API key(s).
+        "uk_corporate_intelligence" => {
+            let q = query.ok_or_else(|| {
+                anyhow::anyhow!("--query is required for uk_corporate_intelligence")
+            })?;
             let companies_house_api_key = required_secret(
                 credentials.uk_companies_house_api_key.as_ref(),
                 "UK_COMPANIES_HOUSE_API_KEY",
@@ -698,8 +727,8 @@ async fn cmd_fetch(
                 .opencorporates_api_key
                 .as_ref()
                 .map(|s| s.expose().clone());
-            let result = fetch_uk_corporate_intelligence(
-                query,
+            fetch_uk_corporate_intelligence(
+                q,
                 &companies_house_api_key,
                 opencorporates_api_key.as_deref(),
                 output_dir,
@@ -707,10 +736,51 @@ async fn cmd_fetch(
                 25,
                 2,
             )
-            .await?;
-            println!("{}", result.output_path.display());
-            Ok(())
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))
         }
+
+        // Fetchers requiring only query (public APIs, no auth).
+        "gitlab_profile" => {
+            let q =
+                query.ok_or_else(|| anyhow::anyhow!("--query is required for gitlab_profile"))?;
+            fetch_gitlab_profile(q, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "stackexchange_profile" => {
+            let q = query
+                .ok_or_else(|| anyhow::anyhow!("--query is required for stackexchange_profile"))?;
+            fetch_stackexchange_profile(q, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "reverse_phone_basic" => {
+            let q = query
+                .ok_or_else(|| anyhow::anyhow!("--query is required for reverse_phone_basic"))?;
+            fetch_reverse_phone_basic(q, output_dir).map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        "reverse_address_public" => {
+            let q = query
+                .ok_or_else(|| anyhow::anyhow!("--query is required for reverse_address_public"))?;
+            fetch_reverse_address_public(q, output_dir)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))
+        }
+
+        // Fetchers requiring no query (bulk/snapshot downloads).
+        "ofac_sdn" => fetch_sdn(output_dir)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}")),
+
+        // Fallback for fetchers registered in KNOWN_FETCHERS but not yet wired in CLI.
+        _ => Err(anyhow::anyhow!(
+            "fetcher '{source}' is registered but not yet implemented in CLI; \
+             if this is a new fetcher, add a handler in dispatch_fetch()"
+        )),
     }
 }
 
@@ -906,7 +976,7 @@ mod tests {
                 query,
                 output,
             } => {
-                assert!(matches!(source, FetchSource::UkCorporateIntelligence));
+                assert_eq!(source, "uk_corporate_intelligence");
                 assert_eq!(query.as_deref(), Some("ACME"));
                 assert_eq!(output, Some(PathBuf::from("/tmp/out")));
             }
@@ -928,7 +998,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Commands::Fetch { source, query, .. }
-                if matches!(source, FetchSource::UkCorporateIntelligence)
+                if source == "uk_corporate_intelligence"
                     && query.as_deref() == Some("Acme Holdings")
         ));
     }
@@ -947,7 +1017,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Commands::Fetch { source, query, .. }
-                if matches!(source, FetchSource::UkCorporateIntelligence)
+                if source == "uk-corporate-intelligence"
                     && query.as_deref() == Some("Acme Holdings")
         ));
     }
@@ -1072,11 +1142,14 @@ mod tests {
     }
 
     #[test]
-    fn cli_rejects_unknown_fetch_source() {
-        let err =
-            Cli::try_parse_from(["redshank", "fetch", "sec-edgar", "--query", "ACME"]).unwrap_err();
-        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
-        assert!(err.to_string().contains("sec-edgar"));
+    fn cli_parses_unknown_fetch_source_for_runtime_validation() {
+        let cli =
+            Cli::try_parse_from(["redshank", "fetch", "sec-edgar", "--query", "ACME"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Fetch { source, query, .. }
+                if source == "sec-edgar" && query.as_deref() == Some("ACME")
+        ));
     }
 
     #[test]
