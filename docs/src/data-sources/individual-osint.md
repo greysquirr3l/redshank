@@ -1,6 +1,6 @@
 # Individual OSINT
 
-> Note: `redshank fetch` CLI dispatch currently exposes `uk_corporate_intelligence` only. The command snippets on this page document fetcher IDs and expected query shapes as dispatcher targets are expanded.
+> Note: The following individual-person OSINT fetchers are available via the CLI and TUI. Use the command snippets below to invoke each fetcher, or browse the Sources tab in the TUI for real-time availability.
 
 ## HIBP — Have I Been Pwned
 

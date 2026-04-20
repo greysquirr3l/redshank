@@ -695,7 +695,7 @@ async fn cmd_fetch(
     // Validate source is in KNOWN_FETCHERS.
     if !KNOWN_FETCHERS.contains(&canonical_source.as_str()) {
         return Err(anyhow::anyhow!(
-            "unknown fetcher: '{source}'; run `redshank configure` to see available sources"
+            "unknown fetcher: '{source}'; see the Sources tab in the TUI or the documentation for available sources"
         ));
     }
 
