@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Individual OSINT expansion: public profiles & reverse lookups** — Four new fetchers for free/public OSINT sources:
   - `gitlab_profile`: Search public GitLab profiles via the unauthenticated Users API.
   - `stackexchange_profile`: Search public Stack Overflow profiles via the public Stack Exchange API.
-  - `reverse_phone_basic`: Normalize US phone numbers (free endpoint; no actual reverse lookup yet).
+  - `reverse_phone_basic`: Normalize US phone numbers to E.164 format with country-code inference (metadata only; no paid identity API).
   - `reverse_address_public`: Geocode and enrich US addresses via the Census geocoder.
 - **CLI dynamic fetcher dispatch** — Replaced hardcoded `FetchSource` enum with a string-based registry (`KNOWN_FETCHERS`). All fetchers now wire through the CLI via `redshank fetch <source-id> --query <query>`.
 - **Dependency Review workflow resilience** — Added HTTP pre-check guard (via GitHub SBOM API) to skip dependency review on repos where the dependency graph is disabled, preventing hard failures.
