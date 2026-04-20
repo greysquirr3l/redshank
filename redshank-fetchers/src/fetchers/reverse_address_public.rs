@@ -52,8 +52,8 @@ pub async fn fetch_reverse_address_public(
         .get("result")
         .and_then(|r| r.get("addressMatches"))
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
 
     let mut records = matches
         .iter()

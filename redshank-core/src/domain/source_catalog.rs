@@ -611,14 +611,14 @@ pub static SOURCES: &[SourceDescriptor] = &[
     // Stack Exchange Profiles
     SourceDescriptor {
         id: "stackexchange_profile",
-        title: "Stack Exchange Profiles",
-        description: "Public Stack Overflow/Stack Exchange user profiles, reputation, and activity metadata.",
+        title: "Stack Overflow Profiles",
+        description: "Public Stack Overflow user profiles, reputation, and activity metadata via Stack Exchange API (site=stackoverflow).",
         category: SourceCategory::Osint,
         homepage_url: "https://api.stackexchange.com/",
         auth_requirement: AuthRequirement::Optional,
         credential_field: None,
         enabled_by_default: false,
-        access_instructions: "Public API available without key; optional key increases quota.",
+        access_instructions: "Public API available without key; currently queries Stack Overflow only via site=stackoverflow.",
     },
     // GitLab Profiles
     SourceDescriptor {

@@ -62,7 +62,7 @@ pub mod eu_bris;
 pub mod france_infogreffe;
 pub mod germany_handelsregister;
 
-// ── T21: 8 individual-person OSINT fetchers ──────────────────────────────────
+// ── T21: 12 individual-person OSINT fetchers ─────────────────────────────────
 pub mod github_profile;
 pub mod gitlab_profile;
 pub mod hibp;

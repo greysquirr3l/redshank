@@ -9,6 +9,23 @@ use std::path::Path;
 
 const STACKEXCHANGE_API: &str = "https://api.stackexchange.com/2.3/users";
 
+fn map_stackexchange_item(item: &serde_json::Value, normalized: &str) -> serde_json::Value {
+    serde_json::json!({
+        "query": normalized,
+        "source": "stackexchange",
+        "site": "stackoverflow",
+        "user_id": item.get("user_id").and_then(serde_json::Value::as_i64),
+        "display_name": item.get("display_name").and_then(serde_json::Value::as_str),
+        "profile_image": item.get("profile_image").and_then(serde_json::Value::as_str),
+        "profile_url": item.get("link").and_then(serde_json::Value::as_str),
+        "reputation": item.get("reputation").and_then(serde_json::Value::as_i64),
+        "badge_counts": item.get("badge_counts"),
+        "creation_date": item.get("creation_date").and_then(serde_json::Value::as_i64),
+        "last_access_date": item.get("last_access_date").and_then(serde_json::Value::as_i64),
+        "location": item.get("location").and_then(serde_json::Value::as_str),
+    })
+}
+
 /// Fetch Stack Exchange public profiles that match a display-name query.
 ///
 /// # Errors
@@ -55,22 +72,7 @@ pub async fn fetch_stackexchange_profile(
         .map(|items| {
             items
                 .iter()
-                .map(|item| {
-                    serde_json::json!({
-                        "query": normalized,
-                        "source": "stackexchange",
-                        "site": "stackoverflow",
-                        "user_id": item.get("user_id").and_then(serde_json::Value::as_i64),
-                        "display_name": item.get("display_name").and_then(serde_json::Value::as_str),
-                        "profile_image": item.get("profile_image").and_then(serde_json::Value::as_str),
-                        "profile_url": item.get("link").and_then(serde_json::Value::as_str),
-                        "reputation": item.get("reputation").and_then(serde_json::Value::as_i64),
-                        "badge_counts": item.get("badge_counts"),
-                        "creation_date": item.get("creation_date").and_then(serde_json::Value::as_i64),
-                        "last_access_date": item.get("last_access_date").and_then(serde_json::Value::as_i64),
-                        "location": item.get("location").and_then(serde_json::Value::as_str),
-                    })
-                })
+                .map(|item| map_stackexchange_item(item, normalized))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -98,5 +100,40 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, FetchError::Parse(_)));
+    }
+
+    #[test]
+    fn map_stackexchange_item_shapes_expected_fields() {
+        let item = serde_json::json!({
+            "user_id": 123,
+            "display_name": "Jane Dev",
+            "link": "https://stackoverflow.com/users/123/jane-dev",
+            "reputation": 9999,
+            "badge_counts": {"gold": 1, "silver": 2, "bronze": 3}
+        });
+
+        let mapped = map_stackexchange_item(&item, "jane");
+        assert_eq!(mapped.get("query").and_then(serde_json::Value::as_str), Some("jane"));
+        assert_eq!(
+            mapped.get("source").and_then(serde_json::Value::as_str),
+            Some("stackexchange")
+        );
+        assert_eq!(
+            mapped.get("site").and_then(serde_json::Value::as_str),
+            Some("stackoverflow")
+        );
+        assert_eq!(mapped.get("user_id").and_then(serde_json::Value::as_i64), Some(123));
+        assert_eq!(
+            mapped
+                .get("display_name")
+                .and_then(serde_json::Value::as_str),
+            Some("Jane Dev")
+        );
+        assert_eq!(
+            mapped
+                .get("profile_url")
+                .and_then(serde_json::Value::as_str),
+            Some("https://stackoverflow.com/users/123/jane-dev")
+        );
     }
 }
