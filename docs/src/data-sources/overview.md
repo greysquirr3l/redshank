@@ -15,7 +15,7 @@ The `redshank fetch` CLI dispatcher currently exposes UK corporate intelligence 
 | [Sanctions](./sanctions.md) | OFAC SDN, UN consolidated, EU sanctions, World Bank debarred | 4 |
 | [Courts & Leaks](./courts-leaks.md) | CourtListener/RECAP, ICIJ offshore leaks | 2 |
 | [Environmental & Reference](./environmental-reference.md) | EPA ECHO, OSHA, Census ACS, Wikidata, GDELT | 5 |
-| [Individual OSINT](./individual-osint.md) | HIBP, GitHub, Wayback, WHOIS/RDAP, voter rolls, USPTO, username enum, social profiles | 8 |
+| [Individual OSINT](./individual-osint.md) | HIBP, GitHub, GitLab, Stack Exchange, Wayback, WHOIS/RDAP, voter rolls, USPTO, username enum, social profiles, reverse phone, reverse address | 12 |
 
 ## Running a fetcher directly
 
