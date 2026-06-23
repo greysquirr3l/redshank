@@ -31,6 +31,12 @@ concurrency:
   group: auto-tag-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
+env:
+  # Pin the same Rust toolchain the CI workflow uses so `cargo metadata`
+  # has a deterministic, reproducible toolchain. Must match `RUST_VERSION`
+  # in the other workflows.
+  RUST_VERSION: "1.96.0"
+
 jobs:
   tag:
     name: Push version tag if missing
@@ -53,6 +59,15 @@ jobs:
           # credential helper on disk, but the push still works because the
           # step below re-configures a URL rewrite using GITHUB_TOKEN.
           persist-credentials: false
+
+      # Install the pinned Rust toolchain before `cargo metadata`. Relying
+      # on whatever Cargo happens to be preinstalled on `ubuntu-latest` is
+      # brittle and can break auto-tagging when the runner image changes
+      # (or when MSRV bumps).
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Gate on release commit
         id: gate

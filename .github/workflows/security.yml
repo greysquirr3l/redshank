@@ -63,16 +63,8 @@ jobs:
         # accepted risks; do not blanket-ignore here.
         run: cargo audit
 
-  gitleaks:
-    name: Gitleaks Secret Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Scan for secrets
-        uses: gitleaks/gitleaks-action@f65dee2ef48e96e7a5a2b775b131c3d81b2e73ea # v2.0.8
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # NOTE: a dedicated `.github/workflows/gitleaks.yml` workflow covers all
+  # branches and PRs with gitleaks. Defining a gitleaks job here as well
+  # would run the same scan twice on every push to main and every PR —
+  # wasted CI minutes with no benefit. Keep the two workflows in sync if
+  # the gitleaks configuration needs to change.

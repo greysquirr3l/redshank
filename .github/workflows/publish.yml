@@ -7,7 +7,10 @@ name: Publish Crates
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      # Glob pattern, not regex. Use `*` (zero-or-more) for the dot, not `+`
+      # (which is a literal plus in fnmatch). The strict `^v[0-9]+\.[0-9]+\.[0-9]+$`
+      # validation lives in the `resolve-ref` job below.
+      - "v[0-9]*.[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       tag:

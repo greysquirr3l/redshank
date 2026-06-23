@@ -8,7 +8,10 @@ name: Release
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+      # Glob pattern, not regex. Use `*` (zero-or-more) for the dot, not `+`
+      # (which is a literal plus in fnmatch). The strict `^v[0-9]+\.[0-9]+\.[0-9]+$`
+      # validation lives in the `resolve` job below.
+      - "v[0-9]*.[0-9]*.[0-9]*"
   workflow_run:
     # Fires when the auto-tag workflow pushes a tag via GITHUB_TOKEN.
     # GitHub blocks `push: tags` on downstream workflows triggered by
@@ -279,9 +282,14 @@ jobs:
       - name: Extract changelog for this version
         id: changelog
         run: |
+          set -euo pipefail
           VERSION="${{ needs.resolve.outputs.version }}"
           if [ -f CHANGELOG.md ]; then
-            NOTES=$(awk "/^## \[?v?$VERSION\]?/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md)
+            # Escape dots in the version so the awk regex matches a literal
+            # "## [v0.2.3]" header rather than treating each "." as a regex
+            # wildcard (which could match the wrong section boundary).
+            ESCAPED=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+            NOTES=$(awk "/^## \\[?v?${ESCAPED}\\]?/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md)
           else
             NOTES="Release $VERSION"
           fi
