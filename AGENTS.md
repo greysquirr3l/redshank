@@ -79,8 +79,81 @@ single executable with no Python or Node.js runtime dependency.
 
 ## Commit conventions
 
-- Use conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
+- Use conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
 - Focus commit messages on user impact, not file counts or line numbers
+- A `chore(release):` subject line on a commit to `main` is the **release trigger** — see the Release section below.
+
+## Release
+
+The release pipeline is fully automated. The only thing you do as a contributor
+is write a release commit; the rest is CI.
+
+### Cutting a release
+
+Bump the version in the workspace (`Cargo.toml` `[workspace.package] version`
+and any `version.workspace = true` consumers, or let `cargo release` /
+`release-plz` do it) and commit with a **`chore(release):`** subject line:
+
+```
+chore(release): v0.2.3
+```
+
+Any other commit message — including `feat:`, `fix:`, `docs:` — will not
+trigger auto-tagging, even on `main`. The head commit message is the
+release trigger; the workspace version is the release payload.
+
+### What happens after the trigger commit
+
+1. `CI` runs and must pass.
+2. `auto-tag.yml` (workflow_run from CI) reads the version via
+   `cargo metadata` (handles `version.workspace = true` correctly), probes
+   `git ls-remote --tags origin` to confirm the tag doesn't already exist
+   (a racing concurrent run is treated as success, not failure), and pushes
+   a `vX.Y.Z` annotated tag. The push URL is rewritten to inject
+   `GITHUB_TOKEN` so the token never lands in the git credential helper on
+   disk (`persist-credentials: false` is set on the checkout).
+3. `release.yml` (workflow_run from auto-tag) polls the GitHub Actions API
+   for up to 30 minutes waiting for CI to complete on the tagged SHA — CI
+   must be `success` or the release is aborted. Then it builds the binary
+   for `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, and
+   `x86_64-pc-windows-msvc` (using `RUST_VERSION = 1.96.0`), downloads
+   all artifacts, generates `SHA256SUMS.txt`, extracts the `## [vX.Y.Z]`
+   block from `CHANGELOG.md`, and creates the GitHub Release via
+   `softprops/action-gh-release`. Prereleases are detected from any `-`
+   in the version.
+4. `publish.yml` publishes to crates.io in dependency order:
+   `redshank-core` → `redshank-fetchers` + `redshank-tui` (in parallel,
+   after core index propagation, 20 × 20s poll) → `redshank-cli`. Each
+   step is **idempotent** — re-running skips any crate whose current
+   version is already on the index. Requires the `CARGO_REGISTRY_TOKEN`
+   secret.
+
+### Tag format
+
+`vX.Y.Z` (e.g. `v0.2.3`). The release workflow validates any
+`workflow_dispatch` input against `^v[0-9]+\.[0-9]+\.[0-9]+$` and rejects
+malformed input with a clear error.
+
+### Manual override
+
+If you need to publish off a branch without going through auto-tag, run
+either `release.yml` or `publish.yml` via `workflow_dispatch` with a `tag`
+input. Manual runs still require CI to be green on the tagged SHA.
+
+### Pre-release checklist
+
+The release pipeline assumes the following are already green on `main`:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test --workspace --all-features`
+- `cargo deny --all-features check`
+- `cargo audit` (no outstanding RUSTSEC advisories)
+- MSRV build (`RUST_VERSION = 1.96.0`)
+- `CHANGELOG.md` has a `## [vX.Y.Z]` block at the top
+
+Fix any failures in a normal `feat:` / `fix:` commit first; auto-tag won't
+fire on a non-`chore(release):` commit anyway.
 
 ---
 
