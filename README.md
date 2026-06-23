@@ -206,7 +206,7 @@ Global Options:
 
 ### Prerequisites
 
-- Rust 1.94+ (stable)
+- Rust 1.96.0+ (stable)
 - SQLite (bundled via rusqlite)
 
 ### Build & Test
@@ -281,7 +281,7 @@ redshank/
 
 | | OpenPlanter | Redshank |
 | --- | --- | --- |
-| **Language** | Python 3.12 | Rust 1.94 (edition 2024) |
+| **Language** | Python 3.12 | Rust 1.96.0 (edition 2024) |
 | **TUI framework** | Textual | ratatui + crossterm |
 | **Graph library** | NetworkX | petgraph |
 | **HTTP client** | urllib / httpx | reqwest + stygian-browser |

@@ -21,7 +21,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
-  RUST_VERSION: "1.94"
+  RUST_VERSION: "1.96.0"
 
 jobs:
   resolve-ref:

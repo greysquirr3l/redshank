@@ -3,7 +3,7 @@
 ## Project
 
 redshank — Redshank is an autonomous recursive language-model investigation agent
-written in Rust 1.94 (edition 2024). It ingests heterogeneous public datasets —
+written in Rust 1.96.0 (edition 2024). It ingests heterogeneous public datasets —
 campaign finance, lobbying disclosures, federal contracts, corporate registries,
 sanctions lists (OFAC, UN, EU, World Bank), property records, nonprofit filings,
 corporate registries (GLEIF, OpenCorporates, FinCEN BOI, state SOS portals),
@@ -35,7 +35,7 @@ single executable with no Python or Node.js runtime dependency.
 
 ## Rules
 
-- Rust edition 2024, stable toolchain 1.94 only — no nightly features.
+- Rust edition 2024, stable toolchain 1.96.0 only — no nightly features.
 
 - All error types use thiserror; no .unwrap() or .expect() outside of tests and main().
 
