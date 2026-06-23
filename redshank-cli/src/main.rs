@@ -841,6 +841,10 @@ async fn dispatch_uk_corporate_intelligence(
 }
 
 fn required_secret(value: Option<&CredentialGuard<String>>, name: &str) -> anyhow::Result<String> {
+    // `name` is interpolated into the format! string in the `ok_or_else`
+    // closure below; CodeQL's rust/unused-variable rule does not track
+    // `format!` captures.
+    // codeql[rust/unused-variable]
     value
         .map(|secret| secret.expose().clone())
         .filter(|secret| !secret.trim().is_empty())

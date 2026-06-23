@@ -8,7 +8,7 @@ cargo install redshank-cli --locked
 
 ## From source
 
-Requires Rust 1.94+ stable.
+Requires Rust 1.96.0+ stable.
 
 ```bash
 git clone https://github.com/greysquirr3l/redshank.git

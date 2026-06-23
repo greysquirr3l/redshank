@@ -1,19 +1,37 @@
 name: Dependency Review
 
+# Blocks PRs that introduce dependencies with known vulnerabilities,
+# incompatible licenses, or from blocked package origins.
+# Works with any ecosystem supported by GitHub's dependency graph
+# (npm, cargo, go, pip, nuget, maven, etc.).
+#
+# Requires the Dependency graph feature to be enabled in repo settings.
+
 on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: read
-  pull-requests: write
+# Top-level permissions default to read-all. The job needs
+# `pull-requests: write` to post inline PR comments; declared at job level.
+permissions: read-all
+
+# Cancel superseded runs on the same PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required to post inline PR comments.
+      pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Check dependency graph availability
         id: depgraph
@@ -39,5 +57,7 @@ jobs:
         if: steps.depgraph.outputs.supported == 'true'
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
+          # Block PRs that introduce any vulnerability severity.
+          # Set to "moderate", "high", or "critical" to be less strict.
           fail-on-severity: low
           comment-summary-in-pr: always

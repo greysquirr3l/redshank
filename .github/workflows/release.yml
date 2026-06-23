@@ -1,36 +1,52 @@
 name: Release
 
+# Builds multi-platform release binaries and publishes a GitHub Release.
+# crates.io publishing is handled by the separate `publish.yml` workflow
+# (the publish job's `permissions: read-all` is the GitHub-token scope; the
+# `CARGO_REGISTRY_TOKEN` secret handles crates.io authentication).
+
 on:
   push:
     tags:
+      # Glob pattern, not regex. Use `*` (zero-or-more) for the dot, not `+`
+      # (which is a literal plus in fnmatch). The strict `^v[0-9]+\.[0-9]+\.[0-9]+$`
+      # validation lives in the `resolve` job below.
       - "v[0-9]*.[0-9]*.[0-9]*"
   workflow_run:
+    # Fires when the auto-tag workflow pushes a tag via GITHUB_TOKEN.
+    # GitHub blocks `push: tags` on downstream workflows triggered by
+    # GITHUB_TOKEN pushes (loop-prevention), so we must listen here instead.
     workflows:
-      - "Auto Tag"
+      - "Auto-tag on release merge"
     types:
       - completed
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g., v0.2.1)"
+        description: "Release tag (must be v-prefixed, e.g. v0.2.3)"
         required: true
         type: string
 
+# Serialize concurrent release runs for the same ref. Manual runs and tag
+# pushes target the same ref, so cancelling in-progress would be unsafe;
+# pin to the head SHA when triggered by auto-tag instead.
 concurrency:
   group: release-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
-  RUST_VERSION: "1.94"
-  BINARY_NAME: redshank
+  RUST_VERSION: "1.96.0"
+  BINARY_NAME: "redshank"
+  CLI_CRATE: "redshank-cli"
+
+# Top-level permissions default to read-all; the only job that needs
+# elevated scopes is `release` (contents: write to create the release).
+permissions: read-all
 
 jobs:
-  resolve-tag:
+  resolve:
     name: Resolve release tag and SHA
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
@@ -38,25 +54,39 @@ jobs:
     outputs:
       should_release: ${{ steps.tag.outputs.should_release }}
       tag: ${{ steps.tag.outputs.tag }}
-      sha: ${{ steps.tag.outputs.sha }}
+      release_ref: ${{ steps.tag.outputs.release_ref }}
+      release_sha: ${{ steps.tag.outputs.release_sha }}
+      version: ${{ steps.tag.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Determine tag and SHA
+      - name: Resolve release tag and SHA
         id: tag
-        shell: bash
         run: |
           set -euo pipefail
-          git fetch --tags origin
+          git fetch --tags --force origin
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            TAG="${{ inputs.tag }}"
-            SHA=$(git rev-list -n 1 "$TAG" 2>/dev/null || true)
-            if [[ -z "$SHA" ]]; then
-              echo "Tag $TAG not found" >&2; exit 1
+            INPUT_TAG="${{ inputs.tag }}"
+            # Reject tags that don't match the vX.Y.Z contract.
+            if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Tag '$INPUT_TAG' must match vX.Y.Z (e.g. v1.2.3)" >&2
+              exit 1
             fi
+            SHA=$(git rev-list -n 1 "$INPUT_TAG" 2>/dev/null || true)
+            if [[ -z "$SHA" ]]; then
+              echo "Tag $INPUT_TAG not found" >&2
+              exit 1
+            fi
+            TAG="$INPUT_TAG"
+            REF="refs/tags/$TAG"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            SHA="${GITHUB_SHA}"
+            REF="${GITHUB_REF}"
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             SHA="${{ github.event.workflow_run.head_sha }}"
             TAG=$(git tag --points-at "$SHA" \
@@ -67,33 +97,42 @@ jobs:
               {
                 echo "should_release=false"
                 echo "tag="
-                echo "sha="
+                echo "release_ref="
+                echo "release_sha=$SHA"
+                echo "version="
               } >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            REF="refs/tags/$TAG"
           else
-            TAG="${GITHUB_REF#refs/tags/}"
-            SHA="${GITHUB_SHA}"
+            echo "Unsupported event: ${{ github.event_name }}" >&2
+            exit 1
           fi
 
+          VERSION="${TAG#v}"
           {
             echo "should_release=true"
             echo "tag=$TAG"
-            echo "sha=$SHA"
+            echo "release_ref=$REF"
+            echo "release_sha=$SHA"
+            echo "version=$VERSION"
           } >> "$GITHUB_OUTPUT"
+
+          echo "Resolved: tag=$TAG ref=$REF sha=$SHA version=$VERSION"
 
   verify-ci:
     name: Verify CI is green
     runs-on: ubuntu-latest
-    needs: [resolve-tag]
-    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
-    timeout-minutes: 15
+    needs: [resolve]
+    if: ${{ needs.resolve.outputs.should_release == 'true' }}
+    timeout-minutes: 30
 
     steps:
       - name: Wait for CI workflow result on tagged commit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_SHA: ${{ needs.resolve-tag.outputs.sha }}
+          # Always use the tag's commit SHA, regardless of trigger type.
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
         run: |
           set -euo pipefail
 
@@ -103,24 +142,30 @@ jobs:
 
           echo "Checking CI status for ${repo}@${sha}"
 
-          for attempt in {1..30}; do
+          # 90 attempts × 20s = up to 30 minutes. Long enough for the longest
+          # CI run, short enough that a stuck run fails the release fast.
+          max_attempts=90
+          sleep_seconds=20
+
+          for attempt in $(seq 1 "${max_attempts}"); do
             json=$(curl -fsSL \
               -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               "${api}")
 
+            # Match the workflow name exactly.
             ci_status=$(echo "${json}" | jq -r '.workflow_runs[] | select(.name == "CI") | .status' | head -n1)
             ci_conclusion=$(echo "${json}" | jq -r '.workflow_runs[] | select(.name == "CI") | .conclusion' | head -n1)
 
             if [[ -z "${ci_status}" ]]; then
-              echo "Attempt ${attempt}/30: CI workflow run not found yet; waiting..."
-              sleep 20
+              echo "Attempt ${attempt}/${max_attempts}: CI workflow run not found yet; waiting..."
+              sleep "${sleep_seconds}"
               continue
             fi
 
             if [[ "${ci_status}" != "completed" ]]; then
-              echo "Attempt ${attempt}/30: CI is ${ci_status}; waiting..."
-              sleep 20
+              echo "Attempt ${attempt}/${max_attempts}: CI is ${ci_status}; waiting..."
+              sleep "${sleep_seconds}"
               continue
             fi
 
@@ -133,14 +178,14 @@ jobs:
             exit 1
           done
 
-          echo "Timed out waiting for CI completion on ${sha}"
+          echo "Timed out waiting for CI completion on ${sha} after $((max_attempts * sleep_seconds)) seconds"
           exit 1
 
   build:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
-    needs: [resolve-tag, verify-ci]
-    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
+    needs: [resolve, verify-ci]
+    if: ${{ needs.resolve.outputs.should_release == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -156,21 +201,30 @@ jobs:
             bin: redshank.exe
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ needs.resolve-tag.outputs.sha }}
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
+      - name: Cache cargo
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-${{ matrix.target }}-
 
       - name: Build release binary
-        run: cargo build --release --locked -p redshank-cli --target ${{ matrix.target }}
+        run: cargo build --release --locked -p ${{ env.CLI_CRATE }} --target ${{ matrix.target }}
 
       - name: Stage artifact (Unix)
         if: runner.os != 'Windows'
@@ -186,23 +240,32 @@ jobs:
           Compress-Archive -Path "${{ env.BINARY_NAME }}.exe","README.md" -DestinationPath "${{ env.BINARY_NAME }}-${{ matrix.target }}.zip"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ env.BINARY_NAME }}-${{ matrix.target }}
+          # Hardcoded BINARY_NAME — GitHub Actions does not allow the
+          # `env` context inside a step `name:` field. `matrix.target`
+          # IS allowed. Must match `BINARY_NAME` env in this workflow.
+          name: redshank-${{ matrix.target }}
           path: ${{ env.BINARY_NAME }}-${{ matrix.target }}.*
           retention-days: 1
 
   release:
     name: Publish GitHub Release
-    needs: [resolve-tag, verify-ci, build]
+    needs: [resolve, verify-ci, build]
     runs-on: ubuntu-latest
-    if: ${{ needs.resolve-tag.outputs.should_release == 'true' && needs.resolve-tag.outputs.tag != '' }}
+    if: ${{ needs.resolve.outputs.should_release == 'true' }}
     permissions:
       contents: write
+      id-token: write
 
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.release_ref }}
+          persist-credentials: false
+
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           path: dist/
           merge-multiple: true
@@ -219,13 +282,38 @@ jobs:
           fi
           sha256sum "${files[@]}" > SHA256SUMS.txt
 
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.resolve.outputs.version }}"
+          if [ -f CHANGELOG.md ]; then
+            # Escape dots in the version so the awk regex matches a literal
+            # "## [v0.2.3]" header rather than treating each "." as a regex
+            # wildcard (which could match the wrong section boundary).
+            ESCAPED=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
+            NOTES=$(awk "/^## \\[?v?${ESCAPED}\\]?/{flag=1; next} /^## /{flag=0} flag" CHANGELOG.md)
+          else
+            NOTES="Release $VERSION"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: ${{ needs.resolve-tag.outputs.tag }}
-          target_commitish: ${{ needs.resolve-tag.outputs.sha }}
-          name: "Redshank ${{ needs.resolve-tag.outputs.tag }}"
+          # tag_name MUST be the bare tag (e.g. v1.2.3). Passing a fully-qualified
+          # ref like refs/tags/v1.2.3 produces an invalid release/tag association.
+          tag_name: ${{ needs.resolve.outputs.tag }}
+          target_commitish: ${{ needs.resolve.outputs.release_sha }}
+          name: "Redshank ${{ needs.resolve.outputs.tag }}"
+          body: ${{ steps.changelog.outputs.notes }}
           draft: false
-          prerelease: ${{ contains(needs.resolve-tag.outputs.tag, '-') }}
+          prerelease: ${{ contains(needs.resolve.outputs.version, '-') }}
           generate_release_notes: true
           files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

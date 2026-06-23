@@ -1,45 +1,66 @@
 name: OSSF Scorecard
 
+# Runs OSSF Scorecard and uploads SARIF results to the GitHub Security tab.
+# `publish_results: true` posts results to the OpenSSF REST API; this only
+# works for public repositories. The repo is public, so this is enabled.
+
 on:
+  # Re-run on every branch protection rule change so the badge stays accurate.
   branch_protection_rule:
+  # Weekly scan on Monday at 01:30 UTC.
   schedule:
     - cron: "30 1 * * 1"
+  # Run on every push to main for tighter feedback.
   push:
     branches: [main]
+  workflow_dispatch:
 
+# Top-level permissions default to read-all; the scorecard job needs
+# `security-events: write` and `id-token: write` at job scope only.
 permissions: read-all
+
+# Scorecard is non-blocking and advisory; cancel superseded runs to save
+# CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   scorecard:
     name: Scorecard analysis
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
+      # Required to upload SARIF results to the Security tab.
       security-events: write
+      # Required to publish results and access repo details.
       id-token: write
       contents: read
       actions: read
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
       - name: Run Scorecard analysis
-        uses: ossf/scorecard-action@99c09fe975337306107572b4fdf4db224cf8e2f2 # v2.4.3
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: false
+          # publish_results: true posts to the OpenSSF REST API; only valid for
+          # public repositories (this repo is public).
+          publish_results: true
 
       - name: Upload SARIF artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: scorecard-results
           path: results.sarif
           retention-days: 5
 
       - name: Upload results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@865f5f5c36632f18690a3d569fa0a764f2da0c3e # v3
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: results.sarif

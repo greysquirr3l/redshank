@@ -127,6 +127,9 @@ fn render_chat(frame: &mut Frame, area: Rect, state: &AppState) {
         .chat_log
         .iter()
         .flat_map(|entry| {
+            // `prefix` and `color` are used inside the `move` closure below;
+            // CodeQL's rust/unused-variable rule does not model the capture.
+            // codeql[rust/unused-variable]
             let (prefix, color) = match entry.role {
                 ChatRole::User => ("you> ", Color::Green),
                 ChatRole::Assistant => ("bot> ", Color::Cyan),

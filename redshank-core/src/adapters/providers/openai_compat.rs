@@ -513,6 +513,10 @@ impl ModelProvider for OpenAICompatibleModel {
 
                     Ok(Self::process_sse_body(&bytes))
                 }
+                // `status` and `error_body` are interpolated into the
+                // format! string on the next line; CodeQL's
+                // rust/unused-variable rule does not track `format!` captures.
+                // codeql[rust/unused-variable]
                 Err((status, error_body)) => Err(DomainError::Other(format!(
                     "API error {status}: {error_body}"
                 ))),

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.94+ stable (`rustup toolchain install 1.94`)
+- Rust 1.96.0+ stable (`rustup toolchain install 1.96.0`)
 - `cargo-deny` (`cargo install cargo-deny`)
 
 ## Setup
