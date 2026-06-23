@@ -35,8 +35,14 @@ updates:
     groups:
       actions:
         applies-to: version-updates
+        # Group every action into one PR per update. The `patterns`
+        # field is REQUIRED under each group entry — leaving it out
+        # causes dependabot to fail its config validation in <1s
+        # without ever creating a run.
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "ci"
     commit-message:
-      prefix: "ci"
+      prefix: "ci(deps)"
