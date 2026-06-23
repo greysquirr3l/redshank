@@ -1,0 +1,48 @@
+name: gitleaks
+
+# Scans every push and pull request for committed secrets. Runs across all
+# branches (branches: ["**"]) because a secret leaked to any branch — even a
+# throwaway one — is still a secret.
+#
+# IMPORTANT: this workflow does NOT upload a SARIF report. The
+# `gitleaks/gitleaks-action` v2 prints findings to the workflow log and
+# exits non-zero on detection; it does not produce a SARIF file. We
+# deliberately keep `permissions: read-all` at the workflow level rather
+# than requesting `security-events: write` for SARIF upload, because
+# that capability would be unused here. If you want SARIF-style findings
+# in the Security tab, switch to the official GitHub secret-scanning push
+# protection flow instead of bolting SARIF onto this action.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+# Top-level permissions default to read-all. The default GITHUB_TOKEN is
+# sufficient for gitleaks to fetch the repository; no elevated scope is
+# required.
+permissions: read-all
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # fetch-depth: 0 lets gitleaks scan the entire history, not just
+          # the most recent commit. Important because secrets often leak
+          # many commits back and are later "removed" without rewriting history.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@f65dee2ef48e96e7a5a2b775b131c3d81b2e73ea # v2.0.8
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

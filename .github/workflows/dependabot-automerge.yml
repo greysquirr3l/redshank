@@ -1,0 +1,49 @@
+name: Dependabot Auto-Merge
+
+# Auto-merges Dependabot patch and minor version updates with squash merge.
+# Major version bumps are intentionally excluded so a human reviews them.
+#
+# Uses `pull_request_target` so that the GITHUB_TOKEN has write permissions
+# for the PR API. We do not check out any PR head code, so the elevated
+# token scope does not increase the risk of a compromised PR running code.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Top-level permissions default to read-all; the job explicitly requests
+# `contents: write` and `pull-requests: write` only where needed. The
+# TokenPermissionsID scorecard check is satisfied.
+permissions: read-all
+
+# Cancel superseded runs on the same PR; otherwise a flood of pushes to
+# a Dependabot PR would queue auto-merge runs that all do the same work.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    # Only run on PRs opened by Dependabot itself — never auto-merge a
+    # human-authored PR that just happens to look like a version bump.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch and minor updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

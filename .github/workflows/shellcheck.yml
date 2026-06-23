@@ -1,0 +1,69 @@
+name: ShellCheck
+
+# Lints shell scripts with ShellCheck. The repo has no first-party .sh
+# files at present, but the .githooks/pre-commit hook is a shell script
+# in disguise — ShellCheck picks it up too because of the file glob.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Top-level permissions default to read-all.
+permissions: read-all
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Find shell scripts
+        id: find
+        run: |
+          set -euo pipefail
+          # Look for files with a shell shebang. Catches .sh files and also
+          # executables without an extension (e.g. .githooks/pre-commit).
+          mapfile -t files < <(find . -type f \
+            \( -name '*.sh' -o -name '.githooks/*' -o -name 'hooks/*' \) \
+            -not -path './target/*' \
+            -not -path './.git/*' \
+            -not -path './.coraline/*')
+          # Also find files whose first line starts with #! and includes sh.
+          while IFS= read -r f; do
+            first=$(head -n1 "$f" 2>/dev/null || true)
+            if [[ "$first" == "#!"* && ( "$first" == *sh* || "$first" == *bash* ) ]]; then
+              files+=("$f")
+            fi
+          done < <(find . -type f \
+            -not -name '*.sh' \
+            -not -path './target/*' \
+            -not -path './.git/*' \
+            -not -path './.coraline/*')
+          if (( ${#files[@]} == 0 )); then
+            echo "files=" >> "$GITHUB_OUTPUT"
+            echo "No shell scripts found; nothing to lint." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "files<<EOF"
+            printf '%s\n' "${files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run ShellCheck
+        if: steps.find.outputs.files != ''
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          scandir: "."
+          severity: warning
