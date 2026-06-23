@@ -11,6 +11,7 @@ docs/plan.toml
 tasks/
 reference_projects/
 .redshank/
+AGENTS.md
 
 # ─── VS Code ──────────────────────────────────────────────────────────────────
 .vscode/*
