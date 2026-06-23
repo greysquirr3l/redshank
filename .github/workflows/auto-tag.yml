@@ -1,4 +1,18 @@
-name: Auto Tag
+name: Auto-tag on release merge
+
+# Fires only after CI succeeds on main. Safer than `push: branches` because
+# we never tag a commit that failed tests.
+#
+# Tag-creation model:
+#   1. Gate on a `chore(release): ...` commit message so we only tag releases.
+#   2. Read the workspace version via `cargo metadata` (handles workspace
+#      inheritance correctly; `grep ^version Cargo.toml` does not).
+#   3. Probe `git ls-remote --tags` to confirm the tag doesn't already exist.
+#      A manual tag push or a racing concurrent run can win the race; we treat
+#      that as success rather than failing.
+#   4. Configure git to use GITHUB_TOKEN for the push URL (no credential helper
+#      write). This works alongside `persist-credentials: false` on the
+#      checkout, so the token never lands in the credential store on disk.
 
 on:
   workflow_run:
@@ -6,63 +20,113 @@ on:
     branches: [main]
     types: [completed]
 
-permissions:
-  contents: write
+# Top-level permissions default to read-all; the only job needs
+# `contents: write` (declared at the job level). Narrows the blast radius
+# of a compromised action and satisfies the TokenPermissionsID check.
+permissions: read-all
 
+# One tag attempt at a time per commit SHA; prevents duplicate tag pushes
+# from back-to-back CI completions on the same commit.
 concurrency:
   group: auto-tag-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   tag:
-    name: Create version tag if missing
+    name: Push version tag if missing
+    # Skip if CI did not pass.
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # Check out the workflow_run head_sha rather than `main` so a force-push
+      # to main between CI and auto-tag can't cause us to tag the wrong commit.
+      # This also addresses the DangerousWorkflowID scorecard finding: the
+      # ref is now a pinned commit SHA from the workflow run, not arbitrary
+      # attacker-controlled input.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          # persist-credentials: false removes the token from the git
+          # credential helper on disk, but the push still works because the
+          # step below re-configures a URL rewrite using GITHUB_TOKEN.
+          persist-credentials: false
+
+      - name: Gate on release commit
+        id: gate
+        run: |
+          set -euo pipefail
+          msg="$(git log -1 --pretty=%s)"
+          if [[ "$msg" == chore\(release\):* ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Read workspace version
+        if: steps.gate.outputs.run == 'true'
         id: version
-        shell: bash
         run: |
-          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          set -euo pipefail
+          # cargo metadata handles workspace version inheritance correctly.
+          VERSION=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "redshank-core") | .version')
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            echo "Could not determine version for crate redshank-core" >&2
+            exit 1
+          fi
           TAG="v${VERSION}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Check if tag exists
+      - name: Check if tag already exists
+        if: steps.gate.outputs.run == 'true'
         id: check-tag
-        shell: bash
         run: |
+          set -euo pipefail
           if git ls-remote --tags origin "refs/tags/${{ steps.version.outputs.tag }}" | grep -q .; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push tag
-        if: steps.check-tag.outputs.exists == 'false'
-        shell: bash
+      - name: Push tag
+        if: steps.gate.outputs.run == 'true' && steps.check-tag.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Rewrite https://github.com/... to https://x-access-token:TOKEN@github.com/...
+          # so the next `git push` authenticates without writing the token to
+          # the credential helper (persist-credentials: false above ensures
+          # the helper is empty).
+          git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.version }}"
+
           if git push origin "${{ steps.version.outputs.tag }}"; then
             echo "Pushed ${{ steps.version.outputs.tag }}"
             exit 0
           fi
+
+          # If a concurrent run raced us to the same tag, that's still success.
           if git ls-remote --tags origin "refs/tags/${{ steps.version.outputs.tag }}" | grep -q .; then
             echo "Tag ${{ steps.version.outputs.tag }} was created concurrently; continuing"
             exit 0
           fi
+
           echo "Failed to push tag ${{ steps.version.outputs.tag }}" >&2
           exit 1
 
       - name: Tag already exists
-        if: steps.check-tag.outputs.exists == 'true'
-        run: echo "Tag already exists; skipping"
+        if: steps.gate.outputs.run == 'true' && steps.check-tag.outputs.exists == 'true'
+        run: echo "Tag ${{ steps.version.outputs.tag }} already exists; skipping"
+
+      - name: Not a release commit
+        if: steps.gate.outputs.run == 'false'
+        run: echo "Skipping auto-tag; head commit is not a release commit"

@@ -1,4 +1,4 @@
-name: CodeQL Analysis
+name: CodeQL
 
 on:
   push:
@@ -6,35 +6,50 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "30 2 * * 0"
+    # Weekly scheduled scan to catch regressions between PRs.
+    - cron: "30 6 * * 2"
+  workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
+# Top-level permissions default to read-all; the analyze job declares
+# `security-events: write` to upload SARIF to the Security tab.
+permissions: read-all
+
+# Cancel superseded runs on the same ref. Scheduled runs are not cancelled
+# in flight because GitHub treats each scheduled run as a unique event.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze (rust)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Required to upload SARIF results.
+      security-events: write
+      contents: read
+      actions: read
+
     strategy:
       fail-fast: false
       matrix:
-        language: [rust]
+        build-mode: [none]
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
-          languages: ${{ matrix.language }}
-          queries: security-and-quality
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+          languages: rust
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended,security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
-          category: /language:${{ matrix.language }}
+          category: "/language:rust"

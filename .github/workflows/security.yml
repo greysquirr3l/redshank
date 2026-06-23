@@ -3,57 +3,76 @@ name: Security Audit
 on:
   push:
     branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/security.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/security.yml"
+  # Weekly cron catches advisories published between pushes.
   schedule:
-    # Run every Monday at 08:00 UTC to catch newly-published advisories
     - cron: "0 8 * * 1"
   workflow_dispatch:
 
-permissions:
-  contents: read
+# Top-level permissions default to read-all; individual jobs request
+# elevated scopes only where required.
+permissions: read-all
 
+# Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_AUDIT_VERSION: "0.22.1"
+
 jobs:
+  cargo-audit:
+    name: Audit dependencies for CVEs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Cache cargo tools
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-tools-audit-${{ env.CARGO_AUDIT_VERSION }}
+          restore-keys: ${{ runner.os }}-cargo-tools-audit-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --force --version "${CARGO_AUDIT_VERSION}"
+
+      - name: Run cargo audit
+        # `cargo audit` exits non-zero when it finds any advisory. Override
+        # with `--ignore RUSTSEC-XXXX-YYYY` on the command line for known
+        # accepted risks; do not blanket-ignore here.
+        run: cargo audit
+
   gitleaks:
     name: Gitleaks Secret Scan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Scan for secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@f65dee2ef48e96e7a5a2b775b131c3d81b2e73ea # v2.0.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  audit:
-    name: Cargo Audit
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-audit-
-
-      - name: cargo audit
-        uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
