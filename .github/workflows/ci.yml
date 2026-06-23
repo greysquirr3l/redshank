@@ -147,7 +147,10 @@ jobs:
           RUSTDOCFLAGS: "-Dwarnings"
 
   msrv:
-    name: Minimum Supported Rust Version (${{ env.RUST_VERSION }})
+    # Hardcoded MSRV string — GitHub Actions does not allow the `env`
+    # context inside a job `name:` field. Must match `RUST_VERSION` env
+    # in this workflow and in the others.
+    name: Minimum Supported Rust Version (1.96.0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
