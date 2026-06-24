@@ -77,7 +77,7 @@ stygian-browser = "0.14"
 stygian-graph = { version = "0.14", default-features = false }
 
 # Archiving
-zip = "2"
+zip = "8"
 
 # Secure password input (no terminal echo)
 rpassword = "7"
